@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SNIPER-EYE 2.0</title>
+<style>
+:root {
+  --bg: #000;
+  --fg: #fff;
+  --amber: #FFB800;
+  --red: #FF3333;
+  --border: rgba(255,255,255,0.22);
+  --dim: 0.15;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  width: 100%;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Courier New', Courier, monospace;
+  overflow-y: auto;
+}
+
+/* ── SCREENS ─────────────────────────────────── */
+.screen {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  width: 100%;
+  padding: env(safe-area-inset-top,0px) env(safe-area-inset-right,0px)
+           env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px);
+}
+.screen.active { display: flex; }
+
+/* ── INPUT SCREEN ────────────────────────────── */
+#screen-input {
+  justify-content: flex-start;
+  padding: 3vh 5vw 4vh;
+  gap: 0;
+  align-items: center;
+}
+
+.page-title {
+  font-size: clamp(20px, 4.5vw, 40px);
+  letter-spacing: 0.4em;
+  color: var(--amber);
+  border-bottom: 1px solid var(--amber);
+  padding-bottom: 1.5vh;
+  margin-bottom: 3vh;
+  width: 100%;
+  max-width: 660px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+#words-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1.8vh;
+  width: 100%;
+  max-width: 660px;
+  flex-shrink: 0;
+}
+
+.word-row {
+  display: flex;
+  align-items: center;
+  gap: 2vw;
+}
+
+.inp-num {
+  width: clamp(55px, 11vw, 90px);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--amber);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: clamp(14px, 2.6vw, 22px);
+  letter-spacing: 0.12em;
+  padding: 0.5vh 0.3vw;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.inp-num::placeholder { color: rgba(255,184,0,0.28); font-size: 0.8em; }
+.inp-num:focus { border-bottom-color: var(--amber); }
+
+.inp-word {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: clamp(14px, 2.6vw, 22px);
+  letter-spacing: 0.22em;
+  padding: 0.5vh 0.3vw;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.inp-word::placeholder { color: rgba(255,255,255,0.2); }
+.inp-word:focus { border-bottom-color: var(--fg); }
+
+.btn-del {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.22);
+  font-size: clamp(16px, 2.8vw, 24px);
+  cursor: pointer;
+  padding: 0 0.5vw;
+  line-height: 1;
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+.btn-del:active { color: var(--red); }
+
+.bottom-controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2vh;
+  margin-top: 3vh;
+  width: 100%;
+  max-width: 660px;
+  flex-shrink: 0;
+}
+
+.row-inline {
+  display: flex;
+  align-items: center;
+  gap: 2vw;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.btn {
+  font-family: 'Courier New', Courier, monospace;
+  background: transparent;
+  border: 1px solid currentColor;
+  cursor: pointer;
+  letter-spacing: 0.3em;
+  transition: background 0.15s, color 0.15s;
+  -webkit-appearance: none;
+}
+
+.btn-add {
+  color: rgba(255,255,255,0.4);
+  font-size: clamp(12px, 1.8vw, 17px);
+  padding: 0.9vh 3vw;
+}
+.btn-add:active { background: rgba(255,255,255,0.08); }
+
+.timer-group {
+  display: flex;
+  align-items: center;
+  gap: 1.5vw;
+}
+.timer-label {
+  font-size: clamp(11px, 1.7vw, 16px);
+  letter-spacing: 0.2em;
+  color: rgba(255,255,255,0.4);
+  white-space: nowrap;
+}
+.inp-timer {
+  width: clamp(52px, 8vw, 72px);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+  font-family: 'Courier New', Courier, monospace;
+  font-size: clamp(14px, 2.2vw, 20px);
+  letter-spacing: 0.15em;
+  padding: 0.4vh 0.3vw;
+  text-align: center;
+  outline: none;
+}
+.inp-timer:focus { border-bottom-color: var(--fg); }
+
+.btn-ready {
+  color: var(--fg);
+  font-size: clamp(16px, 3vw, 28px);
+  padding: 1.5vh 8vw;
+  width: 100%;
+  max-width: 340px;
+}
+.btn-ready:active { background: var(--fg); color: var(--bg); }
+
+/* ── PRE-START ──────────────────────────────── */
+#screen-prestart { gap: 3vh; text-align: center; padding: 4vw; }
+
+.hunt-btn {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: clamp(26px, 5.5vw, 66px);
+  letter-spacing: 0.28em;
+  color: var(--fg);
+  background: transparent;
+  border: 2px solid var(--fg);
+  padding: 3.5vh 8vw;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s;
+}
+.hunt-btn::before {
+  content: '';
+  position: absolute; inset: 7px;
+  border: 1px solid rgba(255,255,255,0.15);
+  pointer-events: none;
+}
+.hunt-btn:active { background: var(--fg); color: var(--bg); }
+
+/* ── COMBAT ─────────────────────────────────── */
+/* Widescreen: grid and timer sit side by side, centred together */
+#screen-combat {
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 3vw;
+  padding: 2vh 3vw;
+}
+
+#timer-wrap {
+  width: clamp(70px, 9vw, 110px);
+  height: clamp(70px, 9vw, 110px);
+  position: relative;
+  flex-shrink: 0;
+}
+#timer-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+#timer-track { fill: none; stroke: rgba(255,255,255,0.1); }
+#timer-arc   { fill: none; stroke: var(--amber); stroke-linecap: round; transition: stroke-dashoffset 1s linear, stroke 0.4s; }
+#timer-text  {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: clamp(15px, 2.4vw, 28px);
+  letter-spacing: 0.04em;
+}
+
+/* ── GRID — shared base ─────────────────────── */
+#grid-container, #reveal-grid-container {
+  display: flex; flex-direction: column;
+  align-items: center;
+  line-height: 1.44;
+  user-select: none;
+}
+.grid-row { display: flex; }
+
+.gc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(11px, 2.0vw, 22px);
+  letter-spacing: 0.15em;
+  width: clamp(13px, 2.2vw, 26px);
+  height: clamp(16px, 2.6vw, 30px);
+  transition: opacity 0.25s, color 0.25s;
+}
+
+.gc.priming { color: var(--amber); font-weight: 700; }
+.gc.dim-bg  { opacity: var(--dim); }
+.gc.hi { color: var(--amber); font-weight: 700; opacity: 1 !important; }
+
+@keyframes pulse-a {
+  0%   { color: var(--amber); text-shadow: none; }
+  50%  { color: #fff; text-shadow: 0 0 10px var(--amber); }
+  100% { color: var(--amber); text-shadow: none; }
+}
+.gc.pulsing { animation: pulse-a 1s ease-in-out 3; }
+
+.rev-num {
+  font-size: 0.58em;
+  color: var(--amber);
+  font-weight: 700;
+  vertical-align: super;
+  margin-right: 1px;
+  line-height: 0;
+  letter-spacing: 0;
+}
+
+/* ── MEMORY ─────────────────────────────────── */
+#screen-memory { gap: 4vh; text-align: center; padding: 5vw; }
+
+.mem-main {
+  font-size: clamp(18px, 4.2vw, 54px);
+  letter-spacing: 0.25em;
+  line-height: 1.65;
+}
+.mem-sub {
+  font-size: clamp(10px, 1.65vw, 19px);
+  letter-spacing: 0.3em;
+  color: rgba(255,255,255,0.3);
+}
+
+.btn-flash {
+  color: var(--amber);
+  font-size: clamp(13px, 2.1vw, 23px);
+  padding: 1.5vh 6vw;
+  letter-spacing: 0.3em;
+}
+.btn-flash:active { background: var(--amber); color: var(--bg); }
+
+/* ── REVEAL ─────────────────────────────────── */
+#screen-reveal { gap: 2.5vh; }
+
+.btn-again {
+  color: rgba(255,255,255,0.38);
+  font-size: clamp(11px, 1.6vw, 18px);
+  padding: 1.2vh 4vw;
+  letter-spacing: 0.25em;
+}
+.btn-again:active { color: var(--fg); }
+
+/* scanlines */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 3px, rgba(0,0,0,0.06) 3px, rgba(0,0,0,0.06) 4px);
+  pointer-events: none;
+  z-index: 9999;
+}
+</style>
+</head>
+<body>
+
+<!-- ① INPUT -->
+<div id="screen-input" class="screen active">
+  <div class="page-title">SNIPER-EYE 2.0</div>
+  <div id="words-wrapper"></div>
+  <div class="bottom-controls">
+    <div class="row-inline">
+      <button class="btn btn-add" id="btn-add">+ ADD WORD</button>
+      <div class="timer-group">
+        <span class="timer-label">TIMER (SEC)</span>
+        <input class="inp-timer" id="inp-timer" type="number" value="15" min="5" max="99">
+      </div>
+    </div>
+    <button class="btn btn-ready" id="btn-ready">READY</button>
+  </div>
+</div>
+
+<!-- ② PRE-START — pure black, START HUNTING only, zero info leak -->
+<div id="screen-prestart" class="screen">
+  <button class="hunt-btn" id="btn-hunt">START HUNTING</button>
+</div>
+
+<!-- ③ COMBAT -->
+<div id="screen-combat" class="screen">
+  <div id="timer-wrap">
+    <svg viewBox="0 0 100 100">
+      <circle id="timer-track" cx="50" cy="50" r="44" stroke-width="5"/>
+      <circle id="timer-arc"   cx="50" cy="50" r="44" stroke-width="5"/>
+    </svg>
+    <div id="timer-text"></div>
+  </div>
+  <div id="grid-container"></div>
+</div>
+
+<!-- ③b MEMORY -->
+<div id="screen-memory" class="screen">
+  <div class="mem-main">WRITE ANY NUMBER<br>YOU SAW</div>
+  <div class="mem-sub">EXTRACT YOUR VISUAL MEMORY</div>
+  <button class="btn btn-flash" id="btn-flash">FLASH ANSWERS</button>
+</div>
+
+<!-- ④ REVEAL -->
+<div id="screen-reveal" class="screen">
+  <div id="reveal-grid-container"></div>
+  <button class="btn btn-again" id="btn-again">↺ NEW ROUND</button>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+let entries  = [];
+let gridData = [];
+let gridSize = 12;
+let wordMeta = [];
+let timerSec = 15;
+let ticker   = null;
+
+const CIRC = 2 * Math.PI * 44;
+
+const $  = id => document.getElementById(id);
+const mk = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+const randChar = () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 26)];
+
+function show(name) {
+  ['input','prestart','combat','memory','reveal'].forEach(s => {
+    $('screen-' + s).classList.toggle('active', s === name);
+  });
+}
+
+// ── IME-safe uppercase ─────────────────────
+function attachUppercase(input) {
+  let composing = false;
+  input.addEventListener('compositionstart', () => { composing = true; });
+  input.addEventListener('compositionend', () => {
+    composing = false;
+    const pos = input.selectionStart;
+    input.value = input.value.toUpperCase();
+    try { input.setSelectionRange(pos, pos); } catch(e) {}
+  });
+  input.addEventListener('input', () => {
+    if (composing) return;
+    const pos = input.selectionStart;
+    input.value = input.value.toUpperCase();
+    try { input.setSelectionRange(pos, pos); } catch(e) {}
+  });
+}
+
+// ── Dynamic rows ───────────────────────────
+function makeRow() {
+  const row = mk('div', 'word-row');
+
+  const ni = mk('input', 'inp-num');
+  ni.type = 'text'; ni.placeholder = 'NO.';
+  ni.autocomplete = ni.autocorrect = 'off';
+  ni.spellcheck = false;
+
+  const wi = mk('input', 'inp-word');
+  wi.type = 'text'; wi.placeholder = 'ENTER WORD';
+  wi.autocomplete = wi.autocorrect = 'off';
+  wi.spellcheck = false;
+  attachUppercase(wi);
+
+  const del = mk('button', 'btn-del');
+  del.type = 'button'; del.textContent = '×';
+  del.addEventListener('click', () => {
+    const wrap = $('words-wrapper');
+    if (wrap.children.length > 1) wrap.removeChild(row);
+  });
+
+  row.append(ni, wi, del);
+  return row;
+}
+
+const wrap = $('words-wrapper');
+wrap.appendChild(makeRow());
+wrap.appendChild(makeRow());
+wrap.appendChild(makeRow());
+
+$('btn-add').addEventListener('click', () => wrap.appendChild(makeRow()));
+
+// ── Read inputs ────────────────────────────
+function readEntries() {
+  return [...wrap.querySelectorAll('.word-row')].reduce((acc, row) => {
+    const ins = row.querySelectorAll('input');
+    const num  = ins[0].value.trim();
+    const word = ins[1].value.trim().toUpperCase().replace(/[^A-Z]/g, '');
+    if (num && word) acc.push({ num, word });
+    return acc;
+  }, []);
+}
+
+// ── Build grid ─────────────────────────────
+// ① gridSize = Math.max(最長單字字元數 + 2, 12)
+// 不依單字數量決定大小，只依最長單字確保不截斷
+function buildGrid(ents) {
+  const longest = ents.reduce((max, e) => Math.max(max, e.word.length), 0);
+  gridSize = Math.max(longest + 2, 12);
+
+  gridData = Array.from({length: gridSize}, () =>
+    Array.from({length: gridSize}, () => randChar())
+  );
+  wordMeta = [];
+
+  ents.forEach(({num, word}) => {
+    let placed = false, tries = 0;
+    while (!placed && tries < 1000) {
+      tries++;
+      const horiz = Math.random() < 0.5;
+      let r = 0, c = 0;
+      if (horiz) {
+        r = Math.floor(Math.random() * gridSize);
+        c = Math.floor(Math.random() * (gridSize - word.length + 1));
+      } else {
+        r = Math.floor(Math.random() * (gridSize - word.length + 1));
+        c = Math.floor(Math.random() * gridSize);
+      }
+      let ok = true;
+      for (let i = 0; i < word.length && ok; i++) {
+        const rr = horiz ? r : r + i;
+        const cc = horiz ? c + i : c;
+        const already = wordMeta.some(m => m.cells.some(p => p.r === rr && p.c === cc));
+        if (already && gridData[rr][cc] !== word[i]) ok = false;
+      }
+      if (ok) {
+        const cells = [];
+        for (let i = 0; i < word.length; i++) {
+          const rr = horiz ? r : r + i;
+          const cc = horiz ? c + i : c;
+          gridData[rr][cc] = word[i];
+          cells.push({r: rr, c: cc});
+        }
+        wordMeta.push({num, word, cells});
+        placed = true;
+      }
+    }
+  });
+}
+
+// ── Render: COMBAT — letters only, no numbers ──
+function renderCombat() {
+  const c = $('grid-container');
+  c.innerHTML = '';
+  const targetMap = new Set();
+  wordMeta.forEach(m => m.cells.forEach(p => targetMap.add(p.r + ',' + p.c)));
+  for (let r = 0; r < gridSize; r++) {
+    const row = mk('div', 'grid-row');
+    for (let c2 = 0; c2 < gridSize; c2++) {
+      const cell = mk('span', 'gc');
+      cell.textContent = gridData[r][c2];
+      if (targetMap.has(r + ',' + c2)) cell.dataset.t = '1';
+      row.appendChild(cell);
+    }
+    c.appendChild(row);
+  }
+}
+
+// ── Render: REVEAL — [num] badge at word start only ──
+function renderReveal() {
+  const c = $('reveal-grid-container');
+  c.innerHTML = '';
+  const posMap = {};
+  wordMeta.forEach(m => m.cells.forEach((p, i) => {
+    posMap[p.r + ',' + p.c] = {meta: m, idx: i};
+  }));
+  for (let r = 0; r < gridSize; r++) {
+    const row = mk('div', 'grid-row');
+    for (let c2 = 0; c2 < gridSize; c2++) {
+      const cell = mk('span', 'gc');
+      const hit  = posMap[r + ',' + c2];
+      if (hit) {
+        if (hit.idx === 0) {
+          const badge = mk('span', 'rev-num');
+          badge.textContent = '[' + hit.meta.num + ']';
+          cell.appendChild(badge);
+        }
+        cell.appendChild(document.createTextNode(gridData[r][c2]));
+        cell.dataset.t = '1';
+      } else {
+        cell.textContent = gridData[r][c2];
+        cell.classList.add('dim-bg');
+      }
+      row.appendChild(cell);
+    }
+    c.appendChild(row);
+  }
+}
+
+// ── Priming ────────────────────────────────
+function doPriming(cb) {
+  const cells = $('grid-container').querySelectorAll('.gc[data-t="1"]');
+  cells.forEach(c => c.classList.add('priming'));
+  setTimeout(() => { cells.forEach(c => c.classList.remove('priming')); cb(); }, 500);
+}
+
+// ── Timer ──────────────────────────────────
+function startTimer(sec) {
+  let rem = sec;
+  const arc = $('timer-arc'), txt = $('timer-text');
+  arc.style.strokeDasharray  = CIRC;
+  arc.style.strokeDashoffset = 0;
+  arc.style.stroke = 'var(--amber)';
+  txt.textContent = rem;
+  ticker = setInterval(() => {
+    rem--;
+    txt.textContent = rem;
+    arc.style.strokeDashoffset = CIRC * (1 - rem / sec);
+    if (rem <= 5) arc.style.stroke = 'var(--red)';
+    if (rem <= 0) { clearInterval(ticker); show('memory'); }
+  }, 1000);
+}
+
+// ── Reveal pulse ───────────────────────────
+function doRevealPulse() {
+  const cells = $('reveal-grid-container').querySelectorAll('.gc[data-t="1"]');
+  cells.forEach(c => { c.classList.add('hi'); setTimeout(() => c.classList.add('pulsing'), 60); });
+}
+
+// ── Events ─────────────────────────────────
+$('btn-ready').addEventListener('click', () => {
+  entries = readEntries();
+  if (!entries.length) return;
+  timerSec = Math.max(5, parseInt($('inp-timer').value) || 15);
+  buildGrid(entries);
+  show('prestart');
+});
+
+$('btn-hunt').addEventListener('click', () => {
+  renderCombat();
+  show('combat');
+  $('timer-text').textContent = timerSec;
+  doPriming(() => startTimer(timerSec));
+});
+
+$('btn-flash').addEventListener('click', () => {
+  renderReveal();
+  show('reveal');
+  setTimeout(doRevealPulse, 120);
+});
+
+$('btn-again').addEventListener('click', () => {
+  clearInterval(ticker);
+  $('grid-container').innerHTML = '';
+  $('reveal-grid-container').innerHTML = '';
+  show('input');
+});
+
+})();
+</script>
+</body>
+</html>

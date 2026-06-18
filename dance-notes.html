@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>舞蹈筆記</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0F0E1A;--sur:#18172A;--up:#22203A;--bd:#2C2A42;
+  --ac:#FF6B9D;--adim:rgba(255,107,157,.13);
+  --tx:#EEEAF5;--mu:#7A7893;--gr:#7DFFB3;--bl:#7BC8FF;
+}
+html,body{height:100%;font-family:-apple-system,'Noto Sans TC','PingFang TC',sans-serif;background:var(--bg);color:var(--tx);-webkit-tap-highlight-color:transparent;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100vh}
+#tabBar{flex-shrink:0;display:flex;align-items:center;gap:2px;height:44px;padding:0 6px;background:var(--sur);border-bottom:1px solid var(--bd);overflow-x:auto;scrollbar-width:none}
+#tabBar::-webkit-scrollbar{display:none}
+.stab{flex-shrink:0;padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;color:var(--mu);background:transparent;border:none;cursor:pointer;white-space:nowrap}
+.stab.on{background:var(--adim);color:var(--ac)}
+.tabadd{flex-shrink:0;width:32px;height:32px;border-radius:8px;background:transparent;border:none;font-size:22px;color:var(--mu);cursor:pointer;display:flex;align-items:center;justify-content:center}
+#note{flex:1;min-height:0;padding:14px 16px;background:var(--bg);border:none;outline:none;color:var(--tx);font-size:16px;line-height:1.85;font-family:inherit;resize:none;overflow-y:auto;-webkit-overflow-scrolling:touch;user-select:text;-webkit-user-select:text}
+#note::placeholder{color:var(--mu);font-size:14px;line-height:1.7}
+#bp{flex-shrink:0;background:var(--sur);border-top:1px solid var(--bd);padding:4px 5px}
+.brow{display:grid;gap:3px;margin-bottom:3px}
+.r1{grid-template-columns:repeat(8,1fr)}
+.r2{grid-template-columns:repeat(6,1fr)}
+.r3{grid-template-columns:repeat(8,1fr)}
+.bdiv{border-top:1px solid var(--bd);margin:5px 0 4px}
+.bb{height:38px;background:var(--up);border:1px solid var(--bd);border-radius:7px;color:var(--tx);font-family:'SF Mono','Fira Code',monospace;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer;touch-action:manipulation;transition:background .07s,transform .07s,border-color .07s,color .07s}
+.bb.dim{font-size:12px;font-weight:600;color:var(--mu)}
+.bb.amp{color:var(--ac)}
+.bb.grn{color:var(--gr)}
+.bb.blu{color:var(--bl)}
+.bb.tap,.chip.tap{background:var(--ac)!important;border-color:var(--ac)!important;color:#fff!important;transform:scale(.91)}
+#es{font-size:11px;color:var(--mu);text-align:center;padding:3px 0 1px;letter-spacing:.02em}
+#vp{flex-shrink:0;background:var(--sur);border-top:1px solid var(--bd)}
+#vt{display:flex;border-bottom:1px solid var(--bd)}
+.vtab{flex:1;padding:7px 0;text-align:center;font-size:11px;font-weight:600;color:var(--mu);background:transparent;border:none;cursor:pointer;letter-spacing:.02em}
+.vtab.on{color:var(--ac);box-shadow:inset 0 -2px 0 var(--ac)}
+#chips{display:flex;flex-wrap:wrap;gap:5px;padding:7px 7px 9px;max-height:98px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.chip{padding:4px 11px;background:var(--up);color:#C5C2DB;border:1px solid var(--bd);border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;touch-action:manipulation;transition:background .07s,color .07s,border-color .07s}
+#toast{position:fixed;bottom:26%;left:50%;transform:translateX(-50%) translateY(6px);padding:8px 20px;background:rgba(255,107,157,.92);color:#fff;border-radius:20px;font-size:13px;font-weight:600;pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;z-index:99;white-space:nowrap}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="tabBar"></div>
+  <textarea id="note" placeholder="選段落 → 點拍號 → 點詞卡&#10;&#10;例：點「1」→「左手」→「前」→「推」→ 1左手前推"></textarea>
+  <div id="bp">
+    <div class="brow r1" id="r1"></div>
+    <div class="brow r2" id="r2"></div>
+    <div class="bdiv"></div>
+    <div class="brow r3" id="r3"></div>
+    <div id="es">尚未設定起點</div>
+  </div>
+  <div id="vp">
+    <div id="vt"></div>
+    <div id="chips"></div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+/* STATE */
+var secs=[{id:1,name:'前奏',text:''},{id:2,name:'副歌1',text:''}];
+var aid=1,nid=3,avoc='部位',cur=0,tTouch=0;
+var rS=null,rE=null;
+var hist=[''],hidx=0,hDeb=null;
+var btnS,btnE,btnCp,btnCut,btnClr;
+
+/* VOCAB */
+var VOC={
+  '部位':['右手','左手','雙手','右腳','左腳','雙腳',
+          '頭','下巴','脖子','後腦勺','胸','背','腰','臀','核心','骨盆',
+          '右肩','左肩','手肘','手腕','大腿','右膝','左膝','小腿','腳跟','腳尖'],
+  '動作':['踩','走位','跳','跳開','跳併','蹲','起身','跪','drag','slide',
+          '舉','推','拉','收','開','甩','繞','揮','丟','wave','roll',
+          '搭','托','扶','摸','拍','捶','掩','叉腰',
+          '看','抬頭','低頭','點頭','甩頭',
+          '轉身','側身','前傾','後仰','挺胸','坐胯','提臀','roll臀'],
+  '手型':['握拳','張開','手掌平','手刀','手心朝上','手心朝下','手心朝外',
+          '打直','比槍','比7','比耶','虎口','翻花手','食指出','拇指出','指尖'],
+  '方向':['左','右','前','後','上','下','內','外',
+          '斜左上','斜右上','斜左下','斜右下','順時針','逆時針','水平','交叉'],
+  '質感':['[Hit]','[Pop]','[Whip]','[Drop]','[流動]',
+          '[定格]','[延伸]','[Isolation]','[Roll]','*2','*3','*4']
+};
+
+var R1=['1','2','3','4','5','6','7','8'];
+var R2=[
+  {l:'&',t:'&',c:''},
+  {l:'/',t:' / ',c:'dim'},
+  {l:'*2',t:'*2',c:'dim'},
+  {l:'*3',t:'*3',c:'dim'},
+  {l:'--',t:'\n--\n',c:'dim'},
+  {l:'↵',t:'\n',c:'dim'}
+];
+
+/* TEXTAREA */
+var NOTE=document.getElementById('note');
+NOTE.addEventListener('input',function(){
+  saveTxt();
+  clearTimeout(hDeb);
+  hDeb=setTimeout(function(){pushH(NOTE.value)},800);
+});
+['keyup','click','touchend'].forEach(function(e){
+  NOTE.addEventListener(e,function(){cur=NOTE.selectionStart||cur});
+});
+NOTE.addEventListener('blur',function(){cur=NOTE.selectionStart||cur});
+
+function saveTxt(){
+  var s=secs.find(function(x){return x.id===aid});
+  if(s)s.text=NOTE.value;
+}
+
+/* UNDO / REDO */
+function pushH(text){
+  if(hist[hidx]===text)return;
+  hist=hist.slice(0,hidx+1);
+  hist.push(text);
+  if(hist.length>60)hist.shift();
+  hidx=hist.length-1;
+}
+function undo(){
+  if(hidx>0){
+    hidx--;NOTE.value=hist[hidx];saveTxt();
+    rS=null;rE=null;updateRange();toast('復原');
+  }
+}
+function redo(){
+  if(hidx<hist.length-1){
+    hidx++;NOTE.value=hist[hidx];saveTxt();
+    rS=null;rE=null;updateRange();toast('重做');
+  }
+}
+
+/* INSERT AT CURSOR */
+function ins(text){
+  pushH(NOTE.value);
+  var f=document.activeElement===NOTE;
+  var s=f?NOTE.selectionStart:cur;
+  var e=f?NOTE.selectionEnd:cur;
+  NOTE.value=NOTE.value.slice(0,s)+text+NOTE.value.slice(e);
+  var p=s+text.length;
+  NOTE.focus();NOTE.setSelectionRange(p,p);
+  cur=p;saveTxt();
+}
+
+/* CLIPBOARD */
+function doCopy(txt,cb){
+  if(navigator.clipboard&&window.isSecureContext){
+    navigator.clipboard.writeText(txt).then(cb).catch(function(){fallCopy(txt,cb)});
+  } else {fallCopy(txt,cb)}
+}
+function fallCopy(txt,cb){
+  var ta=document.createElement('textarea');
+  ta.value=txt;ta.style.cssText='position:fixed;opacity:0;top:0;left:0;pointer-events:none';
+  document.body.appendChild(ta);ta.focus();ta.select();
+  try{document.execCommand('copy');if(cb)cb()}catch(e){toast('複製失敗')}
+  document.body.removeChild(ta);
+}
+function cpAll(){
+  var t=NOTE.value;
+  if(!t){toast('內容為空');return}
+  doCopy(t,function(){toast('已複製全部 '+t.length+' 字')});
+}
+function cpRange(){
+  if(rS===null||rE===null){toast('請先設定起點和終點');return}
+  var s=Math.min(rS,rE),e=Math.max(rS,rE);
+  var t=NOTE.value.slice(s,e);
+  if(!t){toast('選取範圍為空');return}
+  doCopy(t,function(){toast('複製 '+t.length+' 字')});
+}
+function cutRange(){
+  if(rS===null||rE===null){toast('請先設定起點和終點');return}
+  var s=Math.min(rS,rE),e=Math.max(rS,rE);
+  var t=NOTE.value.slice(s,e);
+  if(!t){toast('選取範圍為空');return}
+  pushH(NOTE.value);
+  NOTE.value=NOTE.value.slice(0,s)+NOTE.value.slice(e);
+  saveTxt();NOTE.focus();NOTE.setSelectionRange(s,s);cur=s;
+  doCopy(t,function(){toast('剪下 '+t.length+' 字')});
+  rS=null;rE=null;updateRange();
+}
+
+/* RANGE SELECTION */
+function setStart(){
+  var f=document.activeElement===NOTE;
+  rS=f?NOTE.selectionStart:cur;
+  rE=null;updateRange();toast('起點 ✓');
+}
+function setEnd(){
+  if(rS===null){toast('請先設定起點');return}
+  var f=document.activeElement===NOTE;
+  rE=f?NOTE.selectionStart:cur;
+  var s=Math.min(rS,rE),e=Math.max(rS,rE);
+  NOTE.focus();NOTE.setSelectionRange(s,e);
+  updateRange();toast('選取 '+(e-s)+' 字');
+}
+function clearRange(){
+  rS=null;rE=null;updateRange();
+  NOTE.focus();NOTE.setSelectionRange(cur,cur);
+}
+function setBtn(btn,cls,op){
+  if(!btn)return;
+  btn.className=cls;
+  btn.style.opacity=(op!==undefined)?op:'1';
+}
+function updateRange(){
+  var es=document.getElementById('es');
+  if(rS===null){
+    es.textContent='尚未設定起點';
+    setBtn(btnS,'bb dim','.28');setBtn(btnE,'bb dim','.28');
+    setBtn(btnCp,'bb dim','.28');setBtn(btnCut,'bb dim','.28');
+    setBtn(btnClr,'bb dim','.28');
+  } else if(rE===null){
+    es.textContent='起點 ✓   尚未設定終點';
+    setBtn(btnS,'bb grn');setBtn(btnE,'bb dim');
+    setBtn(btnCp,'bb dim','.28');setBtn(btnCut,'bb dim','.28');
+    setBtn(btnClr,'bb dim');
+  } else {
+    var s=Math.min(rS,rE),e=Math.max(rS,rE);
+    es.textContent='已選取 '+(e-s)+' 字';
+    setBtn(btnS,'bb grn');setBtn(btnE,'bb grn');
+    setBtn(btnCp,'bb blu');setBtn(btnCut,'bb amp');setBtn(btnClr,'bb dim');
+  }
+}
+
+/* BUTTON HELPERS */
+function mkIns(label,text,cls){
+  var btn=document.createElement('button');
+  btn.className=cls;btn.textContent=label;
+  btn.addEventListener('mousedown',function(e){e.preventDefault()});
+  btn.addEventListener('touchstart',function(e){e.preventDefault()},{passive:false});
+  btn.addEventListener('touchend',function(e){
+    e.preventDefault();ins(text);flash(btn);tTouch=Date.now();
+  });
+  btn.addEventListener('click',function(){
+    if(Date.now()-tTouch<400)return;
+    ins(text);flash(btn);
+  });
+  return btn;
+}
+function mkAct(label,cls,action){
+  var btn=document.createElement('button');
+  btn.className=cls;btn.textContent=label;
+  btn.addEventListener('mousedown',function(e){e.preventDefault()});
+  btn.addEventListener('touchstart',function(e){e.preventDefault()},{passive:false});
+  btn.addEventListener('touchend',function(e){
+    e.preventDefault();action();flash(btn);tTouch=Date.now();
+  });
+  btn.addEventListener('click',function(){
+    if(Date.now()-tTouch<400)return;
+    action();flash(btn);
+  });
+  return btn;
+}
+function flash(el){
+  if(parseFloat(el.style.opacity||'1')<0.5)return;
+  el.classList.add('tap');
+  setTimeout(function(){el.classList.remove('tap')},130);
+}
+
+/* SECTION TABS */
+function renderTabs(){
+  var bar=document.getElementById('tabBar');bar.innerHTML='';
+  secs.forEach(function(sec){
+    var btn=document.createElement('button');
+    btn.className='stab'+(sec.id===aid?' on':'');
+    btn.textContent=sec.name;
+    btn.addEventListener('click',function(){switchTo(sec.id)});
+    var timer;
+    btn.addEventListener('touchstart',function(){
+      timer=setTimeout(function(){tabMenu(sec)},500);
+    },{passive:true});
+    btn.addEventListener('touchend',function(){clearTimeout(timer)});
+    btn.addEventListener('touchmove',function(){clearTimeout(timer)});
+    btn.addEventListener('contextmenu',function(e){e.preventDefault();tabMenu(sec)});
+    bar.appendChild(btn);
+  });
+  var add=document.createElement('button');
+  add.className='tabadd';add.textContent='＋';
+  add.addEventListener('click',addSec);
+  bar.appendChild(add);
+  setTimeout(function(){
+    var a=bar.querySelector('.on');
+    if(a)a.scrollIntoView({inline:'nearest',behavior:'smooth'});
+  },30);
+}
+function switchTo(id){
+  saveTxt();aid=id;
+  var s=secs.find(function(x){return x.id===id});
+  NOTE.value=s?s.text:'';
+  hist=[NOTE.value];hidx=0;cur=NOTE.value.length;
+  rS=null;rE=null;updateRange();renderTabs();
+}
+function addSec(){
+  saveTxt();
+  var defs=['第一段','第二段','Bridge','第三段','Outro','間奏','尾奏'];
+  var used=new Set(secs.map(function(x){return x.name}));
+  var def=defs.find(function(n){return!used.has(n)})||('段落'+nid);
+  var name=prompt('新段落名稱：',def);
+  if(!name)return;
+  var id=nid++;
+  secs.push({id:id,name:name.trim()||def,text:''});
+  aid=id;NOTE.value='';hist=[''];hidx=0;cur=0;
+  rS=null;rE=null;updateRange();renderTabs();
+}
+function tabMenu(sec){
+  var doRename=confirm('「'+sec.name+'」\n\n確認 → 重命名   取消 → 刪除段落');
+  if(doRename){
+    var name=prompt('新名稱：',sec.name);
+    if(name&&name.trim()){sec.name=name.trim();renderTabs();}
+  } else {
+    if(secs.length<=1){toast('最少保留一個段落');return}
+    if(!confirm('確定刪除「'+sec.name+'」？'))return;
+    secs=secs.filter(function(x){return x.id!==sec.id});
+    if(aid===sec.id){aid=secs[0].id;NOTE.value=secs[0].text;hist=[NOTE.value];hidx=0;}
+    rS=null;rE=null;updateRange();renderTabs();
+  }
+}
+
+/* BUILD BEATS */
+function buildBeats(){
+  var r1=document.getElementById('r1');
+  R1.forEach(function(n){r1.appendChild(mkIns(n,n,'bb'))});
+
+  var r2=document.getElementById('r2');
+  R2.forEach(function(b){r2.appendChild(mkIns(b.l,b.t,'bb'+(b.c?' '+b.c:'')))});
+
+  var r3=document.getElementById('r3');
+  var bU=mkAct('↩','bb dim',undo); bU.style.fontSize='15px';
+  var bRd=mkAct('↪','bb dim',redo); bRd.style.fontSize='15px';
+  var bA=mkAct('全複製','bb',cpAll);
+  bA.style.fontSize='11px';bA.style.color='var(--ac)';bA.style.borderColor='rgba(255,107,157,.3)';
+
+  btnS=mkAct('起','bb dim',setStart);
+  btnE=mkAct('終','bb dim',setEnd);
+  btnCp=mkAct('複製','bb dim',cpRange); btnCp.style.fontSize='11px';
+  btnCut=mkAct('剪下','bb dim',cutRange); btnCut.style.fontSize='11px';
+  btnClr=mkAct('×','bb dim',clearRange); btnClr.style.fontSize='15px';
+
+  [bU,bRd,bA,btnS,btnE,btnCp,btnCut,btnClr].forEach(function(b){r3.appendChild(b)});
+  updateRange();
+}
+
+/* BUILD VOCAB */
+function buildVtabs(){
+  var el=document.getElementById('vt');el.innerHTML='';
+  Object.keys(VOC).forEach(function(key){
+    var btn=document.createElement('button');
+    btn.className='vtab'+(key===avoc?' on':'');
+    btn.textContent=key;
+    btn.addEventListener('mousedown',function(e){e.preventDefault()});
+    btn.addEventListener('touchstart',function(e){e.preventDefault()},{passive:false});
+    btn.addEventListener('touchend',function(e){
+      e.preventDefault();avoc=key;buildVtabs();buildChips();tTouch=Date.now();
+    });
+    btn.addEventListener('click',function(){
+      if(Date.now()-tTouch<400)return;
+      avoc=key;buildVtabs();buildChips();
+    });
+    el.appendChild(btn);
+  });
+}
+function buildChips(){
+  var el=document.getElementById('chips');el.innerHTML='';
+  VOC[avoc].forEach(function(w){
+    el.appendChild(mkIns(w,w,'chip'));
+  });
+}
+
+/* TOAST */
+var tTimer;
+function toast(msg){
+  var t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(tTimer);
+  tTimer=setTimeout(function(){t.classList.remove('show')},2000);
+}
+
+/* IOS HEIGHT FIX */
+function fixH(){document.getElementById('app').style.height=window.innerHeight+'px'}
+window.addEventListener('resize',fixH);
+window.addEventListener('orientationchange',function(){setTimeout(fixH,80)});
+fixH();
+
+/* INIT */
+renderTabs();buildBeats();buildVtabs();buildChips();
+</script>
+</body>
+</html>
