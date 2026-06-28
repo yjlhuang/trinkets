@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>復盤編輯器</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #1a1a1f; --surface: #22222a; --surface2: #2a2a35;
+    --border: #333345; --text: #e8e8f0; --muted: #666677;
+    --accent: #7b8cde; --accent2: #c084fc;
+    --green: #6ee7b7; --yellow: #fde68a; --red: #f87171;
+  }
+
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text); font-family: 'Noto Sans TC', sans-serif;
+    overflow: hidden;
+    position: fixed; width: 100%;
+    touch-action: none;
+  }
+
+  /* wrapper is exactly 75vh tall, no more */
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 75vh;
+    overflow: hidden;
+  }
+
+
+
+  /* EDITOR — eats all remaining space */
+  #editor-wrap { flex: 1; overflow: hidden; min-height: 0; }
+  #editor {
+    width: 100%; height: 100%;
+    resize: none; border: none; outline: none;
+    background: var(--bg); color: var(--text);
+    font-family: 'Noto Sans TC', sans-serif;
+    font-size: 15px; line-height: 1.8;
+    padding: 14px 16px; overflow-y: auto;
+    caret-color: var(--accent);
+    -webkit-overflow-scrolling: touch;
+  }
+  #editor::placeholder { color: #444455; font-size: 14px; }
+  #editor::selection { background: rgba(123,140,222,0.3); }
+
+  /* RANGE STATUS slim bar */
+  #rangeBar {
+    padding: 2px 10px 3px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+  }
+  .range-status { font-size: 10px; font-family: 'JetBrains Mono', monospace; color: var(--muted); }
+  .range-status .hi { color: var(--accent2); }
+
+  /* BOTTOM PANEL — shrinks to content */
+  #bar-bottom {
+    flex-shrink: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+  }
+
+  /* Buttons */
+  .tb-label { font-size: 10px; color: var(--muted); font-family: 'JetBrains Mono', monospace; white-space: nowrap; margin: 0 1px 0 2px; }
+  .dv { width: 1px; height: 16px; background: var(--border); margin: 0 2px; flex-shrink: 0; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 5px 9px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface2);
+    color: var(--text); font-size: 12px; font-family: 'Noto Sans TC', sans-serif;
+    cursor: pointer; white-space: nowrap; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { opacity: 0.65; }
+  .btn:disabled { opacity: 0.3; }
+  .btn.acc  { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.grn  { background: #1a3a2f; border-color: var(--green); color: var(--green); }
+  .btn.grn2 { background: #132e22; border-color: #4ade80; color: #4ade80; }
+  .btn.red  { background: #3a1a1a; border-color: var(--red); color: var(--red); }
+  .btn.ylw  { background: #2a2516; border-color: var(--yellow); color: var(--yellow); font-size: 14px; }
+
+  .range-status {
+    font-size: 10px; font-family: 'JetBrains Mono', monospace;
+    color: var(--muted); flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .range-status .hi { color: var(--accent2); }
+
+  .sep-row {
+    display: flex; align-items: center; gap: 4px;
+    padding: 5px 8px; border-bottom: 1px solid var(--border);
+    overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  .sep-row::-webkit-scrollbar { display: none; }
+  .sep-label { font-size: 10px; color: var(--muted); font-family: 'JetBrains Mono', monospace; flex-shrink: 0; margin-right: 2px; }
+  .btn-sep {
+    flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+    padding: 7px 10px; border-radius: 5px;
+    border: 1px solid #444458; background: var(--bg);
+    color: #aaaacc; font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent;
+  }
+  .btn-sep:active { background: #1e1e2a; border-color: var(--accent2); color: var(--accent2); }
+  .action-row { display: flex; align-items: center; gap: 4px; padding: 5px 8px; }
+
+  /* ── EMOJI BAR ── */
+  .emoji-bar { flex-shrink: 0; background: var(--surface); border-top: 1px solid var(--border); }
+  .emoji-row-main { display: flex; align-items: center; gap: 1px; padding: 3px 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .emoji-row-main::-webkit-scrollbar { display: none; }
+  .emoji-btn { font-size: 19px; background: none; border: none; cursor: pointer; padding: 3px 2px; border-radius: 4px; flex-shrink: 0; line-height: 1; }
+  .emoji-btn:active { background: var(--surface2); }
+  .emoji-toggle { font-size: 11px; color: var(--muted); background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; cursor: pointer; flex-shrink: 0; margin-left: 2px; }
+  .emoji-extra { padding: 3px 8px 5px; display: flex; flex-wrap: wrap; gap: 1px; }
+  .emoji-extra.hidden { display: none; }
+
+
+  #toast {
+    position: fixed; bottom: 20px; left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    background: var(--surface2); border: 1px solid var(--accent);
+    color: var(--accent); padding: 6px 16px; border-radius: 20px;
+    font-size: 12px; font-family: 'JetBrains Mono', monospace;
+    opacity: 0; transition: opacity .2s, transform .2s;
+    pointer-events: none; z-index: 999;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="editor-wrap">
+    <textarea id="editor" placeholder="在這裡貼上或輸入復盤文字…"></textarea>
+  </div>
+
+  <div id="bar-bottom">
+    <!-- Row 1: sep piano keys -->
+    <div class="sep-row">
+      <span class="sep-label">分隔</span>
+      <button class="btn-sep" onclick="insertSep('short')">短</button>
+      <button class="btn-sep" onclick="insertSep('long')">長</button>
+      <button class="btn-sep" onclick="insertSep('me')">我</button>
+      <button class="btn-sep" onclick="insertSep('gemini')">Gemini</button>
+      <button class="btn-sep" onclick="insertSep('gpt')">GPT</button>
+      <button class="btn-sep" onclick="insertSep('sonnet')">Sonnet</button>
+      <button class="btn-sep" onclick="insertSep('opus')">Opus</button>
+    </div>
+    <!-- Row 2: all actions + undo + range -->
+    <div class="action-row" style="flex-wrap:wrap; gap:4px;">
+      <button class="btn" id="btnUndo" onclick="doUndo()">↩</button>
+      <button class="btn" id="btnRedo" onclick="doRedo()">↪</button>
+      <div class="dv"></div>
+      <button class="btn acc" onclick="copyAll()">全選複製</button>
+      <button class="btn red" id="btnClear" onclick="clearAll()">清空</button>
+      <button class="btn" onclick="cleanMd()">洗MD</button>
+      <button class="btn" onclick="shrinkNewlines()" title="連續換行減少一個">縮</button>
+      <button class="btn" onclick="growNewlines()" title="連續換行增加一個">增</button>
+      <div class="dv"></div>
+      <button class="btn ylw" onclick="ins('【')">【</button>
+      <button class="btn ylw" onclick="ins('】')">】</button>
+      <div class="dv"></div>
+      <button class="btn grn"  onclick="setStart()">起</button>
+      <button class="btn grn"  onclick="setEnd()">終</button>
+      <button class="btn grn"  id="btnRangeCopy" onclick="rangeCopy()" disabled>⧉</button>
+      <button class="btn grn2" id="btnRangeCut"  onclick="rangeCut()"  disabled>✂️</button>
+      <button class="btn"      onclick="clearRange()">✕</button>
+    </div>
+    <!-- Range status slim bar -->
+    <div id="rangeBar">
+      <span class="range-status" id="rangeStatus">尚未設定起點</span>
+    </div>
+    <div class="emoji-bar">
+      <div class="emoji-row-main">
+        <button class="emoji-btn" onclick="ins('😆')">😆</button>
+        <button class="emoji-btn" onclick="ins('😂')">😂</button>
+        <button class="emoji-btn" onclick="ins('🤣')">🤣</button>
+        <button class="emoji-btn" onclick="ins('🫠')">🫠</button>
+        <button class="emoji-btn" onclick="ins('🥲')">🥲</button>
+        <button class="emoji-btn" onclick="ins('☺')">☺</button>
+        <button class="emoji-btn" onclick="ins('️')">️</button>
+        <button class="emoji-btn" onclick="ins('😑')">😑</button>
+        <button class="emoji-btn" onclick="ins('😐')">😐</button>
+        <button class="emoji-btn" onclick="ins('🥺')">🥺</button>
+        <button class="emoji-btn" onclick="ins('😍')">😍</button>
+        <button class="emoji-toggle" onclick="toggleEmoji()" id="btnEmojiToggle">▾</button>
+      </div>
+      <div class="emoji-extra hidden" id="emojiExtra">
+          <button class="emoji-btn" onclick="ins('🥰')">🥰</button>
+          <button class="emoji-btn" onclick="ins('😘')">😘</button>
+          <button class="emoji-btn" onclick="ins('🤨')">🤨</button>
+          <button class="emoji-btn" onclick="ins('🧐')">🧐</button>
+          <button class="emoji-btn" onclick="ins('😬')">😬</button>
+          <button class="emoji-btn" onclick="ins('🤯')">🤯</button>
+          <button class="emoji-btn" onclick="ins('😡')">😡</button>
+          <button class="emoji-btn" onclick="ins('😳')">😳</button>
+          <button class="emoji-btn" onclick="ins('😎')">😎</button>
+          <button class="emoji-btn" onclick="ins('🥸')">🥸</button>
+          <button class="emoji-btn" onclick="ins('🤩')">🤩</button>
+          <button class="emoji-btn" onclick="ins('🥳')">🥳</button>
+          <button class="emoji-btn" onclick="ins('😵')">😵</button>
+          <button class="emoji-btn" onclick="ins('😵‍💫')">😵‍💫</button>
+          <button class="emoji-btn" onclick="ins('😮‍💨')">😮‍💨</button>
+          <button class="emoji-btn" onclick="ins('😱')">😱</button>
+          <button class="emoji-btn" onclick="ins('😨')">😨</button>
+          <button class="emoji-btn" onclick="ins('😰')">😰</button>
+          <button class="emoji-btn" onclick="ins('💀')">💀</button>
+          <button class="emoji-btn" onclick="ins('😹')">😹</button>
+          <button class="emoji-btn" onclick="ins('🫶')">🫶</button>
+          <button class="emoji-btn" onclick="ins('✌️')">✌️</button>
+          <button class="emoji-btn" onclick="ins('👍')">👍</button>
+          <button class="emoji-btn" onclick="ins('👌')">👌</button>
+          <button class="emoji-btn" onclick="ins('🤚')">🤚</button>
+          <button class="emoji-btn" onclick="ins('🙏')">🙏</button>
+          <button class="emoji-btn" onclick="ins('🤦🏻‍♀️')">🤦🏻‍♀️</button>
+          <button class="emoji-btn" onclick="ins('🤷🏻‍♀️')">🤷🏻‍♀️</button>
+          <button class="emoji-btn" onclick="ins('💃')">💃</button>
+          <button class="emoji-btn" onclick="ins('🕺')">🕺</button>
+          <button class="emoji-btn" onclick="ins('⭐️')">⭐️</button>
+          <button class="emoji-btn" onclick="ins('🌟')">🌟</button>
+          <button class="emoji-btn" onclick="ins('✨')">✨</button>
+          <button class="emoji-btn" onclick="ins('🔥')">🔥</button>
+          <button class="emoji-btn" onclick="ins('💥')">💥</button>
+          <button class="emoji-btn" onclick="ins('🌸')">🌸</button>
+          <button class="emoji-btn" onclick="ins('❤️')">❤️</button>
+          <button class="emoji-btn" onclick="ins('💕')">💕</button>
+          <button class="emoji-btn" onclick="ins('💗')">💗</button>
+          <button class="emoji-btn" onclick="ins('💖')">💖</button>
+          <button class="emoji-btn" onclick="ins('💝')">💝</button>
+          <button class="emoji-btn" onclick="ins('⭕️')">⭕️</button>
+          <button class="emoji-btn" onclick="ins('❌')">❌</button>
+          <button class="emoji-btn" onclick="ins('💯')">💯</button>
+          <button class="emoji-btn" onclick="ins('‼️')">‼️</button>
+          <button class="emoji-btn" onclick="ins('⁉️')">⁉️</button>
+          <button class="emoji-btn" onclick="ins('❗️')">❗️</button>
+          <button class="emoji-btn" onclick="ins('❓')">❓</button>
+          <button class="emoji-btn" onclick="ins('⬅️')">⬅️</button>
+          <button class="emoji-btn" onclick="ins('⬆️')">⬆️</button>
+          <button class="emoji-btn" onclick="ins('⬇️')">⬇️</button>
+          <button class="emoji-btn" onclick="ins('↗️')">↗️</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+const editor = document.getElementById('editor');
+
+// ── UNDO ──
+let undoStack = [''], undoIndex = 0, undoTimer = null;
+function pushUndo(val) {
+  undoStack = undoStack.slice(0, undoIndex + 1);
+  undoStack.push(val); undoIndex = undoStack.length - 1;
+  updateUndoButtons();
+}
+function updateUndoButtons() {
+  document.getElementById('btnUndo').disabled = undoIndex <= 0;
+  document.getElementById('btnRedo').disabled = undoIndex >= undoStack.length - 1;
+}
+function doUndo() { if (undoIndex<=0) return; undoIndex--; editor.value=undoStack[undoIndex]; updateUndoButtons(); toast('↩ 復原'); }
+function doRedo() { if (undoIndex>=undoStack.length-1) return; undoIndex++; editor.value=undoStack[undoIndex]; updateUndoButtons(); toast('↪ 取消復原'); }
+editor.addEventListener('input', () => { clearTimeout(undoTimer); undoTimer = setTimeout(() => pushUndo(editor.value), 600); });
+function programmaticSet(val) { editor.value = val; pushUndo(val); }
+updateUndoButtons();
+
+// ── TOAST ──
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._tid); t._tid = setTimeout(() => t.classList.remove('show'), 1800);
+}
+
+// ── INSERT ──
+function ins(str) {
+  const s = editor.selectionStart, e = editor.selectionEnd, v = editor.value;
+  const next = v.slice(0,s)+str+v.slice(e);
+  editor.value = next; editor.selectionStart = editor.selectionEnd = s+str.length;
+  editor.focus(); pushUndo(next);
+}
+
+// ── SEPARATORS ──
+const SEPS = {
+  short:  '\n-------------',
+  long:   '\n----------------------------------------',
+  me:     '\n----------------------------------------\n\n我',
+  gemini: '\n----------------------------------------\n\nGemini',
+  gpt:    '\n----------------------------------------\n\nGPT',
+  sonnet: '\n----------------------------------------\n\nSonnet',
+  opus:   '\n----------------------------------------\n\nOpus',
+};
+function insertSep(k) { ins(SEPS[k]); }
+
+// ── COPY ALL ──
+function copyAll() {
+  navigator.clipboard.writeText(editor.value)
+    .then(() => toast('✓ 全部已複製'))
+    .catch(() => { editor.select(); document.execCommand('copy'); toast('✓ 複製完成'); });
+}
+
+// ── CLEAR (double-tap) ──
+let clearPending = false, clearTimer = null;
+function clearAll() {
+  if (editor.value.trim() === '') return;
+  const btn = document.getElementById('btnClear');
+  if (!clearPending) {
+    clearPending = true; btn.textContent = '確定？'; btn.style.background = '#7a1a1a';
+    clearTimer = setTimeout(() => { clearPending=false; btn.textContent='清空'; btn.style.background=''; }, 2000);
+    return;
+  }
+  clearTimeout(clearTimer); clearPending=false; btn.textContent='清空'; btn.style.background='';
+  programmaticSet(''); rangeStart=rangeEnd=null; updateRangeUI(); updateRangeButtons(); toast('已清空');
+}
+
+// ── CLEAN MD ──
+function cleanMd() {
+  let t = editor.value;
+  t = t.replace(/^#{1,6}\s+/gm, '');
+  t = t.replace(/\*\*\*(.+?)\*\*\*/g, '$1');
+  t = t.replace(/\*\*(.+?)\*\*/g, '$1');
+  t = t.replace(/\*(.+?)\*/g, '$1');
+  t = t.replace(/___(.+?)___/g, '$1');
+  t = t.replace(/__(.+?)__/g, '$1');
+  t = t.replace(/_(.+?)_/g, '$1');
+  t = t.replace(/`([^`]+)`/g, '$1');
+  t = t.replace(/```[\s\S]*?```/g, '');
+  t = t.replace(/^>\s*/gm, '');
+  t = t.replace(/^[\-\*•]\s+/gm, '');
+  t = t.replace(/^\d+\.\s+/gm, '');
+  t = t.replace(/^[\-\*]{3,10}\s*$/gm, '');
+  t = t.replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1');
+  t = t.replace(/\n{3,}/g, '\n\n');
+  programmaticSet(t.trim()); toast('✨ MD 格式已清除');
+}
+
+// ── SHRINK / GROW NEWLINES (selection-aware) ──
+function applyToRange(fn) {
+  const s = editor.selectionStart, e = editor.selectionEnd;
+  if (s === e) {
+    programmaticSet(fn(editor.value));
+  } else {
+    const v = editor.value;
+    const result = fn(v.slice(s, e));
+    const next = v.slice(0, s) + result + v.slice(e);
+    editor.value = next;
+    editor.selectionStart = s;
+    editor.selectionEnd = s + result.length;
+    pushUndo(next);
+  }
+}
+function shrinkNewlines() {
+  applyToRange(t => t.replace(/\n{2,}/g, m => m.slice(0, -1)));
+  toast('↕ 換行已減少');
+}
+function growNewlines() {
+  applyToRange(t => t.replace(/\n+/g, m => m + '\n'));
+  toast('↕ 換行已增加');
+}
+function toggleEmoji() {
+  const ex = document.getElementById('emojiExtra');
+  const btn = document.getElementById('btnEmojiToggle');
+  const open = ex.classList.toggle('hidden');
+  btn.textContent = open ? '▾' : '▴';
+}
+
+// ── RANGE ──
+let rangeStart = null, rangeEnd = null;
+function updateRangeButtons() {
+  const ok = rangeStart!==null && rangeEnd!==null;
+  document.getElementById('btnRangeCopy').disabled = !ok;
+  document.getElementById('btnRangeCut').disabled  = !ok;
+}
+function setStart() { rangeStart=editor.selectionStart; rangeEnd=null; updateRangeUI(); updateRangeButtons(); editor.focus(); toast('📍 起點 '+rangeStart); }
+function setEnd() {
+  if (rangeStart===null) { toast('請先設起點'); return; }
+  rangeEnd=editor.selectionEnd;
+  if (rangeEnd<=rangeStart) { toast('終點需在起點之後'); return; }
+  updateRangeUI(); updateRangeButtons(); editor.focus(); toast('🔖 '+(rangeEnd-rangeStart)+' 字');
+}
+function updateRangeUI() {
+  const el = document.getElementById('rangeStatus');
+  if (rangeStart===null) { el.innerHTML='尚未設定起點'; return; }
+  if (rangeEnd===null) {
+    const p = editor.value.slice(rangeStart,rangeStart+8).replace(/\n/g,'↵');
+    el.innerHTML='起<span class="hi">'+rangeStart+'</span>「'+p+'…」';
+  } else {
+    el.innerHTML='起<span class="hi">'+rangeStart+'</span>→終<span class="hi">'+rangeEnd+'</span>（<span class="hi">'+(rangeEnd-rangeStart)+'</span>字）';
+  }
+}
+function rangeCopy() {
+  const s=editor.value.slice(rangeStart,rangeEnd);
+  navigator.clipboard.writeText(s).then(()=>toast('⧉ 複製 '+s.length+' 字'))
+    .catch(()=>{ editor.setSelectionRange(rangeStart,rangeEnd); document.execCommand('copy'); toast('⧉ 複製完成'); });
+}
+function rangeCut() {
+  const v=editor.value, s=v.slice(rangeStart,rangeEnd);
+  navigator.clipboard.writeText(s).then(()=>{
+    programmaticSet(v.slice(0,rangeStart)+v.slice(rangeEnd));
+    toast('✂️ 剪下 '+s.length+' 字');
+    rangeStart=rangeEnd=null; updateRangeUI(); updateRangeButtons();
+  }).catch(()=>toast('剪下失敗'));
+}
+function clearRange() { rangeStart=rangeEnd=null; updateRangeUI(); updateRangeButtons(); toast('起點已清除'); }
+
+editor.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key==='z') { e.preventDefault(); doUndo(); }
+  if ((e.ctrlKey||e.metaKey)&&(e.key==='y'||(e.shiftKey&&e.key==='z'))) { e.preventDefault(); doRedo(); }
+});
+</script>
+</body>
+</html>
