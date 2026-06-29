@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>貼紙盲測發牌機</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #d8d8d8;
+    font-family: "PingFang TC", "Microsoft JhengHei", sans-serif;
+    padding: 20px;
+    color: #222;
+  }
+  .panel {
+    max-width: 1100px;
+    margin: 0 auto 18px;
+    background: #fff;
+    border: 2px solid #c4c4c4;
+    border-radius: 14px;
+    padding: 18px 20px;
+  }
+  .panel h1 { font-size: 1.15rem; margin-bottom: 4px; }
+  .panel .hint { font-size: .8rem; color: #777; margin-bottom: 14px; line-height: 1.5; }
+  .names {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .names label { display: flex; flex-direction: column; font-size: .75rem; color: #666; gap: 4px; }
+  .names input {
+    font-size: .95rem;
+    padding: 8px 10px;
+    border: 1.5px solid #ccc;
+    border-radius: 8px;
+    font-family: inherit;
+  }
+  .names input:focus { outline: 2px solid #e00000; border-color: #e00000; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  button {
+    font-family: inherit;
+    font-size: .95rem;
+    font-weight: 700;
+    padding: 11px 18px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .btn-blind  { background: #2b2b2b; color: #fff; }
+  .btn-reveal { background: #e00000; color: #fff; }
+  .btn-toggle { background: #eee; color: #333; border: 1.5px solid #ccc; }
+  button:focus-visible { outline: 3px solid #1a73e8; outline-offset: 2px; }
+  .modeflag { font-size: .85rem; font-weight: 700; margin-left: auto; }
+  canvas {
+    display: block;
+    width: 100%;
+    max-width: 1100px;
+    height: auto;
+    margin: 0 auto;
+    border-radius: 10px;
+    box-shadow: 0 2px 16px rgba(0,0,0,.18);
+  }
+  @media (max-width: 640px) { .names { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+  <div class="panel">
+    <h1>🃏 貼紙盲測發牌機</h1>
+    <div class="hint">
+      1. 把 6 張圖命名 <b>1.png ~ 6.png</b>，跟本檔一起丟上 Netlify Drop。<br>
+      2. 在下面填各號是哪家（會被遮住，盲測圖裡看不到）。<br>
+      3. 按【下載盲測圖】發牌給評審 → 大家猜完，按【下載答案圖】開牌。<br>
+      ⚠️ 下載鈕需在 Netlify（https）上才作用，本機雙擊 file:// 會被瀏覽器擋下匯出。
+    </div>
+    <div class="names" id="names"></div>
+    <div class="buttons">
+      <button class="btn-blind"  id="dlBlind">📷 下載盲測圖（遮蔽）</button>
+      <button class="btn-reveal" id="dlReveal">🎉 下載答案圖（公佈）</button>
+      <button class="btn-toggle" id="toggle">🔍 預覽切換</button>
+      <span class="modeflag" id="flag">目前預覽：遮蔽中</span>
+    </div>
+  </div>
+
+  <canvas id="stage"></canvas>
+
+<script>
+  // ---- 版面常數（高解析，截圖不糊）----
+  const COLS = 3, ROWS = 2, PAD = 50, GAP = 40;
+  const CW = 2700;
+  const cellW = (CW - 2*PAD - (COLS-1)*GAP) / COLS;   // 840
+  const HH = 140, FH = 140;                            // 標頭 / 名字footer
+  const imgBox = cellW;                                // 圖區正方
+  const cellH = HH + imgBox + FH;                      // 1120
+  const CH = 2*PAD + ROWS*cellH + (ROWS-1)*GAP;        // 2380
+  const FONT = '"PingFang TC","Microsoft JhengHei",sans-serif';
+
+  const names = ["GPT", "Gemini Flash", "Gemini Thinking", "Gemini Pro", "Sonnet 4.6", "Opus 4.8"];
+  let previewMode = "blind";
+  let imgData = new Array(6).fill(null);
+
+  // ---- 名字輸入框 ----
+  const namesWrap = document.getElementById("names");
+  names.forEach((n, i) => {
+    const lab = document.createElement("label");
+    lab.innerHTML = `${i+1}號是哪家？`;
+    const inp = document.createElement("input");
+    inp.value = n;
+    inp.addEventListener("input", () => {
+      names[i] = inp.value;
+      if (previewMode === "reveal") draw(stage, "reveal");
+    });
+    lab.appendChild(inp);
+    namesWrap.appendChild(lab);
+  });
+
+  // ---- 載入圖片（缺圖不破版）----
+  function loadImg(src) {
+    return new Promise(res => {
+      const im = new Image();
+      im.onload  = () => res({ im, ok: true });
+      im.onerror = () => res({ im: null, ok: false });
+      im.src = src;
+    });
+  }
+  Promise.all([1,2,3,4,5,6].map(n => loadImg(n + ".png"))).then(r => {
+    imgData = r;
+    draw(stage, previewMode);
+  });
+
+  // ---- 繪圖 ----
+  const stage = document.getElementById("stage");
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y,   x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x,   y+h, r);
+    ctx.arcTo(x,   y+h, x,   y,   r);
+    ctx.arcTo(x,   y,   x+w, y,   r);
+    ctx.closePath();
+  }
+
+  function draw(canvas, mode) {
+    canvas.width = CW; canvas.height = CH;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#d8d8d8";
+    ctx.fillRect(0, 0, CW, CH);
+
+    for (let i = 0; i < 6; i++) {
+      const col = i % COLS, row = Math.floor(i / COLS);
+      const x = PAD + col * (cellW + GAP);
+      const y = PAD + row * (cellH + GAP);
+
+      // 白卡 + 淺灰框
+      ctx.fillStyle = "#fff";
+      roundRect(ctx, x, y, cellW, cellH, 26); ctx.fill();
+      ctx.strokeStyle = "#cccccc"; ctx.lineWidth = 3;
+      roundRect(ctx, x, y, cellW, cellH, 26); ctx.stroke();
+
+      // 標頭：超大紅字編號
+      ctx.fillStyle = "#e00000";
+      ctx.font = `900 84px ${FONT}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`【${i+1}號】`, x + cellW/2, y + HH/2 + 6);
+
+      // 圖區
+      const bx = x + 30, by = y + HH, bw = cellW - 60, bh = imgBox - 30;
+      const cell = imgData[i];
+      if (cell && cell.ok) {
+        const iw = cell.im.naturalWidth, ih = cell.im.naturalHeight;
+        const s = Math.min(bw/iw, bh/ih);
+        const dw = iw*s, dh = ih*s;
+        ctx.drawImage(cell.im, bx + (bw-dw)/2, by + (bh-dh)/2, dw, dh);
+      } else {
+        ctx.save();
+        ctx.fillStyle = "#f2f2f2";
+        roundRect(ctx, bx, by, bw, bh, 14); ctx.fill();
+        ctx.strokeStyle = "#bbb"; ctx.lineWidth = 3; ctx.setLineDash([14,12]);
+        roundRect(ctx, bx, by, bw, bh, 14); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "#999";
+        ctx.font = `700 46px ${FONT}`;
+        ctx.fillText(`${i+1}號（待生成）`, bx + bw/2, by + bh/2);
+        ctx.restore();
+      }
+
+      // footer：開牌才印名字（自動縮字以免太長爆框）
+      if (mode === "reveal") {
+        const nm = names[i] || "—";
+        let fs = 64;
+        ctx.font = `800 ${fs}px ${FONT}`;
+        while (ctx.measureText(nm).width > cellW - 70 && fs > 24) {
+          fs -= 2; ctx.font = `800 ${fs}px ${FONT}`;
+        }
+        ctx.fillStyle = "#111";
+        ctx.fillText(nm, x + cellW/2, y + HH + imgBox + FH/2);
+      }
+    }
+  }
+
+  // ---- 下載 ----
+  function download(mode, filename) {
+    const off = document.createElement("canvas");
+    draw(off, mode);
+    try {
+      off.toBlob(b => {
+        if (!b) { alert("匯出失敗：請把網頁傳到 Netlify（https）再按，本機 file:// 會被擋。"); return; }
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(b);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }, "image/png");
+    } catch (e) {
+      alert("匯出被瀏覽器擋下（畫布安全限制）：請改在 Netlify／https 環境開啟本頁再按下載。");
+    }
+  }
+
+  document.getElementById("dlBlind").onclick  = () => download("blind",  "盲測圖_blind.png");
+  document.getElementById("dlReveal").onclick = () => download("reveal", "答案圖_reveal.png");
+
+  // ---- 預覽切換 ----
+  const flag = document.getElementById("flag");
+  document.getElementById("toggle").onclick = () => {
+    previewMode = previewMode === "blind" ? "reveal" : "blind";
+    flag.textContent = previewMode === "blind" ? "目前預覽：遮蔽中" : "目前預覽：已公佈";
+    draw(stage, previewMode);
+  };
+</script>
+</body>
+</html>
