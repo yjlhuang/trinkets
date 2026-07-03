@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ExamShuffler v1.0 — 選擇題洗牌加工廠</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:          #f1f5f9;
+  --surface:     #ffffff;
+  --border:      #e2e8f0;
+  --border-mid:  #cbd5e1;
+  --text:        #0f172a;
+  --muted:       #64748b;
+  --accent:      #4f46e5;
+  --accent-dim:  #eef2ff;
+  --accent-dark: #3730a3;
+  --warm:        #ea580c;
+  --warm-dim:    #fff7ed;
+  --warm-border: #fed7aa;
+  --teal:        #0d9488;
+  --teal-dark:   #0f766e;
+  --green:       #16a34a;
+  --red-dim:     #fef2f2;
+  --red:         #dc2626;
+  --shadow-sm:   0 1px 2px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.04);
+  --shadow-md:   0 4px 12px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.04);
+  --r:           10px;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC',
+               'Microsoft JhengHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding: 18px 20px 32px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ── Layout ─────────────────────────────────────────── */
+.app { max-width: 1340px; margin: 0 auto; }
+
+/* ── Header ─────────────────────────────────────────── */
+.app-header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.app-title {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -.4px;
+  color: var(--text);
+}
+.app-title strong { color: var(--accent); }
+.app-version {
+  font-size: .7rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--border);
+  padding: 2px 7px;
+  border-radius: 100px;
+}
+.app-sub {
+  font-size: .75rem;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+/* ── Card ────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Controls bar ────────────────────────────────────── */
+.controls {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-bottom: 12px;
+}
+.ctrl-group { display: flex; align-items: center; gap: 8px; }
+.ctrl-label {
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  white-space: nowrap;
+}
+.ctrl-divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Inputs ──────────────────────────────────────────── */
+.inp {
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 13.5px;
+  color: var(--text);
+  background: var(--surface);
+  transition: border-color .14s;
+  font-family: inherit;
+}
+.inp:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,70,229,.12); }
+input[type="number"].inp {
+  width: 70px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 15px;
+}
+input[type="text"].inp {
+  width: 200px;
+  font-family: 'Consolas', 'Cascadia Code', monospace;
+  letter-spacing: 1.5px;
+  font-size: 13px;
+}
+
+/* ── Segmented control ───────────────────────────────── */
+.seg {
+  display: flex;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+.seg label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: .8rem;
+  font-weight: 600;
+  color: var(--muted);
+  transition: all .13s;
+  user-select: none;
+  white-space: nowrap;
+}
+.seg input[type="radio"] { display: none; }
+.seg label:has(input:checked) {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 4px rgba(0,0,0,.11);
+}
+
+/* ── Buttons ─────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: .8rem;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all .13s;
+  font-family: inherit;
+  line-height: 1;
+}
+.btn:active { transform: scale(.97); }
+.btn-indigo  { background: var(--accent); color: #fff; }
+.btn-indigo:hover { background: var(--accent-dark); }
+.btn-orange  { background: var(--warm); color: #fff; }
+.btn-orange:hover { background: #c2410c; }
+.btn-teal    { background: var(--teal); color: #fff; }
+.btn-teal:hover { background: var(--teal-dark); }
+.btn-ghost   { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+.btn-ghost:hover { background: #e8edf5; color: var(--text); }
+.btn-green   { background: var(--green); color: #fff; }
+
+/* ── Editor grid ─────────────────────────────────────── */
+.editor-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.panel { display: flex; flex-direction: column; }
+
+.panel-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.panel-title {
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.panel-actions { display: flex; gap: 6px; align-items: center; }
+.panel-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1;
+}
+
+/* ── Count pill ──────────────────────────────────────── */
+.pill {
+  background: var(--accent-dim);
+  color: var(--accent);
+  padding: 2px 9px;
+  border-radius: 100px;
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .2px;
+}
+.pill.warn { background: #fef9c3; color: #a16207; }
+
+/* ── Textareas ───────────────────────────────────────── */
+textarea {
+  flex: 1;
+  min-height: 390px;
+  border: 1.5px solid var(--border);
+  border-radius: 7px;
+  padding: 12px 13px;
+  font-family: 'Consolas', 'Cascadia Code', 'Courier New', monospace;
+  font-size: 12.5px;
+  line-height: 1.75;
+  resize: vertical;
+  color: var(--text);
+  transition: border-color .14s;
+  tab-size: 8;
+  -moz-tab-size: 8;
+  white-space: pre;
+  overflow-x: auto;
+}
+textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(79,70,229,.10); }
+#output {
+  background: #f8fafc;
+  cursor: default;
+  border-color: var(--border-mid);
+}
+
+/* Shuffle shine animation on output */
+@keyframes shine {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+#output.shuffled {
+  border-color: #a5b4fc;
+  background: linear-gradient(110deg, #f8fafc 30%, #f0f0ff 50%, #f8fafc 70%);
+  background-size: 200% auto;
+  animation: shine .55s ease-out forwards;
+}
+
+/* ── Status line ─────────────────────────────────────── */
+.status-line { font-size: .71rem; color: var(--muted); min-height: 13px; }
+.status-line.ok   { color: #15803d; }
+.status-line.warn { color: #b45309; }
+.status-line.err  { color: var(--red); }
+
+/* ── Instructions block ──────────────────────────────── */
+.instr-block {
+  border: 1.5px solid var(--warm-border);
+  border-radius: var(--r);
+  background: var(--warm-dim);
+  padding: 14px 18px;
+  margin-bottom: 12px;
+}
+.instr-title {
+  font-size: .82rem;
+  font-weight: 800;
+  color: #9a3412;
+  margin-bottom: 11px;
+}
+.instr-steps { display: flex; flex-direction: column; gap: 9px; }
+.instr-step { display: flex; gap: 10px; }
+.step-num {
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: var(--warm);
+  color: #fff;
+  font-size: .65rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.instr-text {
+  font-size: .79rem;
+  color: #7c2d12;
+  line-height: 1.65;
+}
+code {
+  background: #fde68a;
+  color: #78350f;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: 'Consolas', monospace;
+  font-size: .77rem;
+  word-break: break-all;
+}
+
+/* ── Answer key bar ──────────────────────────────────── */
+.key-bar {
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.key-label {
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  white-space: nowrap;
+}
+#keyDisplay {
+  flex: 1;
+  font-family: 'Consolas', 'Cascadia Code', monospace;
+  font-size: .95rem;
+  font-weight: 700;
+  background: var(--bg);
+  padding: 8px 13px;
+  border-radius: 7px;
+  letter-spacing: .8px;
+  min-width: 200px;
+  color: var(--text);
+  overflow-x: auto;
+  white-space: nowrap;
+  border: 1px solid var(--border);
+  transition: all .2s;
+}
+#keyDisplay.has-key {
+  color: var(--accent-dark);
+  background: var(--accent-dim);
+  border-color: #c7d2fe;
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ── Header ─────────────────────────────────────────────── -->
+<header class="app-header">
+  <div class="app-title">🗂 <strong>ExamShuffler</strong> 選擇題洗牌加工廠</div>
+  <span class="app-version">v1.0</span>
+  <div class="app-sub">字彙單字 &amp; 克漏字 · 選項洗牌 ＋ Word Tab 定位排版</div>
+</header>
+
+<!-- ── Controls ───────────────────────────────────────────── -->
+<div class="card controls">
+
+  <div class="ctrl-group">
+    <span class="ctrl-label">題號起點</span>
+    <input type="number" id="startNum" class="inp" value="1" min="1">
+  </div>
+
+  <div class="ctrl-divider"></div>
+
+  <div class="ctrl-group">
+    <span class="ctrl-label">題型模組</span>
+    <div class="seg">
+      <label><input type="radio" name="mod" value="A" checked> 📝 Module A&nbsp;&nbsp;題幹＋選項</label>
+      <label><input type="radio" name="mod" value="B"> 📋 Module B&nbsp;&nbsp;純選項</label>
+    </div>
+  </div>
+
+  <div class="ctrl-divider"></div>
+
+  <div class="ctrl-group" style="flex:1; flex-wrap:wrap;">
+    <span class="ctrl-label">答案輸入</span>
+    <input type="text" id="answerInput" class="inp" placeholder="例如 DDABC 或 D D A B C">
+    <button class="btn btn-orange" onclick="randomAnswers()">🎲 隨機盲抽</button>
+    <span id="ansHint" style="font-size:.72rem;color:var(--muted);"></span>
+  </div>
+
+</div>
+
+<!-- ── Editor ──────────────────────────────────────────────── -->
+<div class="editor-grid">
+
+  <!-- Input panel -->
+  <div class="card panel">
+    <div class="panel-head">
+      <div class="panel-title">
+        📥 題庫輸入
+        <span class="pill" id="qPill">0 題</span>
+      </div>
+    </div>
+    <div class="panel-body">
+      <textarea id="inputTA" spellcheck="false"
+        placeholder="貼入原始題目——
+
+【Module A：字彙題，帶題幹】
+21. The word ___ means to overcome difficulties.
+(A) tackle  (B) improve  (C) overcome  (D) hesitate
+
+【Module B：克漏字，純選項】
+(A) however  (B) therefore  (C) meanwhile  (D) otherwise
+
+支援格式：(A) / [A] / A. / A)
+原始題號自動清除，依題號起點重新編排"></textarea>
+      <div class="status-line" id="statusLine"></div>
+    </div>
+  </div>
+
+  <!-- Output panel -->
+  <div class="card panel">
+    <div class="panel-head">
+      <div class="panel-title">📤 Word 外銷純文字</div>
+      <div class="panel-actions">
+        <button class="btn btn-indigo" onclick="doShuffle()">🔀 一鍵選項洗牌</button>
+        <button class="btn btn-ghost" id="copyOutBtn" onclick="copyOutput()">📋 複製</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      <textarea id="output" readonly
+        placeholder="輸出預覽區（含 Tab 定位點）&#10;&#10;貼入題目後自動格式化預覽。&#10;點「洗牌」後輸出含答案雙標記 # 的版本。"></textarea>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Instructions ────────────────────────────────────────── -->
+<div class="instr-block">
+  <div class="instr-title">📘 Word 雙向取代操作說明 ── 分別產出教師版 ／ 學生版</div>
+  <div class="instr-steps">
+
+    <div class="instr-step">
+      <div class="step-num">①</div>
+      <div class="instr-text">
+        貼入 Word 後，全選段落，設定【凸排 2 字元】，Tab 停駐點（靠左對齊）：<br>
+        <strong>Module A</strong>（題幹＋選項）→ 停駐點設於 <code>2、11、20、29</code> 字元位置<br>
+        <strong>Module B</strong>（純選項）→ 停駐點設於 <code>11、20、29、38</code> 字元位置<br>
+        <span style="font-size:.75em;opacity:.8">（Times New Roman、B4 橫向、雙欄窄邊界版型）</span>
+      </div>
+    </div>
+
+    <div class="instr-step">
+      <div class="step-num">②</div>
+      <div class="instr-text">
+        <strong>產出教師解答卷</strong>：Ctrl+H，勾選【使用萬用字元】<br>
+        尋找目標：<code>#(\([A-D]\) [!#]@)#</code> &nbsp;&nbsp; 取代為：<code>\1</code> &nbsp;&nbsp; 取代格式設為【粗體＋紅色】
+      </div>
+    </div>
+
+    <div class="instr-step">
+      <div class="step-num">③</div>
+      <div class="instr-text">
+        <strong>產出學生考試卷</strong>：同上，改為 尋找目標：<code>#</code>，取代為空值（清空），即可一次去除所有標記
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Answer key ───────────────────────────────────────────── -->
+<div class="card key-bar">
+  <span class="key-label">🖍 解答本</span>
+  <div id="keyDisplay">（尚無解答）</div>
+  <button class="btn btn-teal" id="copyKeyBtn" onclick="copyKey()">🖍 複製解答本</button>
+</div>
+
+</div><!-- .app -->
+
+<script>
+'use strict';
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let parsedQs   = [];
+let lastResults = [];
+
+// ─── Parser ──────────────────────────────────────────────────────────────────
+function parseQuestions(raw) {
+  let t = raw.replace(/\r\n|\r/g, '\n');
+
+  // Normalise option markers → (X)
+  t = t.replace(/\[([A-D])\]\s*/g,          '($1) ');  // [A] → (A)
+  t = t.replace(/(^|[ \t\n])([A-D])\.\s*/gm,'$1($2) '); // A. → (A)
+  t = t.replace(/(^|[ \t\n])([A-D])\)\s*/gm,'$1($2) '); // A) → (A)
+
+  // Collect all (X) markers with positions
+  const re = /\(([A-D])\)/g;
+  const marks = [];
+  let m;
+  while ((m = re.exec(t)) !== null) {
+    marks.push({ l: m[1], p: m.index, e: m.index + m[0].length });
+  }
+
+  const qs = [];
+  let prevEnd = 0;
+  let i = 0;
+
+  while (i < marks.length) {
+    const a = marks[i], b = marks[i+1], c = marks[i+2], d = marks[i+3];
+
+    if (a?.l==='A' && b?.l==='B' && c?.l==='C' && d?.l==='D') {
+      // ── Stem: text from previous D-end to this A ──
+      const stem = cleanStem(t.slice(prevEnd, a.p));
+
+      // ── Options A B C: content between consecutive markers ──
+      const optA = t.slice(a.e, b.p).trim();
+      const optB = t.slice(b.e, c.p).trim();
+      const optC = t.slice(c.e, d.p).trim();
+
+      // ── Option D: first line after (D) ──
+      const afterD  = t.slice(d.e);
+      const dMatch  = afterD.match(/^[ \t]*([^\n]*)/);
+      const optD    = dMatch ? dMatch[1].trim() : '';
+      prevEnd = d.e + (dMatch ? dMatch[0].length : 0);
+
+      if (optA || optB || optC || optD) {
+        qs.push({ stem, opts: [optA, optB, optC, optD] });
+      }
+      i += 4;
+    } else {
+      i++;
+    }
+  }
+  return qs;
+}
+
+function cleanStem(raw) {
+  const lines = raw.split('\n').map(l => {
+    let s = l.trim();
+    s = s.replace(/^\(\s*\)\s*/, '');   // Remove "( )" answer box
+    s = s.replace(/^\d+[\.\)]\s*/, ''); // Remove "21." / "21)"
+    s = s.replace(/^\(\s*\)\s*/, '');   // Remove again (e.g. "( ) 21.")
+    s = s.replace(/^\d+[\.\)]\s*/, '');
+    return s;
+  }).filter(l => l.length > 0);
+  return lines.join('\n').trim();
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function parseAnswers(str) {
+  return (str.match(/[A-Da-d]/g) || []).map(c => c.toUpperCase());
+}
+
+function fisherYates(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// ─── Generate output ─────────────────────────────────────────────────────────
+function generate(qs, answers, startNum, mod, doShuffle) {
+  return qs.map((q, idx) => {
+    const num       = startNum + idx;
+    const hasAns    = doShuffle && idx < answers.length;
+    const origIdx   = hasAns ? 'ABCD'.indexOf(answers[idx]) : -1;
+
+    let opts        = [...q.opts];
+    let newIdx      = origIdx;
+
+    // Shuffle if we have a valid answer for this question
+    if (hasAns && origIdx >= 0) {
+      const correct = opts[origIdx];
+      opts  = fisherYates(opts);
+      newIdx = opts.indexOf(correct);
+    }
+
+    const ansLetter = (hasAns && newIdx >= 0) ? 'ABCD'[newIdx] : null;
+
+    // Build option parts
+    const parts = opts.map((content, oi) => {
+      const letter = 'ABCD'[oi];
+      return (hasAns && newIdx >= 0 && oi === newIdx)
+        ? `#(${letter}) ${content}#`
+        : `(${letter}) ${content}`;
+    });
+
+    // Format by module type
+    let text;
+    if (mod === 'A') {
+      const stemLine = q.stem ? `(   ) ${num}. ${q.stem}` : `(   ) ${num}.`;
+      text = stemLine + '\n\t' + parts.join('\t');
+    } else {
+      text = `${num}.\t` + parts.join('\t');
+    }
+
+    return { text, ansLetter };
+  });
+}
+
+// ─── Answer key ──────────────────────────────────────────────────────────────
+function buildKey(results) {
+  const anyAns = results.some(r => r.ansLetter);
+  if (!anyAns) return null;
+
+  let lastIdx = -1;
+  results.forEach((r, i) => { if (r.ansLetter) lastIdx = i; });
+
+  let key = 'key：';
+  for (let i = 0; i <= lastIdx; i++) {
+    if (i > 0 && i % 5 === 0) key += ' ';
+    key += results[i].ansLetter || '_';
+  }
+  return key;
+}
+
+// ─── Refresh output ───────────────────────────────────────────────────────────
+function refreshOutput(doShuffle) {
+  const startNum = Math.max(1, parseInt(document.getElementById('startNum').value) || 1);
+  const mod      = document.querySelector('input[name="mod"]:checked').value;
+  const answers  = parseAnswers(document.getElementById('answerInput').value);
+
+  lastResults = generate(parsedQs, answers, startNum, mod, doShuffle);
+
+  const outTA = document.getElementById('output');
+  outTA.value = lastResults.map(r => r.text).join('\n');
+
+  // Shine animation on shuffle
+  if (doShuffle) {
+    outTA.classList.remove('shuffled');
+    void outTA.offsetWidth; // reflow to restart animation
+    outTA.classList.add('shuffled');
+  } else {
+    outTA.classList.remove('shuffled');
+  }
+
+  // Update answer key
+  const keyEl  = document.getElementById('keyDisplay');
+  const keyStr = buildKey(lastResults);
+  if (keyStr) {
+    keyEl.textContent = keyStr;
+    keyEl.classList.add('has-key');
+  } else {
+    keyEl.textContent = '（尚無解答）';
+    keyEl.classList.remove('has-key');
+  }
+}
+
+// ─── Input handler ────────────────────────────────────────────────────────────
+function onInputChange() {
+  const raw = document.getElementById('inputTA').value;
+  parsedQs  = parseQuestions(raw);
+
+  const n   = parsedQs.length;
+  const pill = document.getElementById('qPill');
+  pill.textContent = n + ' 題';
+  pill.className   = n > 0 ? 'pill' : 'pill warn';
+
+  const st = document.getElementById('statusLine');
+  if (!raw.trim()) {
+    st.textContent = ''; st.className = 'status-line';
+  } else if (n > 0) {
+    st.textContent = `✅ 解析到 ${n} 題`; st.className = 'status-line ok';
+  } else {
+    st.textContent = '⚠️ 未偵測到完整 ABCD 選項組合，請確認格式'; st.className = 'status-line warn';
+  }
+
+  updateAnsHint();
+  refreshOutput(false);
+}
+
+function updateAnsHint() {
+  const answers = parseAnswers(document.getElementById('answerInput').value);
+  const n       = parsedQs.length;
+  const hint    = document.getElementById('ansHint');
+
+  if (!n) { hint.textContent = ''; return; }
+
+  if (answers.length === 0) {
+    hint.textContent = '（未輸入答案，洗牌不加標記）';
+  } else if (answers.length < n) {
+    hint.textContent = `⚠ 答案數 ${answers.length}，少於題目數 ${n}，後段不洗牌`;
+  } else {
+    hint.textContent = `✅ ${answers.length} 個答案`;
+  }
+}
+
+// ─── Action handlers ──────────────────────────────────────────────────────────
+function doShuffle() {
+  if (!parsedQs.length) {
+    alert('請先在左側貼入題目！'); return;
+  }
+  refreshOutput(true);
+}
+
+function randomAnswers() {
+  if (!parsedQs.length) {
+    alert('請先貼入題目，才能隨機抽取答案！'); return;
+  }
+  let ans = '';
+  for (let i = 0; i < parsedQs.length; i++) ans += 'ABCD'[Math.floor(Math.random() * 4)];
+  document.getElementById('answerInput').value = ans;
+  updateAnsHint();
+}
+
+// ─── Clipboard ────────────────────────────────────────────────────────────────
+async function copyOutput() {
+  const t = document.getElementById('output').value;
+  if (!t.trim()) return;
+  await clip(t, 'copyOutBtn', '📋 複製');
+}
+
+async function copyKey() {
+  const el = document.getElementById('keyDisplay');
+  if (!el.classList.contains('has-key')) return;
+  await clip(el.textContent, 'copyKeyBtn', '🖍 複製解答本');
+}
+
+async function clip(text, btnId, origLabel) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  flash(btnId, origLabel);
+}
+
+function flash(id, origLabel) {
+  const btn = document.getElementById(id);
+  if (btn.dataset.flashing) return;
+  btn.dataset.flashing = '1';
+  const origClass = btn.className;
+  btn.textContent  = '✅ 已複製';
+  btn.className    = 'btn btn-green';
+  setTimeout(() => {
+    btn.textContent = origLabel;
+    btn.className   = origClass;
+    delete btn.dataset.flashing;
+  }, 1800);
+}
+
+// ─── Event wiring ─────────────────────────────────────────────────────────────
+document.getElementById('inputTA').addEventListener('input', onInputChange);
+document.getElementById('startNum').addEventListener('input', () => refreshOutput(false));
+document.getElementById('answerInput').addEventListener('input', () => {
+  updateAnsHint();
+  // Don't auto-reshuffle on answer change; user clicks the button explicitly
+});
+document.querySelectorAll('input[name="mod"]').forEach(r => {
+  r.addEventListener('change', () => refreshOutput(false));
+});
+
+// Tab key inserts literal tab instead of blurring focus
+document.getElementById('inputTA').addEventListener('keydown', e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = e.target.selectionStart, end = e.target.selectionEnd;
+    e.target.value = e.target.value.slice(0, s) + '\t' + e.target.value.slice(end);
+    e.target.selectionStart = e.target.selectionEnd = s + 1;
+    onInputChange();
+  }
+});
+</script>
+</body>
+</html>

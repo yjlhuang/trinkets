@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>座位表編排器（通用版）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700;900&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --paper:#F6F1E7; --panel:#FFFFFF; --ink:#2A2620;
+    --board:#1F3B32; --board-2:#2C5045; --chalk:#F6F1E7;
+    --accent:#C97A3D; --accent-soft:#F0D9B8; --line:#DDD3BE;
+    --seat-empty:#FBF9F3; --seat-filled:#FFFFFF; --ok:#4C7A5A; --danger:#B0503B; --muted:#8A8070;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0; background:var(--paper); color:var(--ink); font-family:'Noto Sans TC', system-ui, sans-serif; -webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:'Noto Serif TC', serif; margin:0;}
+  #app{max-width:1180px; margin:0 auto; padding:28px 20px 80px;}
+
+  header.top{
+    background:var(--board); color:var(--chalk); border-radius:16px; padding:22px 26px;
+    display:flex; flex-wrap:wrap; gap:18px; align-items:center; justify-content:space-between;
+    box-shadow:0 6px 0 rgba(0,0,0,0.08); margin-bottom:20px;
+  }
+  header.top .title-block h1{font-size:22px; font-weight:900; letter-spacing:1px;}
+  header.top .title-block p{margin:4px 0 0; font-size:12.5px; opacity:.75;}
+  .class-info{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+  .class-info label{display:flex; flex-direction:column; font-size:11px; opacity:.8; gap:4px;}
+  .class-info input{background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25); border-radius:8px; color:var(--chalk); padding:7px 9px; font-size:13px; width:110px; font-family:inherit;}
+  .class-info input::placeholder{color:rgba(255,255,255,0.4);}
+  .class-info button{padding:8px 12px;}
+
+  section.panel{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; margin-bottom:18px;}
+  section.panel > h2{font-size:15px; display:flex; align-items:center; gap:8px; margin-bottom:4px;}
+  section.panel > h2 .num{background:var(--accent); color:#fff; width:22px;height:22px;border-radius:50%; display:inline-flex; align-items:center; justify-content:center; font-size:12px;}
+  section.panel > p.hint{font-size:12.5px; color:var(--muted); margin:2px 0 14px;}
+
+  /* setup screen */
+  .setup-grid{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
+  @media (max-width:760px){ .setup-grid{grid-template-columns:1fr;} }
+  .field label{display:block; font-size:13px; font-weight:700; margin-bottom:6px;}
+  .field .sub{font-size:12px; color:var(--muted); margin-bottom:8px; display:block;}
+  textarea, .field input[type=text], .field input[type=number]{
+    width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 10px;
+    font-family:inherit; font-size:13.5px; background:var(--seat-empty); color:var(--ink); resize:vertical;
+  }
+  textarea{min-height:160px; line-height:1.6;}
+  .row-inline{display:flex; gap:10px; align-items:flex-end; margin-bottom:10px; flex-wrap:wrap;}
+  .row-inline .field{flex:1; min-width:110px;}
+  .status-line{font-size:12.5px; margin-top:8px; padding:8px 10px; border-radius:8px;}
+  .status-ok{background:#E7F2EA; color:#2f5b3f;}
+  .status-warn{background:#FBEAE6; color:#8a3a2b;}
+  .preset-btns{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;}
+  .preset-btns button{font-size:12px; padding:6px 10px;}
+
+  /* officers */
+  .officer-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(190px,1fr)); gap:10px;}
+  .officer-item{background:var(--seat-empty); border:1px solid var(--line); border-radius:9px; padding:8px 10px;}
+  .officer-item label{font-size:11px; color:var(--muted); display:block; margin-bottom:3px; font-weight:400;}
+  .officer-item input{width:100%; border:none; background:transparent; font-size:14px; font-weight:500; color:var(--ink); font-family:inherit; padding:2px 0; border-bottom:1px solid transparent;}
+  .officer-item input:focus{outline:none; border-bottom:1px solid var(--accent);}
+  .officer-item.teacher{grid-column:1 / -1; background:var(--accent-soft); border-color:var(--accent);}
+
+  .workarea{display:grid; grid-template-columns:250px 1fr; gap:18px; align-items:start;}
+  @media (max-width:820px){ .workarea{grid-template-columns:1fr;} }
+  .roster-panel{position:sticky; top:16px;}
+  .progress-line{display:flex; align-items:center; justify-content:space-between; font-size:12.5px; color:var(--muted); margin-bottom:10px;}
+  .progress-bar{height:6px; background:var(--seat-empty); border-radius:4px; overflow:hidden; margin-bottom:12px; border:1px solid var(--line);}
+  .progress-bar > div{height:100%; background:var(--ok); transition:width .25s;}
+  .roster-list{max-height:560px; overflow-y:auto; border:1px solid var(--line); border-radius:10px; background:var(--seat-empty);}
+  .roster-item{display:flex; align-items:center; gap:8px; padding:7px 10px; border-bottom:1px solid var(--line); cursor:pointer; font-size:13px; transition:background .12s;}
+  .roster-item:last-child{border-bottom:none;}
+  .roster-item:hover{background:#fff;}
+  .roster-item .badge{width:22px;height:22px;border-radius:50%; background:#fff; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--muted); flex-shrink:0;}
+  .roster-item .name{flex:1; color:var(--ink);}
+  .roster-item.assigned .badge{background:var(--ok); color:#fff; border-color:var(--ok);}
+  .roster-item.assigned .name{color:var(--muted); text-decoration:line-through; text-decoration-color:var(--line);}
+  .roster-item.active{background:var(--accent-soft);}
+  .roster-item.active .badge{background:var(--accent); color:#fff; border-color:var(--accent);}
+  .roster-item.active .name{font-weight:700; color:var(--ink); text-decoration:none;}
+  .roster-actions{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+
+  .chart-panel{overflow-x:auto;}
+  .active-hint{font-size:13px; margin-bottom:14px; padding:9px 12px; background:var(--accent-soft); border:1px dashed var(--accent); border-radius:9px; color:#6b3d1a;}
+  .active-hint b{font-family:'Noto Serif TC'; font-size:15px;}
+  .active-hint.done{background:#E7F2EA; border-color:var(--ok); color:#2f5b3f;}
+
+  .seat-grid{display:flex; flex-direction:column; gap:8px; min-width:420px;}
+  .seat-row{display:grid; gap:8px;}
+  .seat-slot{min-height:56px;}
+  .seat-slot.gap{visibility:hidden;}
+  .seat{height:100%; border-radius:9px; border:1.5px dashed var(--line); background:var(--seat-empty); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; padding:6px 2px; transition:transform .08s, box-shadow .12s, border-color .12s; user-select:none;}
+  .seat:hover{border-color:var(--accent); transform:translateY(-1px);}
+  .seat.filled{border-style:solid; border-color:var(--line); background:var(--seat-filled); box-shadow:0 2px 0 rgba(0,0,0,0.05);}
+  .seat.filled .num{font-family:'Noto Serif TC'; font-weight:700; font-size:15px; color:var(--accent);}
+  .seat.filled .nm{font-size:11px; color:var(--ink); margin-top:1px; text-align:center;}
+  .seat.empty .plus{color:var(--line); font-size:16px;}
+  .seat.origin-active{outline:2px solid var(--accent); outline-offset:1px;}
+  .podium{text-align:center; padding:9px; margin-top:4px; background:var(--board); color:var(--chalk); border-radius:8px; font-size:12.5px; letter-spacing:4px; font-weight:700;}
+
+  .toolbar{display:flex; flex-wrap:wrap; gap:10px; margin-top:10px;}
+  button{font-family:inherit; font-size:13px; font-weight:500; border-radius:8px; padding:9px 15px; cursor:pointer; border:1px solid var(--line); background:#fff; color:var(--ink); transition:background .12s, border-color .12s;}
+  button:hover{border-color:var(--accent);}
+  button.primary{background:var(--board); color:#fff; border-color:var(--board);}
+  button.primary:hover{background:var(--board-2);}
+  button.ghost{background:transparent;}
+  button.danger{color:var(--danger); border-color:var(--danger);}
+  button:disabled{opacity:.45; cursor:not-allowed;}
+
+  .banner{display:flex; align-items:center; justify-content:space-between; gap:12px; background:#FBF3E4; border:1px solid var(--accent); border-radius:10px; padding:10px 14px; margin-bottom:16px; font-size:13px; flex-wrap:wrap;}
+  .banner button{padding:6px 12px; font-size:12.5px;}
+  .export-row{display:flex; flex-wrap:wrap; gap:10px; align-items:center;}
+  .export-row .save-note{font-size:12px; color:var(--muted);}
+  footer.credit{text-align:center; font-size:11px; color:var(--muted); margin-top:30px;}
+
+  #setupScreen{display:none;}
+  #mainScreen{display:none;}
+
+  #printRoot{display:none;}
+  @media print{
+    body *{visibility:hidden;}
+    #printRoot, #printRoot *{visibility:visible;}
+    #printRoot{display:block; position:absolute; top:0; left:0; width:100%;}
+    .print-page{width:100%; page-break-after:always; padding:10mm 12mm; box-sizing:border-box; font-family:'Noto Sans TC', sans-serif;}
+    .print-page:last-child{page-break-after:auto;}
+    @page{ size:A4 portrait; margin:8mm; }
+  }
+  .print-title{text-align:center; font-family:'Noto Serif TC'; font-weight:900; font-size:18px; margin-bottom:6px;}
+  .print-sub{text-align:center; font-size:11px; color:#555; margin-bottom:10px;}
+  .print-officers{display:flex; justify-content:flex-end; margin-bottom:8px;}
+  .print-officers table{border-collapse:collapse; font-size:10px;}
+  .print-officers th, .print-officers td{border:1px solid #999; padding:2px 7px; text-align:center;}
+  .print-officers th{background:#eee;}
+  .print-grid{display:flex; flex-direction:column; gap:5px;}
+  .print-row{display:grid; gap:5px;}
+  .print-seat{border:1px solid #999; border-radius:4px; min-height:36px; text-align:center; padding:3px 2px;}
+  .print-seat.gap{visibility:hidden;}
+  .print-seat .num{font-weight:700; font-size:10.5px;}
+  .print-seat .nm{font-size:9.5px;}
+  .print-podium{text-align:center; border:1px solid #333; border-radius:4px; padding:5px; margin:6px 0; font-size:11px; letter-spacing:4px; font-weight:700; background:#f0f0f0;}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <header class="top">
+    <div class="title-block">
+      <h1>座位表編排器（通用版）</h1>
+      <p>可自訂人數、排列方式與名單 — 適用任何班級大小</p>
+    </div>
+    <div class="class-info" id="topClassInfo" style="display:none;">
+      <label>學年度學期<input id="ci-term" placeholder="114-2"></label>
+      <label>班級<input id="ci-class" placeholder="例：501班"></label>
+      <label>版本/日期<input id="ci-ver" placeholder="例：8/25版"></label>
+      <button id="btnBackToSetup" class="ghost">⚙ 重新設定名單/座位</button>
+    </div>
+  </header>
+
+  <!-- ========== SETUP SCREEN ========== -->
+  <div id="setupScreen">
+    <section class="panel">
+      <h2><span class="num">1</span>學生名單</h2>
+      <p class="hint">每行一位學生。可以只寫姓名（會照順序自動編 1、2、3...號），也可以自己打座號，例如「12 王小明」「12,王小明」「12、王小明」都看得懂。</p>
+      <div class="field">
+        <textarea id="rosterInput" placeholder="王小明&#10;林小美&#10;陳大同&#10;……"></textarea>
+        <span class="sub" id="rosterCount">目前 0 位學生</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">2</span>座位排列</h2>
+      <p class="hint">用「每排幾個座位」描述教室形狀，例如原本的教室是 <code>5,7,7,7,7,6</code>（由後排到前排，逗號分隔）。也可以用下面的小工具依總人數自動平均分配。</p>
+      <div class="row-inline">
+        <div class="field" style="max-width:140px;">
+          <label style="font-size:12px;">共幾排</label>
+          <input type="number" id="quickRows" min="1" value="6">
+        </div>
+        <div class="field" style="max-width:140px;">
+          <label style="font-size:12px;">每排最多幾個</label>
+          <input type="number" id="quickCols" min="1" value="7">
+        </div>
+        <button id="btnAutoFill">依人數自動分配</button>
+      </div>
+      <div class="field">
+        <label>每排座位數（由後排到前排，逗號分隔）</label>
+        <input type="text" id="rowSpecInput" placeholder="5,7,7,7,7,6">
+      </div>
+      <div id="layoutStatus" class="status-line"></div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">3</span>幹部 / 小老師欄位（選填）</h2>
+      <p class="hint">每行一個職稱，例如「班長」。不需要的話可以整個清空，就不會顯示這個區塊。</p>
+      <div class="field">
+        <textarea id="rolesInput" style="min-height:120px;"></textarea>
+      </div>
+      <div class="preset-btns">
+        <button id="btnPresetRoles">套用常見職稱（導師/班長/副班長…）</button>
+        <button id="btnClearRoles" class="ghost">清空（不使用幹部欄位）</button>
+      </div>
+    </section>
+
+    <div class="toolbar">
+      <button id="btnBuild" class="primary">建立座位表 →</button>
+    </div>
+  </div>
+
+  <!-- ========== MAIN SCREEN ========== -->
+  <div id="mainScreen">
+    <div id="loadBanner" class="banner" style="display:none;">
+      <span id="loadBannerText"></span>
+      <span>
+        <button id="btnLoadDraft" class="primary">載入</button>
+        <button id="btnDismissDraft" class="ghost">略過，從空白開始</button>
+      </span>
+    </div>
+
+    <section class="panel" id="officerSection">
+      <h2><span class="num">1</span>幹部 / 小老師</h2>
+      <p class="hint">會自動記住在這台裝置上，下次打開不用重填。</p>
+      <div class="officer-grid" id="officerGrid"></div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">2</span>排座位</h2>
+      <p class="hint">左邊名單反白的號碼是「準備要排」的人，點右邊任一空位即可入座並自動跳下一個。點錯了再點一次那個座位就會收回。也可以直接點名單裡任何一號來改排他。</p>
+      <div class="workarea">
+        <div class="roster-panel">
+          <div class="progress-line"><span id="progressText">已排 0 / 0</span><span id="progressPct">0%</span></div>
+          <div class="progress-bar"><div id="progressFill" style="width:0%"></div></div>
+          <div class="roster-list" id="rosterList"></div>
+          <div class="roster-actions">
+            <button id="btnClearSeats" class="ghost danger">清空全部座位</button>
+          </div>
+        </div>
+        <div class="chart-panel">
+          <div id="activeHint" class="active-hint"></div>
+          <div class="seat-grid" id="seatGrid"></div>
+          <div class="podium">講　台</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2><span class="num">3</span>確認並輸出</h2>
+      <p class="hint">Excel 會同時產生「教師版（講台在下）」與「學生版（講台在上）」兩張工作表；A4 會開啟列印視窗，可直接列印或另存 PDF。</p>
+      <div class="export-row">
+        <button id="btnExportXlsx" class="primary">匯出 Excel（.xlsx）</button>
+        <button id="btnPrintA4" class="primary">產生 A4 列印版</button>
+        <span class="save-note" id="saveNote"></span>
+      </div>
+    </section>
+  </div>
+
+  <footer class="credit">座位與名單資料只存在您這台瀏覽器裡，不會上傳到任何地方。</footer>
+</div>
+
+<div id="printRoot"></div>
+
+<script>
+/* ---------------- storage adapter: works inside claude.ai artifacts (window.storage) AND as a plain downloaded html file (localStorage fallback) ---------------- */
+async function storageGet(key){
+  if(typeof window.storage !== 'undefined' && window.storage){
+    try{ const r = await window.storage.get(key); return r ? r.value : null; }catch(e){ return null; }
+  }
+  try{ return localStorage.getItem(key); }catch(e){ return null; }
+}
+async function storageSet(key, value){
+  if(typeof window.storage !== 'undefined' && window.storage){
+    try{ await window.storage.set(key, value); return; }catch(e){ return; }
+  }
+  try{ localStorage.setItem(key, value); }catch(e){}
+}
+
+/* ---------------- global state ---------------- */
+let ROSTER = {};       // number -> name
+let TOTAL = 0;
+let ROW_SPEC = [];     // array of seat counts per row, back->front
+let MAX_COLS = 0;
+let OFFICER_ROLES = []; // array of role name strings
+let seatOf = {};        // number -> seatId
+let occupantOf = {};    // seatId -> number
+let activeNumber = 1;
+
+const DEFAULT_ROLES = ["導師","班長","副班長","風紀","學藝","衛生","環保","體育","總務","輔導","圖書","午餐","保健","資訊"];
+
+/* ---------------- setup screen logic ---------------- */
+function parseRoster(text){
+  const lines = text.split('\n').map(l=>l.trim()).filter(l=>l.length);
+  const roster = {};
+  let autoIdx = 1;
+  let explicit = lines.length>0 && lines.every(l=>/^\d+/.test(l));
+  lines.forEach(line=>{
+    const m = line.match(/^(\d+)[\s,、\.]+(.+)$/);
+    if(explicit && m){
+      roster[parseInt(m[1],10)] = m[2].trim();
+    } else {
+      roster[autoIdx] = line.replace(/^\d+[\s,、\.]*/,'').trim() || line;
+      autoIdx++;
+    }
+  });
+  return roster;
+}
+
+function updateRosterCount(){
+  const roster = parseRoster(document.getElementById('rosterInput').value);
+  const n = Object.keys(roster).length;
+  document.getElementById('rosterCount').textContent = `目前 ${n} 位學生`;
+  return n;
+}
+
+function parseRowSpec(text){
+  return text.split(',').map(s=>s.trim()).filter(s=>s.length).map(s=>parseInt(s,10)).filter(n=>!isNaN(n)&&n>0);
+}
+
+function updateLayoutStatus(){
+  const n = updateRosterCount();
+  const spec = parseRowSpec(document.getElementById('rowSpecInput').value);
+  const seatTotal = spec.reduce((a,b)=>a+b,0);
+  const el = document.getElementById('layoutStatus');
+  if(spec.length===0){
+    el.className='status-line status-warn';
+    el.textContent = '請輸入每排座位數';
+    return false;
+  }
+  if(seatTotal === n && n>0){
+    el.className='status-line status-ok';
+    el.textContent = `✓ 座位總數 ${seatTotal} 個，與學生人數相符`;
+    return true;
+  } else {
+    el.className='status-line status-warn';
+    el.textContent = `座位總數 ${seatTotal} 個，學生 ${n} 位 — 兩者不一致，請調整`;
+    return false;
+  }
+}
+
+function autoFillRowSpec(){
+  const n = updateRosterCount();
+  const rows = Math.max(1, parseInt(document.getElementById('quickRows').value,10)||1);
+  const maxCols = Math.max(1, parseInt(document.getElementById('quickCols').value,10)||1);
+  if(n===0){ alert('請先貼上學生名單'); return; }
+  // distribute n across `rows` rows, each at most maxCols, filled from front row backwards evenly
+  let remaining = n;
+  const perRow = Math.ceil(n/rows);
+  const cols = Math.min(perRow, maxCols);
+  const spec = [];
+  for(let i=0;i<rows && remaining>0;i++){
+    const c = Math.min(cols, remaining);
+    spec.push(c);
+    remaining -= c;
+  }
+  if(remaining>0){
+    // not enough rows at this width — add extra row
+    spec.push(remaining);
+  }
+  document.getElementById('rowSpecInput').value = spec.join(',');
+  updateLayoutStatus();
+}
+
+function buildSeatIdsFromSpec(spec){
+  const ids = [];
+  spec.forEach((count,r)=>{
+    for(let c=0;c<count;c++) ids.push(`r${r}s${c}`);
+  });
+  return ids;
+}
+
+async function buildFromSetup(){
+  const roster = parseRoster(document.getElementById('rosterInput').value);
+  const n = Object.keys(roster).length;
+  const spec = parseRowSpec(document.getElementById('rowSpecInput').value);
+  const seatTotal = spec.reduce((a,b)=>a+b,0);
+  if(n===0){ alert('請先貼上學生名單'); return; }
+  if(seatTotal !== n){ alert(`座位總數(${seatTotal})與學生人數(${n})不一致，請調整第2步的每排座位數`); return; }
+
+  const rolesText = document.getElementById('rolesInput').value;
+  const roles = rolesText.split('\n').map(l=>l.trim()).filter(l=>l.length);
+
+  ROSTER = roster; TOTAL = n; ROW_SPEC = spec; MAX_COLS = Math.max(...spec);
+  OFFICER_ROLES = roles;
+  seatOf = {}; occupantOf = {}; activeNumber = 1;
+
+  await storageSet('classConfig', JSON.stringify({ROSTER, ROW_SPEC, OFFICER_ROLES}));
+  await storageSet('draftSeating', '');
+  await storageSet('officers', '');
+
+  showMainScreen(true);
+}
+
+/* ---------------- storage: class info / officers / draft ---------------- */
+async function saveOfficers(){
+  const data = {};
+  OFFICER_ROLES.forEach(r=>{
+    const el = document.getElementById('off-'+encodeURIComponent(r));
+    if(el) data[r] = el.value;
+  });
+  await storageSet('officers', JSON.stringify(data));
+}
+async function loadOfficers(){
+  const v = await storageGet('officers');
+  try{ return v ? JSON.parse(v) : null; }catch(e){ return null; }
+}
+async function saveClassInfo(){
+  const data = {
+    term: document.getElementById('ci-term').value,
+    cls: document.getElementById('ci-class').value,
+    ver: document.getElementById('ci-ver').value
+  };
+  await storageSet('classInfo', JSON.stringify(data));
+}
+async function loadClassInfo(){
+  const v = await storageGet('classInfo');
+  try{ return v ? JSON.parse(v) : null; }catch(e){ return null; }
+}
+let draftSaveTimer = null;
+function scheduleDraftSave(){
+  clearTimeout(draftSaveTimer);
+  draftSaveTimer = setTimeout(async ()=>{
+    await storageSet('draftSeating', JSON.stringify({seatOf, ts: Date.now()}));
+    const note = document.getElementById('saveNote');
+    if(note) note.textContent = '已自動儲存草稿 · ' + new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+  }, 500);
+}
+async function loadDraft(){
+  const v = await storageGet('draftSeating');
+  try{ return v ? JSON.parse(v) : null; }catch(e){ return null; }
+}
+
+/* ---------------- core seat logic ---------------- */
+function nextUnassigned(from){
+  for(let i=1;i<=TOTAL;i++){
+    const n = ((from -1 + i) % TOTAL) + 1;
+    if(!seatOf[n]) return n;
+  }
+  return null;
+}
+function selectNumber(n){ activeNumber = n; render(); }
+function clickSeat(seatId){
+  if(occupantOf[seatId]){
+    const n = occupantOf[seatId];
+    delete occupantOf[seatId]; delete seatOf[n];
+    activeNumber = n;
+  } else {
+    if(activeNumber == null) return;
+    const oldSeat = seatOf[activeNumber];
+    if(oldSeat) delete occupantOf[oldSeat];
+    seatOf[activeNumber] = seatId;
+    occupantOf[seatId] = activeNumber;
+    activeNumber = nextUnassigned(activeNumber);
+  }
+  scheduleDraftSave();
+  render();
+}
+function clearAllSeats(){
+  if(!confirm('確定要清空全部座位安排嗎？名單與幹部資料不受影響。')) return;
+  seatOf = {}; occupantOf = {}; activeNumber = 1;
+  scheduleDraftSave();
+  render();
+}
+
+/* ---------------- render main screen ---------------- */
+function render(){
+  const assignedCount = Object.keys(seatOf).length;
+  document.getElementById('progressText').textContent = `已排 ${assignedCount} / ${TOTAL}`;
+  document.getElementById('progressPct').textContent = Math.round(assignedCount/TOTAL*100)+'%';
+  document.getElementById('progressFill').style.width = (assignedCount/TOTAL*100)+'%';
+
+  const list = document.getElementById('rosterList');
+  list.innerHTML = '';
+  for(let n=1;n<=TOTAL;n++){
+    const item = document.createElement('div');
+    item.className = 'roster-item' + (seatOf[n] ? ' assigned':'') + (n===activeNumber ? ' active':'');
+    item.innerHTML = `<span class="badge">${n}</span><span class="name">${ROSTER[n]}</span>`;
+    item.onclick = ()=> selectNumber(n);
+    list.appendChild(item);
+  }
+
+  const hint = document.getElementById('activeHint');
+  if(activeNumber == null){
+    hint.className = 'active-hint done';
+    hint.innerHTML = `🎉 全部 ${TOTAL} 人都已入座！可以到下方確認並輸出。`;
+  } else {
+    hint.className = 'active-hint';
+    hint.innerHTML = `目前要排的是 <b>${activeNumber}號 ${ROSTER[activeNumber]}</b> ── 點右邊任一空位入座`;
+  }
+
+  const grid = document.getElementById('seatGrid');
+  grid.innerHTML = '';
+  ROW_SPEC.forEach((count,r)=>{
+    const leftPad = Math.floor((MAX_COLS-count)/2);
+    const rightPad = MAX_COLS-count-leftPad;
+    const rowEl = document.createElement('div');
+    rowEl.className = 'seat-row';
+    rowEl.style.gridTemplateColumns = `repeat(${MAX_COLS}, 1fr)`;
+    for(let p=0;p<leftPad;p++){ const s=document.createElement('div'); s.className='seat-slot gap'; rowEl.appendChild(s); }
+    for(let c=0;c<count;c++){
+      const seatId = `r${r}s${c}`;
+      const slot = document.createElement('div');
+      slot.className = 'seat-slot';
+      const occ = occupantOf[seatId];
+      const seatEl = document.createElement('div');
+      seatEl.className = 'seat ' + (occ ? 'filled':'empty');
+      if(occ && occ===activeNumber) seatEl.classList.add('origin-active');
+      seatEl.innerHTML = occ ? `<div class="num">${occ}</div><div class="nm">${ROSTER[occ]}</div>` : `<div class="plus">＋</div>`;
+      seatEl.onclick = ()=> clickSeat(seatId);
+      slot.appendChild(seatEl);
+      rowEl.appendChild(slot);
+    }
+    for(let p=0;p<rightPad;p++){ const s=document.createElement('div'); s.className='seat-slot gap'; rowEl.appendChild(s); }
+    grid.appendChild(rowEl);
+  });
+}
+
+/* ---------------- officers UI ---------------- */
+function buildOfficerGrid(existing){
+  const section = document.getElementById('officerSection');
+  if(OFFICER_ROLES.length===0){ section.style.display='none'; return; }
+  section.style.display='block';
+  const wrap = document.getElementById('officerGrid');
+  wrap.innerHTML = '';
+  OFFICER_ROLES.forEach(role=>{
+    const box = document.createElement('div');
+    const isTeacher = /導師|老師/.test(role);
+    box.className = 'officer-item' + (isTeacher ? ' teacher':'');
+    const val = (existing && existing[role] !== undefined) ? existing[role] : '';
+    const safeId = encodeURIComponent(role);
+    box.innerHTML = `<label>${role}</label><input id="off-${safeId}" value="${(val||'').replace(/"/g,'&quot;')}" placeholder="姓名">`;
+    wrap.appendChild(box);
+  });
+  wrap.querySelectorAll('input').forEach(inp=> inp.addEventListener('input', saveOfficers));
+}
+
+/* ---------------- export helpers (shared grid building) ---------------- */
+function getOccupantGrid(){
+  return ROW_SPEC.map((count,r)=>{
+    const leftPad = Math.floor((MAX_COLS-count)/2);
+    const rightPad = MAX_COLS-count-leftPad;
+    const row = [];
+    for(let p=0;p<leftPad;p++) row.push(null);
+    for(let c=0;c<count;c++) row.push(occupantOf[`r${r}s${c}`]||null);
+    for(let p=0;p<rightPad;p++) row.push(null);
+    return row;
+  });
+}
+
+function buildSheetAoA(orderedRows, podiumAtTop, classInfo, officers){
+  const aoa = [];
+  const title = `${classInfo.term || ''}　${classInfo.cls || ''}教室座位表　${classInfo.ver || ''}`.trim();
+  aoa.push([title]); aoa.push([]);
+  if(OFFICER_ROLES.length){
+    const teacherRole = OFFICER_ROLES.find(r=>/導師|老師/.test(r));
+    const others = OFFICER_ROLES.filter(r=>r!==teacherRole);
+    if(teacherRole) aoa.push([teacherRole, officers[teacherRole]||'']);
+    aoa.push([]);
+    for(let i=0;i<others.length;i+=2){
+      const rowArr = [others[i], officers[others[i]]||''];
+      if(others[i+1]) rowArr.push(others[i+1], officers[others[i+1]]||'');
+      aoa.push(rowArr);
+    }
+    aoa.push([]); aoa.push([]);
+  }
+  if(podiumAtTop) aoa.push(['── 講　台 ──']);
+  orderedRows.forEach(row=>{
+    const numRow = row.map(v=> v || '');
+    const nameRow = row.map(v=> v ? ROSTER[v] : '');
+    aoa.push(numRow); aoa.push(nameRow);
+  });
+  if(!podiumAtTop) aoa.push(['── 講　台 ──']);
+  return aoa;
+}
+
+function currentClassInfo(){
+  return {
+    term: document.getElementById('ci-term').value,
+    cls: document.getElementById('ci-class').value,
+    ver: document.getElementById('ci-ver').value
+  };
+}
+function currentOfficers(){
+  const officers = {};
+  OFFICER_ROLES.forEach(r=>{
+    const el = document.getElementById('off-'+encodeURIComponent(r));
+    if(el) officers[r] = el.value;
+  });
+  return officers;
+}
+
+function exportXlsx(){
+  const assignedCount = Object.keys(seatOf).length;
+  if(assignedCount < TOTAL){
+    if(!confirm(`目前只排了 ${assignedCount} / ${TOTAL} 位，確定要先匯出嗎？`)) return;
+  }
+  const classInfo = currentClassInfo();
+  const officers = currentOfficers();
+  const grid = getOccupantGrid();
+  const teacherRows = grid;
+  const studentRows = [...grid].slice().reverse();
+
+  const wb = XLSX.utils.book_new();
+  const colWidths = Array(MAX_COLS).fill({wch:9});
+  const ws1 = XLSX.utils.aoa_to_sheet(buildSheetAoA(teacherRows, false, classInfo, officers));
+  ws1['!cols'] = colWidths;
+  XLSX.utils.book_append_sheet(wb, ws1, "教師版(講台在下)");
+  const ws2 = XLSX.utils.aoa_to_sheet(buildSheetAoA(studentRows, true, classInfo, officers));
+  ws2['!cols'] = colWidths;
+  XLSX.utils.book_append_sheet(wb, ws2, "學生版(講台在上)");
+
+  const fname = `${classInfo.cls||'座位表'}_${classInfo.ver||''}.xlsx`.replace(/\s+/g,'');
+  XLSX.writeFile(wb, fname);
+  saveFinalized();
+}
+async function saveFinalized(){
+  await storageSet('lastFinalizedSeating', JSON.stringify({seatOf, ts: Date.now()}));
+}
+
+function seatCellHtml(n){
+  if(!n) return `<div class="print-seat gap"></div>`;
+  return `<div class="print-seat"><div class="num">${n}</div><div class="nm">${ROSTER[n]}</div></div>`;
+}
+function officersTableHtml(officers){
+  const teacherRole = OFFICER_ROLES.find(r=>/導師|老師/.test(r));
+  const others = OFFICER_ROLES.filter(r=>r!==teacherRole);
+  let rows = '';
+  if(teacherRole) rows += `<tr><th colspan="2">${teacherRole}</th></tr><tr><td colspan="2">${officers[teacherRole]||''}</td></tr>`;
+  for(let i=0;i<others.length;i+=2){
+    if(others[i+1]){
+      rows += `<tr><th>${others[i]}</th><th>${others[i+1]}</th></tr><tr><td>${officers[others[i]]||''}</td><td>${officers[others[i+1]]||''}</td></tr>`;
+    } else {
+      rows += `<tr><th colspan="2">${others[i]}</th></tr><tr><td colspan="2">${officers[others[i]]||''}</td></tr>`;
+    }
+  }
+  return `<table>${rows}</table>`;
+}
+function gridHtml(rows){
+  return `<div class="print-grid">${rows.map(row=>`<div class="print-row" style="grid-template-columns:repeat(${MAX_COLS},1fr)">${row.map(seatCellHtml).join('')}</div>`).join('')}</div>`;
+}
+function printA4(){
+  const assignedCount = Object.keys(seatOf).length;
+  if(assignedCount < TOTAL){
+    if(!confirm(`目前只排了 ${assignedCount} / ${TOTAL} 位，確定要先列印嗎？`)) return;
+  }
+  const classInfo = currentClassInfo();
+  const officers = currentOfficers();
+  const grid = getOccupantGrid();
+  const teacherRows = grid;
+  const studentRows = [...grid].slice().reverse();
+
+  const officerBlock = OFFICER_ROLES.length ? `<div class="print-officers">${officersTableHtml(officers)}</div>` : '';
+  const page1 = `<div class="print-page">
+      <div class="print-title">${classInfo.term||''} ${classInfo.cls||''} 教室座位表（教師版）</div>
+      <div class="print-sub">${classInfo.ver||''}</div>
+      ${officerBlock}
+      ${gridHtml(teacherRows)}
+      <div class="print-podium">講　台</div>
+    </div>`;
+  const page2 = `<div class="print-page">
+      <div class="print-title">${classInfo.term||''} ${classInfo.cls||''} 教室座位表（學生版）</div>
+      <div class="print-sub">${classInfo.ver||''}</div>
+      <div class="print-podium">講　台</div>
+      ${gridHtml(studentRows)}
+    </div>`;
+
+  document.getElementById('printRoot').innerHTML = page1 + page2;
+  saveFinalized();
+  window.print();
+}
+
+/* ---------------- screen switching ---------------- */
+function showSetupScreen(){
+  document.getElementById('setupScreen').style.display = 'block';
+  document.getElementById('mainScreen').style.display = 'none';
+  document.getElementById('topClassInfo').style.display = 'none';
+}
+async function showMainScreen(isFresh){
+  document.getElementById('setupScreen').style.display = 'none';
+  document.getElementById('mainScreen').style.display = 'block';
+  document.getElementById('topClassInfo').style.display = 'flex';
+
+  const savedOfficers = isFresh ? null : await loadOfficers();
+  buildOfficerGrid(savedOfficers);
+
+  const savedClassInfo = await loadClassInfo();
+  if(savedClassInfo){
+    document.getElementById('ci-term').value = savedClassInfo.term||'';
+    document.getElementById('ci-class').value = savedClassInfo.cls||'';
+    document.getElementById('ci-ver').value = savedClassInfo.ver||'';
+  }
+
+  if(!isFresh){
+    const draft = await loadDraft();
+    if(draft && draft.seatOf && Object.keys(draft.seatOf).length){
+      const banner = document.getElementById('loadBanner');
+      const cnt = Object.keys(draft.seatOf).length;
+      const dateStr = new Date(draft.ts).toLocaleString('zh-TW',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      document.getElementById('loadBannerText').textContent = `偵測到上次未完成的排位草稿（${dateStr}，已排 ${cnt}/${TOTAL} 位），要繼續嗎？`;
+      banner.style.display = 'flex';
+      document.getElementById('btnLoadDraft').onclick = ()=>{
+        seatOf = draft.seatOf; occupantOf = {};
+        Object.entries(seatOf).forEach(([n,s])=> occupantOf[s] = Number(n));
+        activeNumber = nextUnassigned(0) ?? null;
+        if(Object.keys(seatOf).length === 0) activeNumber = 1;
+        banner.style.display = 'none';
+        render();
+      };
+      document.getElementById('btnDismissDraft').onclick = ()=>{ banner.style.display='none'; };
+    }
+  }
+  render();
+}
+
+/* ---------------- init ---------------- */
+async function init(){
+  document.getElementById('rosterInput').addEventListener('input', updateLayoutStatus);
+  document.getElementById('rowSpecInput').addEventListener('input', updateLayoutStatus);
+  document.getElementById('btnAutoFill').addEventListener('click', autoFillRowSpec);
+  document.getElementById('btnPresetRoles').addEventListener('click', ()=>{ document.getElementById('rolesInput').value = DEFAULT_ROLES.join('\n'); });
+  document.getElementById('btnClearRoles').addEventListener('click', ()=>{ document.getElementById('rolesInput').value = ''; });
+  document.getElementById('btnBuild').addEventListener('click', buildFromSetup);
+  document.getElementById('btnBackToSetup').addEventListener('click', ()=>{
+    if(confirm('回到設定畫面重新設定名單/座位？目前的座位安排不會被刪除，除非您按下「建立座位表」覆蓋它。')) showSetupScreen();
+  });
+  document.getElementById('btnClearSeats').addEventListener('click', clearAllSeats);
+  document.getElementById('btnExportXlsx').addEventListener('click', exportXlsx);
+  document.getElementById('btnPrintA4').addEventListener('click', printA4);
+  ['ci-term','ci-class','ci-ver'].forEach(id=>{
+    document.getElementById(id).addEventListener('input', saveClassInfo);
+  });
+
+  document.getElementById('rolesInput').value = DEFAULT_ROLES.join('\n');
+
+  const configRaw = await storageGet('classConfig');
+  if(configRaw){
+    try{
+      const cfg = JSON.parse(configRaw);
+      ROSTER = cfg.ROSTER; TOTAL = Object.keys(ROSTER).length;
+      ROW_SPEC = cfg.ROW_SPEC; MAX_COLS = Math.max(...ROW_SPEC);
+      OFFICER_ROLES = cfg.OFFICER_ROLES || [];
+      document.getElementById('rosterInput').value = Object.entries(ROSTER).map(([n,name])=>`${n} ${name}`).join('\n');
+      document.getElementById('rowSpecInput').value = ROW_SPEC.join(',');
+      if(OFFICER_ROLES.length) document.getElementById('rolesInput').value = OFFICER_ROLES.join('\n');
+      updateLayoutStatus();
+      showMainScreen(false);
+      return;
+    }catch(e){}
+  }
+  showSetupScreen();
+  updateLayoutStatus();
+}
+init();
+</script>
+</body>
+</html>
