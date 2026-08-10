@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>馬賽克工具</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #17191d;
+    --panel: #1f2126;
+    --panel-2: #24262c;
+    --border: #33363d;
+    --text: #e7e6e2;
+    --muted: #8b8d94;
+    --accent: #e0a336;
+    --accent-dim: #4a3a1c;
+    --danger: #d1614f;
+    --radius: 6px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',system-ui,-apple-system,sans-serif;
+    overflow:hidden;
+  }
+  .app{
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+  }
+
+  /* ---- Top bar ---- */
+  .topbar{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 16px;
+    background:var(--panel);
+    border-bottom:1px solid var(--border);
+    flex-shrink:0;
+  }
+  .topbar .title{
+    font-weight:600;
+    font-size:14px;
+    letter-spacing:0.02em;
+    color:var(--text);
+    margin-right:8px;
+    white-space:nowrap;
+  }
+  .topbar .title span{ color:var(--accent); }
+  .spacer{ flex:1; }
+  .icon-btn{
+    display:flex; align-items:center; justify-content:center;
+    width:34px; height:34px;
+    background:transparent;
+    border:1px solid transparent;
+    border-radius:var(--radius);
+    color:var(--text);
+    cursor:pointer;
+    transition:background .12s, border-color .12s, opacity .12s;
+  }
+  .icon-btn:hover:not(:disabled){ background:var(--panel-2); border-color:var(--border); }
+  .icon-btn:disabled{ opacity:.32; cursor:default; }
+  .icon-btn svg{ width:17px; height:17px; }
+  .btn{
+    display:flex; align-items:center; gap:6px;
+    padding:0 12px; height:34px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    color:var(--text);
+    font-size:13px; font-weight:500;
+    cursor:pointer;
+    white-space:nowrap;
+    transition:background .12s, border-color .12s;
+  }
+  .btn:hover{ border-color:#4a4d55; }
+  .btn.primary{ background:var(--accent); border-color:var(--accent); color:#1b1406; font-weight:600; }
+  .btn.primary:hover{ background:#eeb04a; }
+  .btn svg{ width:15px; height:15px; flex-shrink:0; }
+  .btn:disabled{ opacity:.4; cursor:default; }
+
+  /* ---- Layout ---- */
+  .main{ flex:1; display:flex; min-height:0; }
+  .sidebar{
+    width:220px; flex-shrink:0;
+    background:var(--panel);
+    border-right:1px solid var(--border);
+    padding:16px 14px;
+    overflow-y:auto;
+  }
+  .section{ margin-bottom:22px; }
+  .section-label{
+    font-size:11px; font-weight:600; letter-spacing:.08em;
+    color:var(--muted); text-transform:uppercase; margin-bottom:10px;
+  }
+
+  .tool-list{ display:flex; flex-direction:column; gap:4px; }
+  .tool-item{
+    display:flex; align-items:center; gap:10px;
+    padding:8px 10px; border-radius:var(--radius);
+    border:1px solid transparent; cursor:pointer; font-size:13px; color:var(--text);
+    transition:background .12s,border-color .12s;
+  }
+  .tool-item svg{ width:16px; height:16px; flex-shrink:0; color:var(--muted); }
+  .tool-item:hover{ background:var(--panel-2); }
+  .tool-item.active{ background:var(--accent-dim); border-color:var(--accent); }
+  .tool-item.active svg{ color:var(--accent); }
+  .tool-item .key{ margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted); }
+
+  .type-grid{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .type-item{
+    display:flex; flex-direction:column; align-items:center; gap:5px;
+    padding:7px 4px 8px; border-radius:var(--radius); border:1px solid var(--border);
+    background:var(--panel-2); cursor:pointer; transition:border-color .12s;
+  }
+  .type-item:hover{ border-color:#4a4d55; }
+  .type-item.active{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .type-swatch{ width:100%; aspect-ratio:1.4/1; border-radius:4px; overflow:hidden; background:#000; display:block; }
+  .type-item .type-label{ font-size:10.5px; color:var(--muted); }
+  .type-item.active .type-label{ color:var(--text); }
+
+  .slider-row{ margin-bottom:16px; }
+  .slider-row:last-child{ margin-bottom:0; }
+  .slider-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+  .slider-head label{ font-size:12.5px; color:var(--text); font-weight:500; }
+  .slider-head .val{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent); }
+  input[type=range]{
+    -webkit-appearance:none; appearance:none; width:100%; height:3px;
+    background:var(--border); border-radius:2px; outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none; width:14px; height:14px; border-radius:50%;
+    background:var(--accent); cursor:pointer; border:2px solid #17191d; box-shadow:0 0 0 1px var(--accent);
+  }
+  input[type=range]::-moz-range-thumb{
+    width:14px; height:14px; border-radius:50%; background:var(--accent); cursor:pointer; border:2px solid #17191d;
+  }
+
+  .hint-box{
+    font-size:11.5px; color:var(--muted); line-height:1.6;
+    padding:10px 11px; background:var(--panel-2); border-radius:var(--radius); border:1px solid var(--border);
+  }
+  .hint-box b{ color:var(--text); }
+
+  /* ---- Canvas area ---- */
+  .canvas-area{
+    flex:1; position:relative; display:flex; align-items:center; justify-content:center;
+    background:
+      linear-gradient(45deg,#1c1e23 25%,transparent 25%),
+      linear-gradient(-45deg,#1c1e23 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#1c1e23 75%),
+      linear-gradient(-45deg,transparent 75%,#1c1e23 75%);
+    background-size:22px 22px;
+    background-position:0 0,0 11px,11px -11px,-11px 0px;
+    background-color:#141518;
+    overflow:auto; padding:24px;
+  }
+  .canvas-wrap{
+    position:relative; max-width:100%;
+    box-shadow:0 8px 30px rgba(0,0,0,.5);
+    display:none; line-height:0;
+  }
+  .canvas-wrap.show{ display:block; }
+  .canvas-wrap canvas{ display:block; max-width:100%; height:auto; }
+  #overlayCanvas{ position:absolute; top:0; left:0; touch-action:none; }
+  .canvas-wrap.tool-brush #overlayCanvas{ cursor:none; }
+  .canvas-wrap.tool-rect #overlayCanvas{ cursor:crosshair; }
+  .canvas-wrap.tool-lasso #overlayCanvas{ cursor:crosshair; }
+
+  .dropzone{
+    width:min(560px,90%); padding:56px 32px;
+    border:1.5px dashed var(--border); border-radius:12px;
+    text-align:center; color:var(--muted);
+    transition:border-color .15s, background .15s;
+  }
+  .dropzone.drag{ border-color:var(--accent); background:rgba(224,163,54,.05); }
+  .dropzone svg{ width:34px; height:34px; color:var(--muted); margin-bottom:14px; }
+  .dropzone h2{ font-size:15px; color:var(--text); margin:0 0 6px; font-weight:600; }
+  .dropzone p{ font-size:12.5px; margin:0 0 20px; line-height:1.6; }
+  .dropzone .kbd{
+    font-family:'JetBrains Mono',monospace; background:var(--panel-2);
+    border:1px solid var(--border); border-radius:4px; padding:1px 6px; font-size:11px; color:var(--text);
+  }
+
+  .toast{
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(8px);
+    background:var(--panel-2); border:1px solid var(--border); color:var(--text);
+    padding:9px 16px; border-radius:var(--radius); font-size:12.5px;
+    opacity:0; pointer-events:none; transition:opacity .18s, transform .18s;
+    z-index:50; box-shadow:0 6px 20px rgba(0,0,0,.35);
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  ::-webkit-scrollbar{ width:9px; height:9px; }
+  ::-webkit-scrollbar-track{ background:transparent; }
+  ::-webkit-scrollbar-thumb{ background:#3a3d44; border-radius:5px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <div class="title">馬賽克<span>工具</span></div>
+    <button class="icon-btn" id="btnUndo" title="復原 (Ctrl+Z)" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></svg>
+    </button>
+    <button class="icon-btn" id="btnRedo" title="重做 (Ctrl+Shift+Z)" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 15-6.7L21 13"/></svg>
+    </button>
+    <button class="icon-btn" id="btnReset" title="還原成原圖" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+    </button>
+    <div class="spacer"></div>
+    <button class="btn" id="btnUpload">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+      上傳圖片
+    </button>
+    <button class="icon-btn" id="btnCopy" title="複製到剪貼簿" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    </button>
+    <button class="btn primary" id="btnDownload" disabled>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12"/><path d="M6 12l6 6 6-6"/><path d="M4 20h16"/></svg>
+      下載
+    </button>
+    <input type="file" id="fileInput" accept="image/*" hidden>
+  </div>
+
+  <div class="main">
+    <div class="sidebar">
+
+      <div class="section">
+        <div class="section-label">塗抹方式</div>
+        <div class="tool-list" id="toolList">
+          <div class="tool-item active" data-tool="brush">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5 3 21"/><path d="M14 6.5 17.5 3 21 6.5 17.5 10z"/><path d="M9.5 14.5 17.5 6.5l3 3-8 8-4 1z"/></svg>
+            筆刷塗抹
+            <span class="key">B</span>
+          </div>
+          <div class="tool-item" data-tool="rect">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="1" stroke-dasharray="3 2.5"/></svg>
+            框選範圍
+            <span class="key">R</span>
+          </div>
+          <div class="tool-item" data-tool="lasso">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 11c-2 1-3 2.6-2.4 4.2C4.3 17 6.6 17.7 9 17c1.6-.5 2.4-1.7 4-2 2-.4 4 .3 4.6 1.8" stroke-dasharray="2.5 2.5"/><circle cx="17.6" cy="17.6" r="1.6" fill="currentColor" stroke="none"/><path d="M9 13c-2-3-1-7 3.5-8.3S20 5.8 19.6 9.6c-.3 2.4-2 3-3.6 2.6" stroke-dasharray="2.5 2.5"/></svg>
+            套索選取
+            <span class="key">L</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">馬賽克類型</div>
+        <div class="type-grid" id="typeGrid"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">參數</div>
+        <div class="slider-row">
+          <div class="slider-head"><label>尺寸／筆刷粗細</label><span class="val" id="sizeVal">28</span></div>
+          <input type="range" id="sizeSlider" min="4" max="90" value="28">
+        </div>
+        <div class="slider-row">
+          <div class="slider-head"><label>強度</label><span class="val" id="intensityVal">85</span></div>
+          <input type="range" id="intensitySlider" min="5" max="100" value="85">
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="hint-box" id="toolHint">
+          <b>筆刷塗抹</b>：按住滑鼠拖曳，畫過的地方即時打上馬賽克。放開滑鼠即完成一筆，可再按復原。
+        </div>
+      </div>
+
+    </div>
+
+    <div class="canvas-area" id="canvasArea">
+      <div class="dropzone" id="dropzone">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
+        <h2>拖曳圖片到這裡</h2>
+        <p>或點擊上方「上傳圖片」，也可以直接 <span class="kbd">Ctrl</span>+<span class="kbd">V</span> 貼上剪貼簿截圖</p>
+        <button class="btn primary" id="btnUploadCenter">選擇檔案</button>
+      </div>
+      <div class="canvas-wrap tool-brush" id="canvasWrap">
+        <canvas id="baseCanvas"></canvas>
+        <canvas id="overlayCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  const EFFECT_TYPES = [
+    {id:'pixelate', label:'馬賽克'},
+    {id:'dots',      label:'圓點馬賽克'},
+    {id:'blur',      label:'模糊'},
+    {id:'heavyblur', label:'強力模糊'},
+    {id:'glass',     label:'毛玻璃'},
+    {id:'noise',     label:'雜訊'},
+    {id:'black',     label:'黑色遮擋'},
+    {id:'white',     label:'白色遮擋'},
+  ];
+
+  const TOOL_HINTS = {
+    brush: '<b>筆刷塗抹</b>：按住滑鼠拖曳，畫過的地方即時打上馬賽克。放開滑鼠即完成一筆，可再按復原。',
+    rect:  '<b>框選範圍</b>：拖曳畫出矩形範圍，放開滑鼠後整個範圍會一次套用馬賽克。',
+    lasso: '<b>套索選取</b>：按住滑鼠沿著不規則邊界畫一圈，放開後自動封閉範圍並套用馬賽克。'
+  };
+
+  const MAX_DIM = 1800;
+  const MAX_HISTORY = 20;
+
+  const $ = id => document.getElementById(id);
+  const canvasArea = $('canvasArea');
+  const dropzone = $('dropzone');
+  const canvasWrap = $('canvasWrap');
+  const baseCanvas = $('baseCanvas');
+  const overlayCanvas = $('overlayCanvas');
+  const bctx = baseCanvas.getContext('2d', {willReadFrequently:true});
+  const octx = overlayCanvas.getContext('2d');
+  const fileInput = $('fileInput');
+  const toast = $('toast');
+  const typeGrid = $('typeGrid');
+  const toolList = $('toolList');
+  const toolHint = $('toolHint');
+  const sizeSlider = $('sizeSlider');
+  const sizeVal = $('sizeVal');
+  const intensitySlider = $('intensitySlider');
+  const intensityVal = $('intensityVal');
+
+  const state = {
+    tool: 'brush',
+    type: 'pixelate',
+    size: 28,
+    intensity: 85,
+    hasImage: false
+  };
+  let historyStack = [];
+  let redoStack = [];
+  let originalImageData = null;
+
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=>toast.classList.remove('show'), 1800);
+  }
+
+  function updateUndoRedoButtons(){
+    $('btnUndo').disabled = historyStack.length === 0;
+    $('btnRedo').disabled = redoStack.length === 0;
+    $('btnReset').disabled = !state.hasImage;
+    $('btnDownload').disabled = !state.hasImage;
+    $('btnCopy').disabled = !state.hasImage;
+  }
+
+  function pushHistory(){
+    historyStack.push(bctx.getImageData(0,0,baseCanvas.width, baseCanvas.height));
+    if(historyStack.length > MAX_HISTORY) historyStack.shift();
+    redoStack.length = 0;
+    updateUndoRedoButtons();
+  }
+
+  /* ============ 效果核心演算法 ============ */
+  function pixelateBlock(data,w,h,block){
+    block = Math.max(2, Math.round(block));
+    for(let by=0; by<h; by+=block){
+      const bh = Math.min(block, h-by);
+      for(let bx=0; bx<w; bx+=block){
+        const bw = Math.min(block, w-bx);
+        let r=0,g=0,b=0,a=0,count=0;
+        for(let y=0;y<bh;y++){
+          let idx = ((by+y)*w+bx)*4;
+          for(let x=0;x<bw;x++, idx+=4){
+            r+=data[idx]; g+=data[idx+1]; b+=data[idx+2]; a+=data[idx+3]; count++;
+          }
+        }
+        r/=count; g/=count; b/=count; a/=count;
+        for(let y=0;y<bh;y++){
+          let idx = ((by+y)*w+bx)*4;
+          for(let x=0;x<bw;x++, idx+=4){
+            data[idx]=r; data[idx+1]=g; data[idx+2]=b; data[idx+3]=a;
+          }
+        }
+      }
+    }
+  }
+
+  function dotsBlock(data,w,h,block){
+    block = Math.max(4, Math.round(block));
+    for(let by=0; by<h; by+=block){
+      const bh = Math.min(block, h-by);
+      for(let bx=0; bx<w; bx+=block){
+        const bw = Math.min(block, w-bx);
+        let r=0,g=0,b=0,a=0,count=0;
+        for(let y=0;y<bh;y++){
+          let idx = ((by+y)*w+bx)*4;
+          for(let x=0;x<bw;x++, idx+=4){
+            r+=data[idx]; g+=data[idx+1]; b+=data[idx+2]; a+=data[idx+3]; count++;
+          }
+        }
+        r/=count; g/=count; b/=count; a/=count;
+        const cx=bw/2, cy=bh/2, rad = Math.min(bw,bh)/2*0.86;
+        for(let y=0;y<bh;y++){
+          let idx = ((by+y)*w+bx)*4;
+          for(let x=0;x<bw;x++, idx+=4){
+            const d = Math.hypot(x-cx+0.5, y-cy+0.5);
+            if(d<=rad){ data[idx]=r; data[idx+1]=g; data[idx+2]=b; data[idx+3]=a; }
+            else { data[idx]=r*0.5; data[idx+1]=g*0.5; data[idx+2]=b*0.5; data[idx+3]=a; }
+          }
+        }
+      }
+    }
+  }
+
+  function boxBlurOnePass(data,w,h,radius){
+    if(radius<=0) return;
+    const tmp = new Float32Array(data.length);
+    for(let y=0;y<h;y++){
+      const rowBase = y*w;
+      for(let x=0;x<w;x++){
+        let r=0,g=0,b=0,a=0,count=0;
+        const x0=Math.max(0,x-radius), x1=Math.min(w-1,x+radius);
+        for(let xx=x0; xx<=x1; xx++){
+          const idx=(rowBase+xx)*4;
+          r+=data[idx]; g+=data[idx+1]; b+=data[idx+2]; a+=data[idx+3]; count++;
+        }
+        const idx=(rowBase+x)*4;
+        tmp[idx]=r/count; tmp[idx+1]=g/count; tmp[idx+2]=b/count; tmp[idx+3]=a/count;
+      }
+    }
+    for(let x=0;x<w;x++){
+      for(let y=0;y<h;y++){
+        let r=0,g=0,b=0,a=0,count=0;
+        const y0=Math.max(0,y-radius), y1=Math.min(h-1,y+radius);
+        for(let yy=y0; yy<=y1; yy++){
+          const idx=(yy*w+x)*4;
+          r+=tmp[idx]; g+=tmp[idx+1]; b+=tmp[idx+2]; a+=tmp[idx+3]; count++;
+        }
+        const idx=(y*w+x)*4;
+        data[idx]=r/count; data[idx+1]=g/count; data[idx+2]=b/count; data[idx+3]=a/count;
+      }
+    }
+  }
+
+  function boxBlurPasses(data,w,h,radius,passes){
+    passes = Math.max(1, Math.min(10, Math.round(passes)));
+    for(let i=0;i<passes;i++) boxBlurOnePass(data,w,h,radius);
+  }
+
+  function addNoiseBlock(data,w,h,block,amount){
+    block = Math.max(2, Math.round(block/3));
+    for(let by=0; by<h; by+=block){
+      const bh=Math.min(block,h-by);
+      for(let bx=0; bx<w; bx+=block){
+        const bw=Math.min(block,w-bx);
+        const n = (Math.random()-0.5)*2*amount;
+        for(let y=0;y<bh;y++){
+          let idx=((by+y)*w+bx)*4;
+          for(let x=0;x<bw;x++, idx+=4){
+            data[idx]=data[idx]+n; data[idx+1]=data[idx+1]+n; data[idx+2]=data[idx+2]+n;
+          }
+        }
+      }
+    }
+  }
+
+  function whitenOverlay(data,w,h,amt){
+    for(let i=0;i<data.length;i+=4){
+      data[i]=data[i]+(255-data[i])*amt;
+      data[i+1]=data[i+1]+(255-data[i+1])*amt;
+      data[i+2]=data[i+2]+(255-data[i+2])*amt;
+    }
+  }
+
+  function fillColor(data,w,h,r,g,b){
+    for(let i=0;i<data.length;i+=4){ data[i]=r; data[i+1]=g; data[i+2]=b; }
+  }
+
+  function runEffect(type, data, w, h, size){
+    switch(type){
+      case 'pixelate': pixelateBlock(data,w,h,size); break;
+      case 'dots':      dotsBlock(data,w,h,size); break;
+      case 'blur':      boxBlurPasses(data,w,h,2, Math.max(1,size/12)); break;
+      case 'heavyblur': boxBlurPasses(data,w,h,4, Math.max(2,size/7)); break;
+      case 'glass':     boxBlurPasses(data,w,h,3, Math.max(2,size/9)); addNoiseBlock(data,w,h,size,8); whitenOverlay(data,w,h,0.16); break;
+      case 'noise':     addNoiseBlock(data,w,h,size,85); break;
+      case 'black':     fillColor(data,w,h,10,10,10); break;
+      case 'white':     fillColor(data,w,h,250,250,250); break;
+    }
+  }
+
+  function applyEffectToRegion(box, maskFn){
+    const {x,y,w,h} = box;
+    if(w<=0 || h<=0) return;
+    const imgData = bctx.getImageData(x,y,w,h);
+    const data = imgData.data;
+    const original = new Uint8ClampedArray(data);
+    runEffect(state.type, data, w, h, state.size);
+    const strength = state.intensity/100;
+    for(let j=0;j<h;j++){
+      for(let i=0;i<w;i++){
+        const idx=(j*w+i)*4;
+        const m = maskFn ? maskFn(i,j) : 1;
+        const a = m*strength;
+        if(a<=0.002){
+          data[idx]=original[idx]; data[idx+1]=original[idx+1]; data[idx+2]=original[idx+2]; data[idx+3]=original[idx+3];
+        } else if(a<0.998){
+          data[idx]   = original[idx]   + (data[idx]   - original[idx])   * a;
+          data[idx+1] = original[idx+1] + (data[idx+1] - original[idx+1]) * a;
+          data[idx+2] = original[idx+2] + (data[idx+2] - original[idx+2]) * a;
+          data[idx+3] = original[idx+3];
+        } else {
+          data[idx+3] = original[idx+3];
+        }
+      }
+    }
+    bctx.putImageData(imgData, x, y);
+  }
+
+  /* ============ 圖片載入 ============ */
+  function loadImageFile(file){
+    if(!file || !file.type.startsWith('image/')){ showToast('請選擇圖片檔案'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => setupCanvasWithImage(img);
+      img.onerror = () => showToast('圖片讀取失敗');
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function setupCanvasWithImage(img){
+    let w = img.naturalWidth, h = img.naturalHeight;
+    if(Math.max(w,h) > MAX_DIM){
+      const s = MAX_DIM / Math.max(w,h);
+      w = Math.round(w*s); h = Math.round(h*s);
+    }
+    baseCanvas.width = w; baseCanvas.height = h;
+    overlayCanvas.width = w; overlayCanvas.height = h;
+    bctx.clearRect(0,0,w,h);
+    bctx.drawImage(img,0,0,w,h);
+    originalImageData = bctx.getImageData(0,0,w,h);
+    historyStack = []; redoStack = [];
+    state.hasImage = true;
+    dropzone.style.display = 'none';
+    canvasWrap.classList.add('show');
+    updateUndoRedoButtons();
+    showToast('圖片已載入');
+  }
+
+  fileInput.addEventListener('change', e => { if(e.target.files[0]) loadImageFile(e.target.files[0]); e.target.value=''; });
+  $('btnUpload').addEventListener('click', ()=>fileInput.click());
+  $('btnUploadCenter').addEventListener('click', ()=>fileInput.click());
+
+  ;['dragenter','dragover'].forEach(evt=>{
+    canvasArea.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.add('drag'); });
+  });
+  ;['dragleave','drop'].forEach(evt=>{
+    canvasArea.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.remove('drag'); });
+  });
+  canvasArea.addEventListener('drop', e=>{
+    e.preventDefault();
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if(file) loadImageFile(file);
+  });
+
+  window.addEventListener('paste', e=>{
+    const items = e.clipboardData && e.clipboardData.items;
+    if(!items) return;
+    for(const item of items){
+      if(item.type.indexOf('image') === 0){
+        const file = item.getAsFile();
+        loadImageFile(file);
+        e.preventDefault();
+        break;
+      }
+    }
+  });
+
+  /* ============ 工具列 / 類型選單 生成 ============ */
+  function renderTypeSwatch(canvas, type){
+    const w = canvas.width, h = canvas.height;
+    const ctx = canvas.getContext('2d');
+    const grad = ctx.createLinearGradient(0,0,w,h);
+    grad.addColorStop(0,'#e0a336'); grad.addColorStop(0.5,'#5c6ac4'); grad.addColorStop(1,'#2e8b6b');
+    ctx.fillStyle = grad; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle = '#f4e9d8';
+    ctx.beginPath(); ctx.arc(w*0.6, h*0.4, Math.min(w,h)*0.28, 0, Math.PI*2); ctx.fill();
+    const imgData = ctx.getImageData(0,0,w,h);
+    runEffect(type, imgData.data, w, h, Math.max(4, Math.round(w/7)));
+    ctx.putImageData(imgData,0,0);
+  }
+
+  EFFECT_TYPES.forEach(t=>{
+    const item = document.createElement('div');
+    item.className = 'type-item' + (t.id===state.type ? ' active' : '');
+    item.dataset.type = t.id;
+    const sw = document.createElement('canvas');
+    sw.className = 'type-swatch';
+    sw.width = 84; sw.height = 60;
+    const label = document.createElement('div');
+    label.className = 'type-label';
+    label.textContent = t.label;
+    item.appendChild(sw);
+    item.appendChild(label);
+    typeGrid.appendChild(item);
+    renderTypeSwatch(sw, t.id);
+    item.addEventListener('click', ()=>{
+      typeGrid.querySelectorAll('.type-item').forEach(el=>el.classList.remove('active'));
+      item.classList.add('active');
+      state.type = t.id;
+    });
+  });
+
+  toolList.querySelectorAll('.tool-item').forEach(item=>{
+    item.addEventListener('click', ()=>{
+      toolList.querySelectorAll('.tool-item').forEach(el=>el.classList.remove('active'));
+      item.classList.add('active');
+      state.tool = item.dataset.tool;
+      canvasWrap.classList.remove('tool-brush','tool-rect','tool-lasso');
+      canvasWrap.classList.add('tool-'+state.tool);
+      toolHint.innerHTML = TOOL_HINTS[state.tool];
+      clearOverlay();
+    });
+  });
+
+  sizeSlider.addEventListener('input', ()=>{ state.size = +sizeSlider.value; sizeVal.textContent = sizeSlider.value; });
+  intensitySlider.addEventListener('input', ()=>{ state.intensity = +intensitySlider.value; intensityVal.textContent = intensitySlider.value; });
+
+  /* ============ 座標換算 ============ */
+  function toCanvasCoords(e){
+    const rect = overlayCanvas.getBoundingClientRect();
+    const scaleX = overlayCanvas.width / rect.width;
+    const scaleY = overlayCanvas.height / rect.height;
+    return { x:(e.clientX-rect.left)*scaleX, y:(e.clientY-rect.top)*scaleY };
+  }
+
+  function clearOverlay(){ octx.clearRect(0,0,overlayCanvas.width, overlayCanvas.height); }
+
+  /* ============ 筆刷工具 ============ */
+  let brushing = false;
+  let lastPt = null;
+
+  function brushCircleMask(cx, cy, r, box){
+    return (lx, ly) => {
+      const gx = box.x + lx, gy = box.y + ly;
+      const d = Math.hypot(gx-cx, gy-cy);
+      if(d <= r-1.5) return 1;
+      if(d <= r+1.5) return 1-((d-(r-1.5))/3);
+      return 0;
+    };
+  }
+
+  function stampBrush(cx, cy){
+    const r = state.size/2;
+    const box = {
+      x: Math.max(0, Math.floor(cx-r-2)),
+      y: Math.max(0, Math.floor(cy-r-2)),
+      w: 0, h: 0
+    };
+    const x1 = Math.min(baseCanvas.width, Math.ceil(cx+r+2));
+    const y1 = Math.min(baseCanvas.height, Math.ceil(cy+r+2));
+    box.w = Math.max(1, x1-box.x);
+    box.h = Math.max(1, y1-box.y);
+    applyEffectToRegion(box, brushCircleMask(cx,cy,r,box));
+  }
+
+  function drawBrushCursor(x,y){
+    clearOverlay();
+    const r = state.size/2;
+    octx.beginPath();
+    octx.arc(x,y,r,0,Math.PI*2);
+    octx.strokeStyle = 'rgba(224,163,54,0.95)';
+    octx.lineWidth = 1.5;
+    octx.setLineDash([3,3]);
+    octx.stroke();
+    octx.setLineDash([]);
+  }
+
+  /* ============ 框選工具 ============ */
+  let rectStart = null;
+
+  function drawRectPreview(x0,y0,x1,y1){
+    clearOverlay();
+    const x = Math.min(x0,x1), y=Math.min(y0,y1), w=Math.abs(x1-x0), h=Math.abs(y1-y0);
+    octx.fillStyle = 'rgba(224,163,54,0.14)';
+    octx.fillRect(x,y,w,h);
+    octx.strokeStyle = 'rgba(224,163,54,0.95)';
+    octx.lineWidth = 1.5;
+    octx.setLineDash([5,4]);
+    octx.strokeRect(x,y,w,h);
+    octx.setLineDash([]);
+  }
+
+  /* ============ 套索工具 ============ */
+  let lassoPoints = [];
+
+  function drawLassoPreview(){
+    clearOverlay();
+    if(lassoPoints.length<2) return;
+    octx.beginPath();
+    octx.moveTo(lassoPoints[0].x, lassoPoints[0].y);
+    for(let i=1;i<lassoPoints.length;i++) octx.lineTo(lassoPoints[i].x, lassoPoints[i].y);
+    octx.strokeStyle = 'rgba(224,163,54,0.95)';
+    octx.lineWidth = 1.5;
+    octx.setLineDash([5,4]);
+    octx.stroke();
+    octx.setLineDash([]);
+    octx.fillStyle = 'rgba(224,163,54,0.12)';
+    octx.fill();
+  }
+
+  function applyLasso(points){
+    if(points.length<3) return;
+    let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
+    points.forEach(p=>{ minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); });
+    const bx = Math.max(0, Math.floor(minX)), by = Math.max(0, Math.floor(minY));
+    const box = {
+      x: bx, y: by,
+      w: Math.min(baseCanvas.width, Math.ceil(maxX)) - bx,
+      h: Math.min(baseCanvas.height, Math.ceil(maxY)) - by
+    };
+    if(box.w<=0 || box.h<=0) return;
+    const maskCanvas = document.createElement('canvas');
+    maskCanvas.width = box.w; maskCanvas.height = box.h;
+    const mctx = maskCanvas.getContext('2d');
+    mctx.beginPath();
+    mctx.moveTo(points[0].x-box.x, points[0].y-box.y);
+    for(let i=1;i<points.length;i++) mctx.lineTo(points[i].x-box.x, points[i].y-box.y);
+    mctx.closePath();
+    mctx.fillStyle = '#fff';
+    mctx.fill();
+    const maskData = mctx.getImageData(0,0,box.w,box.h).data;
+    const maskFn = (lx,ly) => {
+      const idx = (ly*box.w+lx)*4 + 3;
+      return maskData[idx] / 255;
+    };
+    applyEffectToRegion(box, maskFn);
+  }
+
+  /* ============ 指標事件（統一綁在 overlay canvas） ============ */
+  overlayCanvas.addEventListener('pointerdown', e=>{
+    if(!state.hasImage) return;
+    overlayCanvas.setPointerCapture(e.pointerId);
+    const p = toCanvasCoords(e);
+
+    if(state.tool === 'brush'){
+      brushing = true;
+      pushHistory();
+      lastPt = p;
+      stampBrush(p.x, p.y);
+      drawBrushCursor(p.x,p.y);
+    } else if(state.tool === 'rect'){
+      rectStart = p;
+      drawRectPreview(p.x,p.y,p.x,p.y);
+    } else if(state.tool === 'lasso'){
+      lassoPoints = [p];
+      drawLassoPreview();
+    }
+  });
+
+  overlayCanvas.addEventListener('pointermove', e=>{
+    if(!state.hasImage) return;
+    const p = toCanvasCoords(e);
+
+    if(state.tool === 'brush'){
+      if(brushing){
+        const dist = Math.hypot(p.x-lastPt.x, p.y-lastPt.y);
+        const step = Math.max(2, state.size/4);
+        const n = Math.max(1, Math.floor(dist/step));
+        for(let i=1;i<=n;i++){
+          const t = i/n;
+          stampBrush(lastPt.x+(p.x-lastPt.x)*t, lastPt.y+(p.y-lastPt.y)*t);
+        }
+        lastPt = p;
+      }
+      drawBrushCursor(p.x,p.y);
+    } else if(state.tool === 'rect'){
+      if(rectStart) drawRectPreview(rectStart.x, rectStart.y, p.x, p.y);
+    } else if(state.tool === 'lasso'){
+      if(lassoPoints.length){
+        lassoPoints.push(p);
+        drawLassoPreview();
+      }
+    }
+  });
+
+  function endStroke(e){
+    if(!state.hasImage) return;
+    if(state.tool === 'brush' && brushing){
+      brushing = false;
+      lastPt = null;
+    } else if(state.tool === 'rect' && rectStart){
+      const p = toCanvasCoords(e);
+      const x0 = Math.max(0, Math.floor(Math.min(rectStart.x,p.x)));
+      const y0 = Math.max(0, Math.floor(Math.min(rectStart.y,p.y)));
+      const x1 = Math.min(baseCanvas.width, Math.ceil(Math.max(rectStart.x,p.x)));
+      const y1 = Math.min(baseCanvas.height, Math.ceil(Math.max(rectStart.y,p.y)));
+      const box = { x:x0, y:y0, w:x1-x0, h:y1-y0 };
+      if(box.w>1 && box.h>1){
+        pushHistory();
+        applyEffectToRegion(box, null);
+      }
+      rectStart = null;
+      clearOverlay();
+    } else if(state.tool === 'lasso' && lassoPoints.length){
+      if(lassoPoints.length>=3){
+        pushHistory();
+        applyLasso(lassoPoints);
+      }
+      lassoPoints = [];
+      clearOverlay();
+    }
+  }
+  overlayCanvas.addEventListener('pointerup', endStroke);
+  overlayCanvas.addEventListener('pointerleave', ()=>{
+    if(state.tool==='brush' && !brushing) clearOverlay();
+  });
+  overlayCanvas.addEventListener('pointercancel', endStroke);
+
+  /* ============ 上方工具列動作 ============ */
+  function undo(){
+    if(historyStack.length===0) return;
+    redoStack.push(bctx.getImageData(0,0,baseCanvas.width, baseCanvas.height));
+    const prev = historyStack.pop();
+    bctx.putImageData(prev,0,0);
+    updateUndoRedoButtons();
+  }
+  function redo(){
+    if(redoStack.length===0) return;
+    historyStack.push(bctx.getImageData(0,0,baseCanvas.width, baseCanvas.height));
+    const next = redoStack.pop();
+    bctx.putImageData(next,0,0);
+    updateUndoRedoButtons();
+  }
+  $('btnUndo').addEventListener('click', undo);
+  $('btnRedo').addEventListener('click', redo);
+
+  $('btnReset').addEventListener('click', ()=>{
+    if(!originalImageData) return;
+    pushHistory();
+    bctx.putImageData(originalImageData,0,0);
+    showToast('已還原成原圖');
+  });
+
+  $('btnDownload').addEventListener('click', ()=>{
+    baseCanvas.toBlob(blob=>{
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'mosaic-edit.png';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 2000);
+      showToast('已下載圖片');
+    }, 'image/png');
+  });
+
+  $('btnCopy').addEventListener('click', ()=>{
+    baseCanvas.toBlob(async blob=>{
+      try{
+        await navigator.clipboard.write([ new ClipboardItem({ 'image/png': blob }) ]);
+        showToast('已複製到剪貼簿');
+      }catch(err){
+        showToast('複製失敗，瀏覽器不支援此功能，請改用下載');
+      }
+    }, 'image/png');
+  });
+
+  /* ============ 鍵盤快捷鍵 ============ */
+  window.addEventListener('keydown', e=>{
+    const tag = (e.target && e.target.tagName) || '';
+    if(tag === 'INPUT' || tag==='TEXTAREA') return;
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z'){
+      e.preventDefault();
+      if(e.shiftKey) redo(); else undo();
+    } else if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='y'){
+      e.preventDefault(); redo();
+    } else if(e.key.toLowerCase()==='b'){
+      toolList.querySelector('[data-tool="brush"]').click();
+    } else if(e.key.toLowerCase()==='r'){
+      toolList.querySelector('[data-tool="rect"]').click();
+    } else if(e.key.toLowerCase()==='l'){
+      toolList.querySelector('[data-tool="lasso"]').click();
+    }
+  });
+
+  updateUndoRedoButtons();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>成績排序表</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700&family=Noto+Sans+TC:wght@400;500;700&family=Roboto+Mono:wght@400;500;700&display=swap');
+
+:root{
+  --paper:#FAF6EE;
+  --ink:#1F2A44;
+  --ink-soft:#5B6780;
+  --red:#B23A2E;
+  --rule:#DCD3BF;
+  --rule-blue:#C9D2E0;
+  --bar:#7C8FAE;
+  --gold:#B8902E;
+  --silver:#8A8F98;
+  --bronze:#A5673A;
+  --ok:#3B6B4E;
+}
+
+*{ box-sizing:border-box; }
+
+body{
+  margin:0;
+  background:
+    repeating-linear-gradient(
+      var(--paper) 0px, var(--paper) 31px, var(--rule-blue) 32px
+    );
+  background-color:var(--paper);
+  font-family:'Noto Sans TC', sans-serif;
+  color:var(--ink);
+  padding:28px 20px 60px;
+}
+
+.sheet{
+  max-width:920px;
+  margin:0 auto;
+  position:relative;
+}
+
+.margin-rule{
+  position:absolute;
+  left:52px; top:0; bottom:0;
+  width:1px;
+  background:var(--red);
+  opacity:.35;
+}
+
+header{
+  padding-left:64px;
+  margin-bottom:22px;
+  border-bottom:2px solid var(--ink);
+  padding-bottom:14px;
+}
+header .eyebrow{
+  font-family:'Roboto Mono', monospace;
+  font-size:12px;
+  letter-spacing:.12em;
+  color:var(--red);
+  text-transform:uppercase;
+}
+h1{
+  font-family:'Noto Serif TC', serif;
+  font-weight:700;
+  font-size:28px;
+  margin:4px 0 10px;
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  flex-wrap:wrap;
+}
+#className{
+  font-family:'Noto Serif TC', serif;
+  font-weight:700;
+  font-size:28px;
+  border:none;
+  border-bottom:1px dashed var(--ink-soft);
+  background:transparent;
+  color:var(--ink);
+  width:9em;
+  padding:0 2px;
+}
+#className:focus{ outline:none; border-bottom-color:var(--red); }
+h1 .fixed{ white-space:nowrap; }
+
+.controls{
+  display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+  padding-left:64px;
+  margin-bottom:6px;
+  font-size:13px;
+  color:var(--ink-soft);
+}
+.toggle{
+  display:inline-flex; border:1px solid var(--ink); border-radius:3px; overflow:hidden;
+}
+.toggle button{
+  font-family:'Noto Sans TC',sans-serif;
+  font-size:13px;
+  padding:6px 14px;
+  border:none;
+  background:var(--paper);
+  color:var(--ink);
+  cursor:pointer;
+}
+.toggle button.active{
+  background:var(--ink); color:var(--paper);
+}
+
+main{
+  padding-left:64px;
+}
+
+.panel-title{
+  font-family:'Roboto Mono', monospace;
+  font-size:12px;
+  letter-spacing:.08em;
+  color:var(--ink-soft);
+  margin:26px 0 8px;
+  text-transform:uppercase;
+}
+
+.inputs{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px;
+}
+textarea{
+  width:100%;
+  min-height:150px;
+  font-family:'Roboto Mono', monospace;
+  font-size:13px;
+  line-height:1.7;
+  padding:10px 12px;
+  border:1px solid var(--ink-soft);
+  border-radius:4px;
+  background:#FFFDF8;
+  color:var(--ink);
+  resize:vertical;
+}
+textarea:focus{ outline:none; border-color:var(--red); }
+.hint{ font-size:12px; color:var(--ink-soft); margin-top:5px; }
+
+.warning{
+  margin-top:10px;
+  font-size:13px;
+  color:var(--red);
+  font-family:'Roboto Mono', monospace;
+  display:none;
+}
+
+.results{ margin-top:28px; display:grid; grid-template-columns: 1.3fr 1fr; gap:24px; align-items:start; }
+@media (max-width:760px){ .results{ grid-template-columns:1fr; } .inputs{ grid-template-columns:1fr; } }
+
+table{ width:100%; border-collapse:collapse; font-size:14px; background:#FFFDF8; }
+thead th{
+  text-align:left; font-family:'Roboto Mono',monospace; font-size:11px; letter-spacing:.06em;
+  color:var(--ink-soft); text-transform:uppercase;
+  border-bottom:2px solid var(--ink); padding:6px 8px;
+}
+tbody td{ padding:7px 8px; border-bottom:1px solid var(--rule-blue); }
+tbody tr:hover{ background:#F3EEE0; }
+td.rank, td.score{ font-family:'Roboto Mono',monospace; }
+.stamp{
+  display:inline-block; min-width:22px; text-align:center;
+  border-radius:2px; padding:1px 5px; font-weight:700; font-family:'Roboto Mono',monospace; font-size:12px;
+}
+.stamp.r1{ background:var(--gold); color:#fff; }
+.stamp.r2{ background:var(--silver); color:#fff; }
+.stamp.r3{ background:var(--bronze); color:#fff; }
+
+.summary-box{
+  border:1px solid var(--ink);
+  border-radius:4px;
+  background:#FFFDF8;
+  padding:16px 18px;
+}
+.summary-box h3{
+  font-family:'Noto Serif TC', serif; font-size:16px; margin:0 0 10px;
+  border-bottom:1px solid var(--rule); padding-bottom:8px;
+}
+.band-row{ display:flex; align-items:center; gap:8px; margin:6px 0; font-size:13px; }
+.band-label{ width:70px; font-family:'Roboto Mono',monospace; color:var(--ink-soft); flex-shrink:0; }
+.band-bar-track{ flex:1; background:#EFE9D8; border-radius:2px; height:12px; overflow:hidden; }
+.band-bar-fill{ height:100%; background:var(--bar); }
+.band-count{ width:34px; text-align:right; font-family:'Roboto Mono',monospace; flex-shrink:0; }
+
+.avg-line{
+  margin-top:14px; padding-top:10px; border-top:1px dashed var(--rule);
+  font-family:'Roboto Mono',monospace; font-size:14px; font-weight:700;
+}
+
+.copy-block{ margin-top:16px; }
+.copy-output{
+  width:100%; min-height:70px; font-family:'Roboto Mono',monospace; font-size:12.5px;
+  padding:10px; border:1px dashed var(--ink-soft); border-radius:4px; background:#F6F1E4;
+  white-space:pre-wrap; color:var(--ink);
+}
+button.copy-btn{
+  margin-top:8px;
+  font-family:'Noto Sans TC', sans-serif;
+  font-size:13px; font-weight:700;
+  padding:8px 16px;
+  background:var(--red); color:#fff;
+  border:none; border-radius:3px; cursor:pointer;
+}
+button.copy-btn:hover{ opacity:.9; }
+button.copy-btn.copied{ background:var(--ok); }
+
+.empty-note{ color:var(--ink-soft); font-size:13px; padding:20px 0; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="margin-rule"></div>
+  <header>
+    <div class="eyebrow">Grade Ledger · 成績登記簿</div>
+    <h1><input id="className" placeholder="三年二班" value="三年二班"><span class="fixed">成績排序表</span></h1>
+  </header>
+
+  <div class="controls">
+    排序：
+    <div class="toggle">
+      <button id="btnDesc" class="active">高 → 低</button>
+      <button id="btnAsc">低 → 高</button>
+    </div>
+  </div>
+
+  <main>
+    <div class="panel-title">輸入資料</div>
+    <div class="inputs">
+      <div>
+        <textarea id="nameInput" placeholder="每行一筆，例如：
+1 王小明
+2 陳美玲
+王小華
+（若不寫座號，會依行數自動編號）"></textarea>
+        <div class="hint">座號 姓名（可只寫姓名，自動依順序編座號）</div>
+      </div>
+      <div>
+        <textarea id="scoreInput" placeholder="每行一筆，順序需對應左邊：
+88
+92
+76"></textarea>
+        <div class="hint">成績（需與左邊筆數、順序一致）</div>
+      </div>
+    </div>
+    <div class="warning" id="warning"></div>
+
+    <div id="output"></div>
+  </main>
+</div>
+
+<script>
+const nameInput = document.getElementById('nameInput');
+const scoreInput = document.getElementById('scoreInput');
+const warningEl = document.getElementById('warning');
+const outputEl = document.getElementById('output');
+const classNameInput = document.getElementById('className');
+const btnDesc = document.getElementById('btnDesc');
+const btnAsc = document.getElementById('btnAsc');
+
+let sortDir = 'desc';
+
+btnDesc.addEventListener('click', () => { sortDir='desc'; btnDesc.classList.add('active'); btnAsc.classList.remove('active'); render(); });
+btnAsc.addEventListener('click', () => { sortDir='asc'; btnAsc.classList.add('active'); btnDesc.classList.remove('active'); render(); });
+
+[nameInput, scoreInput, classNameInput].forEach(el => el.addEventListener('input', render));
+
+function parseNames(text){
+  return text.split('\n').map(l => l.trim()).filter(l => l.length > 0).map((line, idx) => {
+    const parts = line.split(/\s+/);
+    if(parts.length > 1 && /^\d+$/.test(parts[0])){
+      return { seat: parts[0], name: parts.slice(1).join(' ') };
+    }
+    return { seat: String(idx + 1), name: line };
+  });
+}
+
+function parseScores(text){
+  return text.split('\n').map(l => l.trim()).filter(l => l.length > 0).map(l => {
+    const v = parseFloat(l);
+    return isNaN(v) ? null : v;
+  });
+}
+
+function bandOf(score){
+  if(score <= 10) return { low: 0, high: 10, label: '0-10' };
+  const high = Math.ceil(score / 10) * 10;
+  const low = high - 9;
+  return { low, high, label: `${low}-${high}` };
+}
+
+const BAND_ORDER = ['91-100','81-90','71-80','61-70','51-60','41-50','31-40','21-30','11-20','0-10'];
+
+function render(){
+  const names = parseNames(nameInput.value);
+  const scores = parseScores(scoreInput.value);
+
+  if(names.length === 0 && scores.length === 0){
+    outputEl.innerHTML = '<p class="empty-note">貼上座號姓名與成績後，會自動排序並統計。</p>';
+    warningEl.style.display = 'none';
+    return;
+  }
+
+  if(names.length !== scores.length){
+    warningEl.style.display = 'block';
+    warningEl.textContent = `⚠ 筆數不一致：座號姓名 ${names.length} 筆，成績 ${scores.length} 筆，請確認每行一一對應。`;
+  } else {
+    warningEl.style.display = 'none';
+  }
+
+  const n = Math.min(names.length, scores.length);
+  let students = [];
+  for(let i = 0; i < n; i++){
+    if(scores[i] === null) continue;
+    students.push({ seat: names[i].seat, name: names[i].name, score: scores[i] });
+  }
+
+  if(students.length === 0){
+    outputEl.innerHTML = '<p class="empty-note">目前沒有有效的成績資料。</p>';
+    return;
+  }
+
+  // sort for ranking (always need desc order to compute competition rank)
+  const byDesc = [...students].sort((a, b) => b.score - a.score);
+  let rank = 1;
+  for(let i = 0; i < byDesc.length; i++){
+    if(i > 0 && byDesc[i].score === byDesc[i-1].score){
+      byDesc[i].rank = byDesc[i-1].rank;
+    } else {
+      byDesc[i].rank = i + 1;
+    }
+  }
+
+  const displayList = sortDir === 'desc' ? byDesc : [...byDesc].sort((a, b) => a.score - b.score);
+
+  // band counts
+  const bandCounts = {};
+  BAND_ORDER.forEach(b => bandCounts[b] = 0);
+  students.forEach(s => { bandCounts[bandOf(s.score).label]++; });
+
+  const total = students.reduce((sum, s) => sum + s.score, 0);
+  const avg = (total / students.length);
+  const avgStr = avg.toFixed(1);
+  const maxCount = Math.max(...Object.values(bandCounts), 1);
+
+  // build table rows
+  const rows = displayList.map(s => {
+    let rankCell = s.rank;
+    if(s.rank === 1) rankCell = `<span class="stamp r1">${s.rank}</span>`;
+    else if(s.rank === 2) rankCell = `<span class="stamp r2">${s.rank}</span>`;
+    else if(s.rank === 3) rankCell = `<span class="stamp r3">${s.rank}</span>`;
+    return `<tr>
+      <td class="rank">${rankCell}</td>
+      <td>${s.seat}</td>
+      <td>${s.name}</td>
+      <td class="score">${s.score}</td>
+      <td>${bandOf(s.score).label}</td>
+    </tr>`;
+  }).join('');
+
+  // build band summary rows (skip empty)
+  const bandRows = BAND_ORDER.filter(b => bandCounts[b] > 0).map(b => {
+    const count = bandCounts[b];
+    const pct = (count / maxCount) * 100;
+    return `<div class="band-row">
+      <div class="band-label">${b}</div>
+      <div class="band-bar-track"><div class="band-bar-fill" style="width:${pct}%"></div></div>
+      <div class="band-count">${count}人</div>
+    </div>`;
+  }).join('');
+
+  const className = classNameInput.value.trim() || '本班';
+  const copyText = `${className}，` +
+    BAND_ORDER.filter(b => bandCounts[b] > 0).map(b => `${b}：${bandCounts[b]}人`).join('、') +
+    `，全班平均：${avgStr}`;
+
+  outputEl.innerHTML = `
+    <div class="panel-title">排序結果（共 ${students.length} 人）</div>
+    <div class="results">
+      <table>
+        <thead><tr><th>名次</th><th>座號</th><th>姓名</th><th>成績</th><th>級距</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="summary-box">
+        <h3>級距人數</h3>
+        ${bandRows}
+        <div class="avg-line">全班平均：${avgStr}</div>
+        <div class="copy-block">
+          <div class="copy-output" id="copyOutput">${copyText}</div>
+          <button class="copy-btn" id="copyBtn">一鍵複製</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('copyBtn').addEventListener('click', () => {
+    const text = document.getElementById('copyOutput').textContent;
+    const btn = document.getElementById('copyBtn');
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = '已複製 ✓';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '一鍵複製'; btn.classList.remove('copied'); }, 1500);
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      btn.textContent = '已複製 ✓';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '一鍵複製'; btn.classList.remove('copied'); }, 1500);
+    });
+  });
+}
+
+render();
+</script>
+</body>
+</html>
