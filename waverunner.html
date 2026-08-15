@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>3D 浪上衝 - 第零關 Demo</title>
+  <style>
+    * { box-sizing: border-box; touch-action: none; user-select: none; margin: 0; padding: 0; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background: #111; font-family: monospace; }
+    #canvas-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; }
+    
+    /* UI Overlay */
+    #ui-layer { position: absolute; top: 10px; left: 10px; color: #0ff; z-index: 10; pointer-events: none; text-shadow: 1px 1px 2px #000; }
+    #debug-panel { display: none; background: rgba(0,0,0,0.7); padding: 8px; border-radius: 4px; font-size: 12px; }
+    
+    /* Controls Overlay for Touch */
+    .touch-zone { position: absolute; top: 0; width: 50%; height: 100%; z-index: 5; }
+    #touch-left { left: 0; }
+    #touch-right { right: 0; }
+    
+    /* Buttons */
+    .top-btn { position: absolute; top: 10px; z-index: 20; background: rgba(0,255,255,0.2); border: 1px solid #0ff; color: #0ff; padding: 6px 12px; border-radius: 4px; font-weight: bold; }
+    #btn-sound { right: 10px; }
+    #btn-debug { right: 80px; }
+    #btn-panel { right: 130px; }
+
+    /* Control Panel */
+    #tweak-panel {
+      position: absolute; bottom: 0; left: 0; width: 100%; max-height: 50vh; overflow-y: auto;
+      background: rgba(10, 15, 25, 0.9); border-top: 2px solid #0ff; color: #fff; z-index: 30;
+      padding: 10px; font-size: 12px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .panel-row { display: flex; align-items: center; justify-content: space-between; }
+    .panel-row label { flex: 1; }
+    .panel-row input { flex: 1.5; }
+    .panel-row span { width: 45px; text-align: right; color: #0ff; }
+    .panel-actions { display: flex; gap: 10px; margin-top: 8px; }
+    .panel-actions button { flex: 1; padding: 8px; background: #0ff; color: #000; font-weight: bold; border: none; border-radius: 4px; }
+  </style>
+  <!-- Three.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+  <div id="canvas-container"></div>
+
+  <!-- Touch Zones -->
+  <div id="touch-left" class="touch-zone"></div>
+  <div id="touch-right" class="touch-zone"></div>
+
+  <!-- UI & Debug -->
+  <div id="ui-layer">
+    <div id="debug-panel">
+      FPS: <span id="val-fps">60</span><br>
+      Speed: <span id="val-speed">0</span><br>
+      Slope: <span id="val-slope">0</span><br>
+      Pos (X/Z): <span id="val-pos">0, 0</span>
+    </div>
+  </div>
+
+  <button id="btn-sound" class="top-btn">🔊 風聲</button>
+  <button id="btn-debug" class="top-btn">D</button>
+  <button id="btn-panel" class="top-btn">⚙️ 調參</button>
+
+  <!-- Slider Panel -->
+  <div id="tweak-panel" style="display: none;">
+    <strong style="color:#0ff; text-align:center;">--- 數值即時調整面板 ---</strong>
+    <div id="sliders-container"></div>
+    <div class="panel-actions">
+      <button id="btn-copy">📋 複製目前數值</button>
+      <button id="btn-close-panel">✕ 關閉面板</button>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // 鐵則 2: CONFIG 集中區 (全部手感參數)
+    // ==========================================
+    const CONFIG = {
+      // 浪 (Wave)
+      waveHeight: 3.0,      // 主浪高度: 越大浪越洶湧
+      waveLength: 40.0,     // 主浪波長: 越大浪越平緩綿長
+      waveSpeed: 6.0,       // 浪推動速度
+      sideWaveHeight: 1.2,  // 側浪高度: 左右起伏
+      fineWaveHeight: 0.3,  // 細波高度: 表面微小碎浪
+
+      // 玩家與物理 (Player)
+      baseSpeed: 35.0,      // 基礎前進速度
+      turnAccel: 28.0,      // 左右加速度: 越大轉彎越靈敏
+      turnDamping: 8.0,     // 左右阻尼: 放開手指回正快慢
+      maxSideSpeed: 20.0,   // 最大左右移動速度
+      slopeEffect: 0.6,     // 坡度影響: 下坡加速/上坡減速強度
+      minSpeed: 20.0,       // 最低速度
+      maxSpeed: 60.0,       // 最高速度
+      boardTilt: 25.0,      // 轉彎時板子側傾角度 (度)
+      snapSmoothness: 0.25, // 貼浪平滑度: 太小會抖，太大會穿浪
+
+      // 攝影機 (Camera)
+      camDistance: 12.0,    // 鏡頭後方距離
+      camHeight: 5.0,       // 鏡頭高度
+      camLag: 0.12,         // 鏡頭跟隨延遲: 越小越黏、越大越飄
+      camTilt: 6.0,         // 轉彎時鏡頭側傾角
+      camWaveFollow: 0.7,   // 鏡頭上下跟浪比例 (0~1)
+      fovMin: 60.0,         // 低速時 FOV
+      fovMax: 78.0,         // 高速時 FOV (速度感主力)
+
+      // 速度感與視覺 (Juice)
+      foamBrightness: 0.5,  // 泡沫線亮度
+      wakeParticles: 30,    // 尾跡粒子數
+      windVolume: 0.3       // 風聲最大音量
+    };
+
+    // ==========================================
+    // 鐵則 1: 地形獨立函數 getHeight(x, z, time)
+    // ==========================================
+    function getHeight(x, z, t) {
+      const mainWave = Math.sin((z - t * CONFIG.waveSpeed) / CONFIG.waveLength * Math.PI * 2) * CONFIG.waveHeight;
+      const sideWave = Math.sin(x / 25.0 * Math.PI * 2) * CONFIG.sideWaveHeight;
+      const fineWave = Math.cos((x + z) / 8.0) * CONFIG.fineWaveHeight;
+      return mainWave + sideWave + fineWave;
+    }
+
+    // 計算 z 軸方向的坡度 (前高後低為正)
+    function getSlopeZ(x, z, t) {
+      const delta = 0.5;
+      const h1 = getHeight(x, z - delta, t);
+      const h2 = getHeight(x, z + delta, t);
+      return (h1 - h2) / (delta * 2); 
+    }
+
+    // ==========================================
+    // Three.js 初始化與場景建構
+    // ==========================================
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a101d);
+    scene.fog = new THREE.FogExp2(0x0a101d, 0.015);
+
+    const camera = new THREE.PerspectiveCamera(CONFIG.fovMin, window.innerWidth / window.innerHeight, 0.1, 300);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    container.appendChild(renderer.domElement);
+
+    // 燈光
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0x00ffff, 0.8);
+    dirLight.position.set(20, 40, 20);
+    scene.add(dirLight);
+
+    // 1. 玩家 (衝浪板)
+    const boardGeo = new THREE.BoxGeometry(1.2, 0.2, 3.0);
+    const boardMat = new THREE.MeshLambertMaterial({ color: 0x00ffff, flatShading: true });
+    const playerMesh = new THREE.Mesh(boardGeo, boardMat);
+    scene.add(playerMesh);
+
+    // 2. 海面網格
+    const planeWidth = 120, planeLength = 250;
+    const planeGeo = new THREE.PlaneGeometry(planeWidth, planeLength, 70, 90);
+    planeGeo.rotateX(-Math.PI / 2); // 轉為水平面
+    const planeMat = new THREE.MeshLambertMaterial({ 
+      color: 0x113355, 
+      wireframe: false, 
+      flatShading: true,
+      vertexColors: false
+    });
+    const oceanMesh = new THREE.Mesh(planeGeo, planeMat);
+    scene.add(oceanMesh);
+
+    // 3. 泡沫條紋 (速度感參照物)
+    const foamGroup = new THREE.Group();
+    scene.add(foamGroup);
+    const foamLines = [];
+    const foamGeo = new THREE.PlaneGeometry(100, 0.8);
+    foamGeo.rotateX(-Math.PI / 2);
+    const foamMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: CONFIG.foamBrightness });
+
+    for (let i = 0; i < 15; i++) {
+      const foam = new THREE.Mesh(foamGeo, foamMat);
+      foamGroup.add(foam);
+      foamLines.push(foam);
+    }
+
+    // 4. 浮標 (兩側參照物)
+    const buoys = [];
+    const buoyGeo = new THREE.CylinderGeometry(0.4, 0.4, 4, 6);
+    const buoyMat = new THREE.MeshLambertMaterial({ color: 0xff3366, flatShading: true });
+    for (let i = 0; i < 10; i++) {
+      const buoyL = new THREE.Mesh(buoyGeo, buoyMat);
+      const buoyR = new THREE.Mesh(buoyGeo, buoyMat);
+      scene.add(buoyL); scene.add(buoyR);
+      buoys.push({ meshL: buoyL, meshR: buoyR, offsetZ: i * 25 });
+    }
+
+    // 5. 尾跡粒子
+    const wakeGeo = new THREE.BoxGeometry(0.3, 0.1, 0.3);
+    const wakeMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
+    const wakeParticles = [];
+    for (let i = 0; i < 40; i++) {
+      const p = new THREE.Mesh(wakeGeo, wakeMat);
+      p.visible = false;
+      scene.add(p);
+      wakeParticles.push({ mesh: p, life: 0, maxLife: 1 });
+    }
+
+    // ==========================================
+    // 音效 (Web Audio API 風聲合成)
+    // ==========================================
+    let audioCtx = null, noiseNode = null, gainNode = null, filterNode = null;
+    let isSoundOn = false;
+
+    function initAudio() {
+      if (audioCtx) return;
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const bufferSize = audioCtx.sampleRate * 2;
+      const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const output = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) { output[i] = Math.random() * 2 - 1; }
+
+      noiseNode = audioCtx.createBufferSource();
+      noiseNode.buffer = noiseBuffer;
+      noiseNode.loop = true;
+
+      filterNode = audioCtx.createBiquadFilter();
+      filterNode.type = 'bandpass';
+      filterNode.frequency.value = 400;
+
+      gainNode = audioCtx.createGain();
+      gainNode.gain.value = 0;
+
+      noiseNode.connect(filterNode);
+      filterNode.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      noiseNode.start();
+    }
+
+    // ==========================================
+    // 遊戲狀態與變數
+    // ==========================================
+    let playerX = 0, playerZ = 0, playerY = 0;
+    let sideSpeed = 0, currentSpeed = CONFIG.baseSpeed;
+    let inputLeft = false, inputRight = false;
+    let clock = new THREE.Clock();
+    let gameTime = 0;
+
+    // 攝影機內部狀態
+    let camX = 0, camY = 5, camZ = -12;
+
+    // ==========================================
+    // 操作監聽 (手機 touch + 電腦 鍵盤)
+    // ==========================================
+    const tLeft = document.getElementById('touch-left');
+    const tRight = document.getElementById('touch-right');
+
+    const handleTouch = (e, left, state) => {
+      e.preventDefault();
+      if (left) inputLeft = state; else inputRight = state;
+    };
+
+    tLeft.addEventListener('pointerdown', (e) => handleTouch(e, true, true));
+    tLeft.addEventListener('pointerup', (e) => handleTouch(e, true, false));
+    tRight.addEventListener('pointerdown', (e) => handleTouch(e, false, true));
+    tRight.addEventListener('pointerup', (e) => handleTouch(e, false, false));
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') inputLeft = true;
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') inputRight = true;
+      if (e.key === 'd' || e.key === 'D') toggleDebug();
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') inputLeft = false;
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') inputRight = false;
+    });
+
+    // ==========================================
+    // 遊戲主迴圈 (Main Loop)
+    // ==========================================
+    let frameCount = 0, lastFpsUpdate = 0, fps = 60;
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const delta = Math.min(clock.getDelta(), 0.1); // 防止分頁切換爆破
+      gameTime += delta;
+
+      // 1. 左右操作與加速度計算
+      if (inputLeft) {
+        sideSpeed -= CONFIG.turnAccel * delta;
+      } else if (inputRight) {
+        sideSpeed += CONFIG.turnAccel * delta;
+      } else {
+        // 阻尼自動回正
+        sideSpeed -= sideSpeed * CONFIG.turnDamping * delta;
+      }
+      sideSpeed = THREE.MathUtils.clamp(sideSpeed, -CONFIG.maxSideSpeed, CONFIG.maxSideSpeed);
+
+      playerX += sideSpeed * delta;
+      playerX = THREE.MathUtils.clamp(playerX, -35, 35); // 左右邊界限制
+
+      // 2. 坡度與速度計算 (下坡加速, 上坡減速)
+      const slope = getSlopeZ(playerX, playerZ, gameTime);
+      const targetSpeed = CONFIG.baseSpeed + (slope * CONFIG.slopeEffect * 30.0);
+      currentSpeed += (targetSpeed - currentSpeed) * 3.0 * delta;
+      currentSpeed = THREE.MathUtils.clamp(currentSpeed, CONFIG.minSpeed, CONFIG.maxSpeed);
+
+      playerZ += currentSpeed * delta;
+
+      // 3. 貼浪計算 (Y軸高度與平滑)
+      const targetY = getHeight(playerX, playerZ, gameTime) + 0.2;
+      playerY += (targetY - playerY) * (1.0 - Math.pow(CONFIG.snapSmoothness, delta * 60));
+
+      // 4. 更新衝浪板 Mesh 位置與姿勢
+      playerMesh.position.set(playerX, playerY, playerZ);
+      const tiltAngle = (-sideSpeed / CONFIG.maxSideSpeed) * THREE.MathUtils.degToRad(CONFIG.boardTilt);
+      playerMesh.rotation.z = THREE.MathUtils.lerp(playerMesh.rotation.z, tiltAngle, 0.1);
+      playerMesh.rotation.x = slope * 0.5; // 順著波浪前後傾斜
+
+      // 5. 動態更新波浪地形 Mesh 頂點
+      const posAttr = planeGeo.attributes.position;
+      for (let i = 0; i < posAttr.count; i++) {
+        const vx = posAttr.getX(i);
+        const vz = posAttr.getZ(i) + playerZ; // 讓網格隨玩家移動捲動
+        const vy = getHeight(vx, vz, gameTime);
+        posAttr.setY(i, vy);
+      }
+      planeGeo.computeVertexNormals();
+      posAttr.needsUpdate = true;
+      oceanMesh.position.z = playerZ;
+
+      // 6. 泡沫線 & 浮標位置跟隨更新
+      foamLines.forEach((foam, idx) => {
+        const spacing = 15;
+        const zPos = Math.floor(playerZ / spacing) * spacing + (idx * spacing) - 30;
+        foam.position.set(0, getHeight(0, zPos, gameTime) + 0.1, zPos);
+        foam.material.opacity = CONFIG.foamBrightness;
+      });
+
+      buoys.forEach((b) => {
+        const bZ = Math.floor((playerZ - b.offsetZ) / 200) * 200 + b.offsetZ + playerZ;
+        b.meshL.position.set(-38, getHeight(-38, bZ, gameTime) + 1.5, bZ);
+        b.meshR.position.set(38, getHeight(38, bZ, gameTime) + 1.5, bZ);
+      });
+
+      // 7. 產生尾跡粒子
+      if (Math.random() < 0.6) {
+        const pObj = wakeParticles.find(p => !p.mesh.visible);
+        if (pObj) {
+          pObj.mesh.visible = true;
+          pObj.mesh.position.set(playerX + (Math.random() - 0.5), playerY - 0.1, playerZ - 1.2);
+          pObj.life = 0;
+        }
+      }
+      wakeParticles.forEach(p => {
+        if (p.mesh.visible) {
+          p.life += delta * 2;
+          p.mesh.scale.setScalar(1 - p.life);
+          if (p.life >= 1) p.mesh.visible = false;
+        }
+      });
+
+      // 8. 攝影機跟隨 (手感靈魂)
+      const targetCamX = playerX * 0.8;
+      const targetCamY = (playerY * CONFIG.camWaveFollow) + CONFIG.camHeight;
+      const targetCamZ = playerZ - CONFIG.camDistance;
+
+      camX += (targetCamX - camX) * CONFIG.camLag;
+      camY += (targetCamY - camY) * CONFIG.camLag;
+      camZ += (targetCamZ - camZ) * (CONFIG.camLag * 1.5);
+
+      camera.position.set(camX, camY, camZ);
+      camera.lookAt(playerX, playerY + 1.0, playerZ + 15.0); // 往前看 15 單位
+
+      // 攝影機轉彎側傾 & FOV 動態拉開
+      camera.rotation.z = (-sideSpeed / CONFIG.maxSideSpeed) * THREE.MathUtils.degToRad(CONFIG.camTilt);
+      const speedRatio = (currentSpeed - CONFIG.minSpeed) / (CONFIG.maxSpeed - CONFIG.minSpeed);
+      camera.fov = THREE.MathUtils.lerp(CONFIG.fovMin, CONFIG.fovMax, speedRatio);
+      camera.updateProjectionMatrix();
+
+      // 9. 風聲合成調整
+      if (isSoundOn && gainNode) {
+        gainNode.gain.value = speedRatio * CONFIG.windVolume;
+        filterNode.frequency.value = 300 + speedRatio * 800;
+      }
+
+      // 10. FPS & Debug 更新
+      frameCount++;
+      if (gameTime - lastFpsUpdate > 0.5) {
+        fps = Math.round(frameCount / (gameTime - lastFpsUpdate));
+        frameCount = 0;
+        lastFpsUpdate = gameTime;
+        document.getElementById('val-fps').innerText = fps;
+      }
+      document.getElementById('val-speed').innerText = currentSpeed.toFixed(1);
+      document.getElementById('val-slope').innerText = slope.toFixed(2);
+      document.getElementById('val-pos').innerText = `${playerX.toFixed(1)}, ${playerZ.toFixed(1)}`;
+
+      renderer.render(scene, camera);
+    }
+
+    // ==========================================
+    // UI、Debug 與調參面板邏輯
+    // ==========================================
+    function toggleDebug() {
+      const p = document.getElementById('debug-panel');
+      p.style.display = p.style.display === 'none' ? 'block' : 'none';
+      planeMat.wireframe = (p.style.display === 'block');
+    }
+    document.getElementById('btn-debug').addEventListener('click', toggleDebug);
+
+    // 音效按鈕
+    document.getElementById('btn-sound').addEventListener('click', () => {
+      initAudio();
+      isSoundOn = !isSoundOn;
+      document.getElementById('btn-sound').innerText = isSoundOn ? '🔊 風聲開' : '🔇 風聲關';
+      if (!isSoundOn && gainNode) gainNode.gain.value = 0;
+    });
+
+    // 動態產生滑桿面板
+    const slidersContainer = document.getElementById('sliders-container');
+    const panel = document.getElementById('tweak-panel');
+
+    const sliderDefs = [
+      { key: 'waveHeight', label: '浪高', min: 0, max: 8, step: 0.2 },
+      { key: 'waveLength', label: '浪長', min: 10, max: 100, step: 1 },
+      { key: 'baseSpeed', label: '前進速度', min: 10, max: 80, step: 1 },
+      { key: 'turnAccel', label: '左右加速度', min: 5, max: 60, step: 1 },
+      { key: 'turnDamping', label: '左右阻尼', min: 1, max: 20, step: 0.5 },
+      { key: 'slopeEffect', label: '坡度影響', min: 0, max: 2, step: 0.1 },
+      { key: 'camDistance', label: '鏡頭距離', min: 5, max: 25, step: 1 },
+      { key: 'camHeight', label: '鏡頭高度', min: 1, max: 15, step: 0.5 },
+      { key: 'camLag', label: '鏡頭跟隨延遲', min: 0.01, max: 0.4, step: 0.01 },
+      { key: 'camTilt', label: '轉彎鏡頭傾斜', min: 0, max: 20, step: 1 },
+      { key: 'fovMax', label: '最高速 FOV', min: 60, max: 100, step: 1 },
+      { key: 'foamBrightness', label: '泡沫亮度', min: 0, max: 1, step: 0.1 },
+      { key: 'windVolume', label: '風聲音量', min: 0, max: 1, step: 0.05 }
+    ];
+
+    sliderDefs.forEach(def => {
+      const row = document.createElement('div');
+      row.className = 'panel-row';
+      row.innerHTML = `
+        <label>${def.label}</label>
+        <input type="range" min="${def.min}" max="${def.max}" step="${def.step}" value="${CONFIG[def.key]}">
+        <span id="val-${def.key}">${CONFIG[def.key]}</span>
+      `;
+      const input = row.querySelector('input');
+      input.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        CONFIG[def.key] = val;
+        document.getElementById(`val-${def.key}`).innerText = val;
+      });
+      slidersContainer.appendChild(row);
+    });
+
+    document.getElementById('btn-panel').addEventListener('click', () => {
+      panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+    });
+    document.getElementById('btn-close-panel').addEventListener('click', () => {
+      panel.style.display = 'none';
+    });
+
+    // 一鍵複製目前 CONFIG 數值
+    document.getElementById('btn-copy').addEventListener('click', () => {
+      const text = JSON.stringify(CONFIG, null, 2);
+      navigator.clipboard.writeText(text).then(() => {
+        alert('已複製所有 CONFIG 數值！可以直接貼給 AI 人工智慧了！');
+      });
+    });
+
+    // 視窗 resize 自適應
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // 啟動迴圈
+    animate();
+  </script>
+</body>
+</html>
