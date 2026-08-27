@@ -78,6 +78,52 @@
     font-size:11px;letter-spacing:.16em;color:var(--dim);
     pointer-events:none;transition:opacity 1s ease}
 
+  #fish{position:fixed;left:50%;transform:translateX(-50%);
+    bottom:max(82px,calc(env(safe-area-inset-bottom) + 60px));
+    width:min(300px, calc(100vw - 44px));
+    padding:14px 16px;border-radius:18px;
+    background:rgba(8,16,17,.62);
+    border:1px solid rgba(232,228,217,.10);
+    backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    display:flex;flex-direction:column;gap:8px;
+    max-height:min(56vh, 440px);overflow-y:auto;-webkit-overflow-scrolling:touch;
+    transition:opacity .35s ease,transform .35s ease}
+  #fish.off{opacity:0;pointer-events:none;transform:translateX(-50%) translateY(10px)}
+  .frow{display:flex;align-items:center;gap:10px}
+  .flab{flex:1;font-size:12px;letter-spacing:.14em;color:var(--paper);
+    text-align:left;min-width:0}
+  button.fhead{appearance:none;border:0;background:transparent;font:inherit;
+    font-size:12px;letter-spacing:.14em;color:var(--paper);padding:2px 0;cursor:pointer;
+    display:flex;align-items:center;gap:6px}
+  button.fhead:hover{color:#cfe6b4}
+  button.fhead:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
+  .fcar{font-size:9px;opacity:.5}
+  .fsub{display:none;padding-left:14px}
+  .fsub .flab{font-size:11px;letter-spacing:.1em;color:rgba(232,228,217,.62)}
+  .fsub .fbtn{width:22px;height:22px;font-size:13px}
+  .fsub .fnum{font-size:11px;color:rgba(232,228,217,.72)}
+  .fsep{height:1px;background:rgba(232,228,217,.10);margin:2px 0}
+  .freset{appearance:none;border:0;background:transparent;font:inherit;
+    font-size:10px;letter-spacing:.16em;color:rgba(232,228,217,.38);
+    padding:6px 0 2px;cursor:pointer;transition:color .2s ease}
+  .freset:hover{color:rgba(232,228,217,.7)}
+  .freset.armed{color:#e0864f}
+  .freset:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
+  .fnum{width:20px;text-align:center;font-size:12px;color:var(--paper);
+    font-variant-numeric:tabular-nums}
+  .fbtn{flex:none;width:26px;height:26px;padding:0;border-radius:50%;
+    border:1px solid rgba(232,228,217,.22);background:transparent;color:var(--paper);
+    font:inherit;font-size:15px;line-height:1;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:background .2s ease,opacity .2s ease}
+  .fbtn:hover:not(:disabled){background:rgba(232,228,217,.12)}
+  .fbtn:active:not(:disabled){transform:scale(.92)}
+  .fbtn:disabled{opacity:.22;cursor:default}
+  .fbtn:focus-visible{outline:2px solid var(--moss);outline-offset:2px}
+  .ftot{margin-top:1px;padding-top:10px;border-top:1px solid rgba(232,228,217,.10);
+    font-size:10px;letter-spacing:.14em;color:var(--dim);text-align:center}
+  .ftot b{font-weight:500;color:var(--paper)}
+
   #sound{position:fixed;left:50%;transform:translateX(-50%);
     bottom:max(82px,calc(env(safe-area-inset-bottom) + 60px));
     width:min(320px, calc(100vw - 44px));
@@ -149,12 +195,14 @@
 <div id="dock">
   <button class="btn" id="bFeed">餵食</button>
   <div class="sep"></div>
-  <button class="btn" id="bAdd">加魚</button>
+  <button class="btn" id="bFish" aria-pressed="false">魚</button>
   <div class="sep"></div>
   <button class="btn" id="bNight" aria-pressed="false">夜燈</button>
   <div class="sep"></div>
   <button class="btn" id="bSound" aria-pressed="false">聲音</button>
 </div>
+
+<div id="fish" class="off"></div>
 
 <div id="sound" class="off">
   <div class="srow">
@@ -1078,16 +1126,17 @@ function spawnGoldfish(v){
   return f;
 }
 
+// 鍵名必須是 name，面板與存檔都靠它辨識花色
 const PUFFER_STYLES = [
-  {back:0xffb32e, belly:0xfff0cf, fin:0xfff6e4, glow:0.10, glowColor:0xffc24a, label:'黃河豚'},
-  {back:0xff6f33, belly:0xffe2c9, fin:0xfff0e2, glow:0.10, glowColor:0xff8a3a, label:'橙河豚'},
-  {back:0x2fc9b8, belly:0xdffaf3, fin:0xeafcf8, glow:0.14, glowColor:0x3fe0cc, label:'青河豚'},
-  {back:0xbcd93a, belly:0xf2f7d6, fin:0xf7fbe6, glow:0.12, glowColor:0xcbe64a, label:'苔河豚'},
-  {back:0xff5f8a, belly:0xffdbe6, fin:0xfff0f4, glow:0.14, glowColor:0xff5f8a, label:'桃河豚'}
+  {back:0xffb32e, belly:0xfff0cf, fin:0xfff6e4, glow:0.10, glowColor:0xffc24a, name:'黃河豚'},
+  {back:0xff6f33, belly:0xffe2c9, fin:0xfff0e2, glow:0.10, glowColor:0xff8a3a, name:'橙河豚'},
+  {back:0x2fc9b8, belly:0xdffaf3, fin:0xeafcf8, glow:0.14, glowColor:0x3fe0cc, name:'青河豚'},
+  {back:0xbcd93a, belly:0xf2f7d6, fin:0xf7fbe6, glow:0.12, glowColor:0xcbe64a, name:'苔河豚'},
+  {back:0xff5f8a, belly:0xffdbe6, fin:0xfff0f4, glow:0.14, glowColor:0xff5f8a, name:'桃河豚'}
 ];
 
-function spawnPuffer(){
-  const st = pick(PUFFER_STYLES);
+function spawnPuffer(st){
+  st = st || pick(PUFFER_STYLES);
   const mats = MODELS.puffer.mats.map((c,i)=>{
     if(i === 0) return fishMaterial({
       colA: st.belly, colB: st.back, splitY: 0.62, splitOff: -0.045,
@@ -1106,7 +1155,7 @@ function spawnPuffer(){
     baseSpeed: rand(0.10, 0.15) * SPEED,
     depthBias: rand(-0.2, 0.3),
     curiosity: rand(0.15, 0.5),
-    label: st.label,
+    label: st.name,
     allMats: mats
   });
   mats.forEach(m=>{
@@ -1168,13 +1217,20 @@ function newWanderTarget(f){
 }
 
 /* --- 螯蝦：貼底行走 --- */
-let crayfish = null;
-function spawnCrayfish(){
-  // 藍魔蝦：先把貼圖壓成明度再上藍，不然紅底乘藍會變濁
+const crayfishes = [];
+// 先把貼圖壓成明度再上色，不然紅底乘藍會變濁
+const CRAYFISH_VARIANTS = [
+  {name:'藍魔蝦', colA:0x74d2ff, colB:0x0f4cf0},
+  {name:'紅螯蝦', colA:0xffb08a, colB:0xd42a10},
+  {name:'橘螯蝦', colA:0xffd6a0, colB:0xff7a10},
+  {name:'白螯蝦', colA:0xfff4e8, colB:0xd0c2ad}
+];
+function spawnCrayfish(v){
+  v = v || pick(CRAYFISH_VARIANTS);
   const mat = fishMaterial({
     map: TEX.crayfish, flatten: 1.0, val: 1.42, emis: 0.24, sat: 1.45,
     rough: 0.88, metal: 0.0,
-    colA: 0x74d2ff, colB: 0x0f4cf0, splitY: 1.0, splitOff: -0.085,
+    colA: v.colA, colB: v.colB, splitY: 1.0, splitOff: -0.085,
     limbA: 0.070, limbB: 0.225, clawZ: 0.215
   });
   mat.userData.uni.uAmp.value = 0.012;
@@ -1183,9 +1239,9 @@ function spawnCrayfish(){
   mesh.scale.setScalar(0.95);
   mesh.castShadow = true;
   tankGroup.add(mesh);
-  crayfish = {
-    mesh, mat,
-    pos: new THREE.Vector3(-1.2, 0, 1.3),
+  const crayfish = {
+    kind:'crayfish', label: v.name, mesh, mat, allMats:[mat],
+    pos: new THREE.Vector3(rand(-3.5,3.5), 0, rand(0.2, 1.8)),
     dir: new THREE.Vector3(1,0,0),
     target: new THREE.Vector3(2.2, 0, 1.0),
     speed: 0,
@@ -1193,6 +1249,7 @@ function spawnCrayfish(){
     bob: 0
   };
   crayfish.pos.y = sandHeight(crayfish.pos.x, crayfish.pos.z);
+  crayfishes.push(crayfish);
   return crayfish;
 }
 
@@ -1296,13 +1353,20 @@ function nearestHitch(pos){
 }
 
 /* --- 螃蟹：橫著走，走走停停，受驚往石頭底下鑽並舉起前身 --- */
-let crab = null;
-function spawnCrab(){
-  // 藍蟹：殼身青藍，螯尖留橘
+const crabs = [];
+// colA = 殼身，colB = 螯尖
+const CRAB_VARIANTS = [
+  {name:'朱紅蟹', colA:0xff3008, colB:0xffb85a},
+  {name:'藍蟹',   colA:0x2f7ad8, colB:0xffa040},
+  {name:'青蟹',   colA:0x1f9e7a, colB:0xdcecb4},
+  {name:'白蟹',   colA:0xf0e6d4, colB:0xffcf9a}
+];
+function spawnCrab(v){
+  v = v || pick(CRAB_VARIANTS);
   const mat = fishMaterial({
     map: TEX.crab, flatten: 1.0, val: 1.42, emis: 0.24, sat: 1.45,
     rough: 0.88, metal: 0.0,
-    colA: 0xff3008, colB: 0xffb85a, splitZ: 1.0, splitOff: -0.30,
+    colA: v.colA, colB: v.colB, splitZ: 1.0, splitOff: -0.30,
     limbA: 0.215, limbB: 0.575, clawZ: 0.255
   });
   mat.userData.uni.uAmp.value = 0;      // 蟹殼是硬的，不做彎曲
@@ -1313,14 +1377,15 @@ function spawnCrab(){
   mesh.scale.setScalar(0.60);
   mesh.castShadow = true;
   tankGroup.add(mesh);
-  crab = {
-    mesh, mat,
-    pos: new THREE.Vector3(2.6, 0, 1.5),
+  const crab = {
+    kind:'crab', label: v.name, mesh, mat, allMats:[mat],
+    pos: new THREE.Vector3(rand(-3.5,3.5), 0, rand(0.4, 1.9)),
     face: new THREE.Vector3(0, 0, 1),
     target: new THREE.Vector3(0, 0, 1.5),
     speed: 0, pause: 2.0, bob: 0, alarm: 0, lift: 0
   };
   crab.pos.y = sandHeight(crab.pos.x, crab.pos.z);
+  crabs.push(crab);
   return crab;
 }
 
@@ -1435,8 +1500,8 @@ function spawnStar(surface, styleIdx){
   mesh.scale.setScalar(s);
   mesh.castShadow = true;
   tankGroup.add(mesh);
-  const st = { mesh, mat, surface, size:s, spin: rand(0, 6.283), wait: rand(3, 14),
-               moving:false, label: sy.name };
+  const st = { kind:'star', mesh, mat, allMats:[mat], surface, size:s,
+               spin: rand(0, 6.283), wait: rand(3, 14), moving:false, label: sy.name };
   if(surface === 'floor'){
     st.a = rand(-4.0, 4.0); st.b = rand(-0.8, TANK.d/2 - 0.9);
   }else{
@@ -1700,9 +1765,14 @@ function sfxFeed(){
 
 // 切到別的分頁就靜音，回來再接上
 document.addEventListener('visibilitychange', function(){
+  if(document.hidden && typeof writeState === 'function') writeState();
   if(!SND.ctx) return;
   if(document.hidden) SND.ctx.suspend();
   else if(SND.water.on || SND.music.on) SND.ctx.resume();
+});
+// 關頁面／切走前立刻落檔，不等 debounce
+window.addEventListener('pagehide', function(){
+  if(typeof writeState === 'function') writeState();
 });
 
 /* ============================================================
@@ -1791,7 +1861,7 @@ function knock(point, normal){
       if(f.kind === 'puffer' && power > 0.35) f.inflateTarget = 1;
     }
   });
-  if(crab) crab.alarm = Math.max(crab.alarm, power);
+  for(let i=0;i<crabs.length;i++) crabs[i].alarm = Math.max(crabs[i].alarm, power);
   if(habituation > 0.6) mood('魚好像習慣了', 4);
   else mood('魚群受驚', 3.5);
 }
@@ -1806,6 +1876,7 @@ function setNight(on){
   nightOn = on;
   document.getElementById('bNight').setAttribute('aria-pressed', on ? 'true':'false');
   document.getElementById('bNight').textContent = on ? '開燈' : '夜燈';
+  if(typeof saveState === 'function') saveState();
   mood(on ? '夜燈亮著' : '水面平靜', 5);
 }
 
@@ -1818,11 +1889,36 @@ function ndcFrom(e){
   pointerNDC.y = -((e.clientY - r.top)/r.height)*2 + 1;
 }
 
+// 切換 App、鎖螢幕或手指離開視窗時，pointerup 與 pointercancel 都不會送達，
+// 殘留的指標會跟下一根手指湊成兩點，拖曳就變成縮放。這裡負責把狀態歸零。
+function resetPointers(){
+  pointers.clear();
+  dragging = false;
+  pinchDist = 0;
+  stage.classList.remove('dragging');
+  finger.inside = false; finger.still = 99;
+}
+document.addEventListener('visibilitychange', function(){
+  if(document.hidden) resetPointers();
+});
+window.addEventListener('blur', resetPointers);
+window.addEventListener('pagehide', resetPointers);
+stage.addEventListener('lostpointercapture', function(e){
+  pointers.delete(e.pointerId);
+  if(pointers.size === 0) dragging = false;
+  if(pointers.size < 2) pinchDist = 0;
+});
+
 stage.addEventListener('pointerdown', e=>{
+  // 保險：太久沒更新過的指標視為已經失效
+  const now = performance.now();
+  pointers.forEach(function(v, id){
+    if(now - v.t > 4000) pointers.delete(id);
+  });
   finger.sx = e.clientX; finger.sy = e.clientY;
   finger.inside = true; finger.still = 0;
   stage.setPointerCapture(e.pointerId);
-  pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  pointers.set(e.pointerId, {x:e.clientX, y:e.clientY, t:now});
   if(pointers.size === 1){
     dragging = true; moved = 0;
     downX = e.clientX; downY = e.clientY; downT = performance.now();
@@ -1841,7 +1937,7 @@ stage.addEventListener('pointermove', e=>{
   if(!pointers.has(e.pointerId)) return;
   const prev = pointers.get(e.pointerId);
   const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
-  pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+  pointers.set(e.pointerId, {x:e.clientX, y:e.clientY, t:performance.now()});
 
   if(pointers.size === 2){
     const p = Array.from(pointers.values());
@@ -1873,6 +1969,7 @@ function endPointer(e){
   pointers.delete(e.pointerId);
   if(pointers.size === 0){ dragging = false; stage.classList.remove('dragging'); }
   if(pointers.size < 2) pinchDist = 0;
+  if(typeof saveState === 'function') saveState();
   if(e.pointerType === 'touch'){ finger.inside = false; finger.still = 99; }
 }
 stage.addEventListener('pointerup', endPointer);
@@ -1883,39 +1980,236 @@ stage.addEventListener('wheel', e=>{
   e.preventDefault();
   orbit.tDist = clamp(orbit.tDist + e.deltaY*0.012, ORB.distMin, ORB.distMax);
   wake();
+  if(typeof saveState === 'function') saveState();
 }, {passive:false});
 
 /* --- 按鈕 --- */
 document.getElementById('bFeed').addEventListener('click', ()=>{ dropFood(); wake(); });
-document.getElementById('bAdd').addEventListener('click', ()=>{
-  if(fishes.length >= 26){ mood('缸子滿了', 4); return; }
-  const r = Math.random();
-  const nPuffer = fishes.filter(x=>x.kind==='puffer').length;
-  const nAngel  = fishes.filter(x=>x.kind==='angel').length;
-  const nHorse = fishes.filter(x=>x.kind==='seahorse').length;
-  const f = (nPuffer < 3 && r < 0.13) ? spawnPuffer()
-          : (nHorse  < 4 && r < 0.30) ? spawnSeahorse()
-          : (nAngel  < 4 && r < 0.50) ? spawnAngel()
-          : spawnGoldfish();
-  f.pos.set(rand(-2,2), rand(0, 1.4), rand(-1,1));
-  mood('放了一隻' + f.label, 4);
-  updateCount(); wake();
-});
+
 document.getElementById('bNight').addEventListener('click', ()=>{
   autoLight = false;               // 手動按過就不再跟著時鐘
   setNight(!nightOn); wake();
 });
 
 
+/* --- 生物面板：選種類與花色、加、撈，全部在同一處，不用切模式 --- */
+const FISH_CAP = 20, BOTTOM_CAP = 8;
+
+const SPECIES = [
+  {k:'goldfish', label:'金魚',   group:'fish',   variants:GOLD_VARIANTS,
+   spawn:function(v){ return spawnGoldfish(v); }},
+  {k:'angel',    label:'神仙魚', group:'fish',   variants:ANGEL_VARIANTS,
+   spawn:function(v){ return spawnAngel(v); }},
+  {k:'seahorse', label:'海馬',   group:'fish',   variants:SEAHORSE_VARIANTS,
+   spawn:function(v){ return spawnSeahorse(v); }},
+  {k:'puffer',   label:'河豚',   group:'fish',   variants:PUFFER_STYLES,
+   spawn:function(v){ return spawnPuffer(v); }},
+  {k:'crayfish', label:'螯蝦',   group:'bottom', variants:CRAYFISH_VARIANTS,
+   spawn:function(v){ return spawnCrayfish(v); }},
+  {k:'crab',     label:'螃蟹',   group:'bottom', variants:CRAB_VARIANTS,
+   spawn:function(v){ return spawnCrab(v); }},
+  {k:'star',     label:'海星',   group:'bottom', variants:STAR_STYLES,
+   spawn:function(v){
+     // 後玻璃與底砂輪流放，兩邊都不會空掉
+     let back = 0;
+     for(let i=0;i<stars.length;i++) if(stars[i].surface === 'back') back++;
+     let idx = STAR_STYLES.indexOf(v);
+     if(idx < 0) idx = randi(0, STAR_STYLES.length - 1);   // 不指定花色時隨機
+     return spawnStar(back <= stars.length - back ? 'back' : 'floor', idx);
+   }}
+];
+
+function listOf(kind){
+  if(kind === 'crayfish') return crayfishes;
+  if(kind === 'crab')     return crabs;
+  if(kind === 'star')     return stars;
+  return fishes;
+}
+function countOf(kind, name){
+  const arr = listOf(kind);
+  let n = 0;
+  for(let i=0;i<arr.length;i++){
+    const o = arr[i];
+    if(arr === fishes && o.kind !== kind) continue;
+    if(name && o.label !== name) continue;
+    n++;
+  }
+  return n;
+}
+function groupCount(group){
+  let n = 0;
+  for(let i=0;i<SPECIES.length;i++)
+    if(SPECIES[i].group === group) n += countOf(SPECIES[i].k);
+  return n;
+}
+
+function addCreature(spec, variant){
+  const cap = spec.group === 'fish' ? FISH_CAP : BOTTOM_CAP;
+  if(groupCount(spec.group) >= cap){
+    mood(spec.group === 'fish' ? '缸子滿了' : '底棲夠多了', 4);
+    return;
+  }
+  const o = spec.spawn(variant);
+  if(spec.group === 'fish'){
+    o.pos.set(rand(-2.2, 2.2), WATER_Y - rand(0.5, 1.1), rand(-1, 1));
+    o.mesh.position.copy(o.pos);
+    ripple(new THREE.Vector3(o.pos.x, WATER_Y + 0.01, o.pos.z), 'surface');
+    sfxFeed();
+  }
+  mood('放了一隻' + o.label, 4);
+  updateCount(); refreshFishPanel(); saveState();
+}
+
+function scoopCreature(spec, name){
+  const arr = listOf(spec.k);
+  // 挑離鏡頭最近的那一隻，通常就是你正在看的那隻
+  let idx = -1, bd = 1e9;
+  for(let i=0;i<arr.length;i++){
+    const o = arr[i];
+    if(arr === fishes && o.kind !== spec.k) continue;
+    if(name && o.label !== name) continue;
+    const d = o.mesh.position.distanceTo(camera.position);
+    if(d < bd){ bd = d; idx = i; }
+  }
+  if(idx < 0) return;
+  const o = arr[idx];
+  arr.splice(idx, 1);
+  if(o.hitch){ o.hitch.taken = false; o.hitch = null; }
+  scoopMesh(o.mesh, o.allMats, o.mesh.position);
+  // 附近的魚也嚇一跳
+  for(let i=0;i<fishes.length;i++){
+    const q = fishes[i];
+    const d = q.pos.distanceTo(o.mesh.position);
+    if(d < 2.4){ q.startle = Math.max(q.startle, 0.5 * (1 - d/2.4)); q.state = 'flee'; }
+  }
+  tapPoint.copy(o.mesh.position);
+  mood(o.label + '被撈起來了', 4);
+  updateCount(); refreshFishPanel(); saveState();
+}
+
+/* --- 面板：每個物種一列，點名稱展開花色 --- */
+const fishPanel = document.getElementById('fish');
+const panelRows = [];
+let openSpecies = null;
+
+function refreshFishPanel(){
+  const nFish = groupCount('fish'), nBottom = groupCount('bottom');
+  for(let i=0;i<panelRows.length;i++){
+    const r = panelRows[i];
+    const cap = r.spec.group === 'fish' ? FISH_CAP : BOTTOM_CAP;
+    const full = (r.spec.group === 'fish' ? nFish : nBottom) >= cap;
+    const n = countOf(r.spec.k, r.name);
+    r.num.textContent = n;
+    r.minus.disabled = n === 0;
+    r.plus.disabled  = full;
+    if(r.head) r.caret.textContent = openSpecies === r.spec.k ? '\u25be' : '\u25b8';
+    if(!r.head) r.el.style.display = openSpecies === r.spec.k ? 'flex' : 'none';
+  }
+  panelTotal.innerHTML = '魚 <b>' + nFish + '</b> / ' + FISH_CAP +
+                         '　·　底棲 <b>' + nBottom + '</b> / ' + BOTTOM_CAP;
+}
+
+function makeRow(spec, variant){
+  const isHead = !variant;
+  const row = document.createElement('div');
+  row.className = isHead ? 'frow' : 'frow fsub';
+
+  const lab = document.createElement(isHead ? 'button' : 'span');
+  lab.className = isHead ? 'flab fhead' : 'flab';
+  lab.textContent = isHead ? spec.label : variant.name;
+
+  let caret = null;
+  if(isHead){
+    caret = document.createElement('span');
+    caret.className = 'fcar';
+    caret.textContent = '\u25b8';
+    lab.appendChild(caret);
+    lab.addEventListener('click', function(){
+      openSpecies = (openSpecies === spec.k) ? null : spec.k;
+      refreshFishPanel(); wake();
+    });
+  }
+
+  const minus = document.createElement('button');
+  minus.className = 'fbtn'; minus.textContent = '\u2212';
+  minus.setAttribute('aria-label', '撈走一隻' + (variant ? variant.name : spec.label));
+  const num = document.createElement('span');
+  num.className = 'fnum'; num.textContent = '0';
+  const plus = document.createElement('button');
+  plus.className = 'fbtn'; plus.textContent = '+';
+  plus.setAttribute('aria-label', '加一隻' + (variant ? variant.name : spec.label));
+
+  minus.addEventListener('click', function(){ scoopCreature(spec, variant ? variant.name : null); wake(); });
+  plus.addEventListener('click',  function(){ addCreature(spec, variant || null); wake(); });
+
+  row.appendChild(lab); row.appendChild(minus); row.appendChild(num); row.appendChild(plus);
+  fishPanel.appendChild(row);
+  panelRows.push({spec:spec, name: variant ? variant.name : null,
+                  el:row, num:num, minus:minus, plus:plus, head:isHead, caret:caret});
+}
+
+function removeAllCreatures(){
+  [fishes, crayfishes, crabs, stars].forEach(function(arr){
+    while(arr.length){
+      const o = arr.pop();
+      tankGroup.remove(o.mesh);
+      o.allMats.forEach(function(m){ m.dispose(); });
+    }
+  });
+}
+
+let resetArmed = 0;
+function resetTank(){
+  if(resetArmed <= 0){
+    resetArmed = 4;                       // 秒；到期會自己收回
+    panelReset.textContent = '再按一次確認';
+    panelReset.classList.add('armed');
+    return;
+  }
+  resetArmed = 0;
+  panelReset.textContent = '重置成預設';
+  panelReset.classList.remove('armed');
+  removeAllCreatures();
+  defaultStock();
+  storeClear();
+  saveState();
+  refreshFishPanel();
+  mood('缸子重置了', 4);
+}
+
+const panelReset = document.createElement('button');
+const panelTotal = document.createElement('div');
+(function buildFishPanel(){
+  SPECIES.forEach(function(spec, i){
+    if(i > 0 && SPECIES[i-1].group !== spec.group){
+      const sep = document.createElement('div');
+      sep.className = 'fsep';
+      fishPanel.appendChild(sep);
+    }
+    makeRow(spec, null);
+    spec.variants.forEach(function(v){ makeRow(spec, v); });
+  });
+  panelTotal.className = 'ftot';
+  fishPanel.appendChild(panelTotal);
+  panelReset.className = 'freset';
+  panelReset.textContent = '重置成預設';
+  panelReset.addEventListener('click', function(){ resetTank(); wake(); });
+  fishPanel.appendChild(panelReset);
+})();
+
 const soundPanel = document.getElementById('sound');
-let soundOpen = false;
-document.getElementById('bSound').addEventListener('click', function(){
-  soundOpen = !soundOpen;
-  soundPanel.classList.toggle('off', !soundOpen);
-  this.setAttribute('aria-pressed', soundOpen ? 'true' : 'false');
-  if(soundOpen) document.getElementById('hint').classList.add('faded');
+let soundOpen = false, fishOpen = false;
+function setPanels(sound, fish){
+  soundOpen = sound; fishOpen = fish;
+  soundPanel.classList.toggle('off', !sound);
+  fishPanel.classList.toggle('off', !fish);
+  document.getElementById('bSound').setAttribute('aria-pressed', sound ? 'true' : 'false');
+  document.getElementById('bFish').setAttribute('aria-pressed', fish ? 'true' : 'false');
+  if(sound || fish) document.getElementById('hint').classList.add('faded');
   wake();
-});
+}
+document.getElementById('bSound').addEventListener('click', function(){ setPanels(!soundOpen, false); });
+document.getElementById('bFish').addEventListener('click',  function(){ setPanels(false, !fishOpen); });
 
 function wireTrack(name, togId, volId){
   const tog = document.getElementById(togId);
@@ -1928,10 +2222,11 @@ function wireTrack(name, togId, volId){
     T.on = !T.on;
     if(T.on) trackStart(name); else trackStop(name);
     tog.setAttribute('aria-pressed', T.on ? 'true' : 'false');
+    saveState();
   });
   vol.addEventListener('input', function(){
     trackVolume(name, parseInt(vol.value, 10) / 100);
-    wake();
+    wake(); saveState();
   });
 }
 wireTrack('water', 'tWater', 'vWater');
@@ -1951,12 +2246,14 @@ document.addEventListener('keydown', primeAudio, {capture:true, once:true});
 
 window.addEventListener('keydown', e=>{
   if(e.key === 'f' || e.key === 'F'){ dropFood(); wake(); }
+  if(e.key === 'Escape'){ setPanels(false, false); }
   if(e.key === 'n' || e.key === 'N'){ setNight(!nightOn); wake(); }
 });
 
 /* --- UI 淡出 --- */
 const uiEls = [document.getElementById('dock'), document.getElementById('title'),
-               document.getElementById('readout'), document.getElementById('sound')];
+               document.getElementById('readout'), document.getElementById('sound'),
+               document.getElementById('fish')];
 const hintEl = document.getElementById('hint');
 let idle = 0;
 function wake(){
@@ -1983,30 +2280,155 @@ function mood(text, secs){
   moodT = secs || 4;
 }
 function updateCount(){
-  document.getElementById('rCount').textContent = fishes.length;
+  document.getElementById('rCount').textContent = groupCount('fish');
 }
 
 /* ============================================================
    13. 起始生物
    ============================================================ */
-(function stock(){
+function defaultStock(){
   const order = ['素赤','紅白','黃金','朱文金','螢光綠','螢光粉'];
   order.forEach(n => spawnGoldfish(GOLD_VARIANTS.find(v=>v.name===n)));
   spawnAngel(ANGEL_VARIANTS[0]);
   spawnSeahorse(SEAHORSE_VARIANTS[0]);
   spawnPuffer();
-  spawnCrayfish();
-  spawnCrab();
+  spawnCrayfish(CRAYFISH_VARIANTS[0]);   // 藍魔蝦
+  spawnCrab(CRAB_VARIANTS[0]);           // 朱紅蟹
   spawnStar('back', 1);    // 紫海星貼後玻璃
   spawnStar('back', 3);    // 青海星貼後玻璃
   spawnStar('floor', 0);   // 黃海星在底砂
   updateCount();
-})();
+}
 
 // 開缸時跟著你的系統時間決定開燈或夜燈，之後每分鐘對一次；
 // 只要手動按過「夜燈」就交還給你，不再自動切換。
-setNight(clockSaysNight());
-U.night.value = nightOn ? 1 : 0;
+/* ============================================================
+   13.5 記憶：把生物名冊、燈光、聲音、鏡頭存進 localStorage
+   沙箱化的 iframe 光是讀取 localStorage 就會丟例外，所以整段都包在
+   try 裡；存取失敗就安靜地退回「每次重整都是預設」的行為。
+   ============================================================ */
+const STORE_KEY = 'planted-tank-v1';
+let storeOK = true, saveTimer = null;
+
+function storeRead(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){ storeOK = false; return null; }
+}
+function storeWrite(obj){
+  if(!storeOK) return;
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(obj)); }
+  catch(e){ storeOK = false; }
+}
+function storeClear(){
+  try{ localStorage.removeItem(STORE_KEY); }catch(e){}
+}
+
+function writeState(){
+  if(!storeOK) return;
+  const roster = {};
+  SPECIES.forEach(function(spec){
+    const m = {};
+    spec.variants.forEach(function(v){
+      if(!v.name) return;                 // 沒有名字就不存，避免寫出 undefined 鍵
+      const n = countOf(spec.k, v.name);
+      if(n) m[v.name] = n;
+    });
+    roster[spec.k] = m;
+  });
+  storeWrite({
+    v: 2,
+    roster: roster,
+    night: { auto: autoLight, on: nightOn },
+    audio: {
+      water: { on: SND.water.on, vol: SND.water.vol },
+      music: { on: SND.music.on, vol: SND.music.vol }
+    },
+    cam: { theta: orbit.tTheta, phi: orbit.tPhi, dist: orbit.tDist }
+  });
+}
+function saveState(){
+  if(!storeOK) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(writeState, 400);
+}
+
+// v1 的河豚花色表把鍵名拼成 label，導致存檔寫出一個叫 "undefined" 的鍵，
+// 讀回來時五種花色各自都讀到它、各生成 n 隻。這裡做一次性修補：
+// 把它還原成「不指定花色的 n 隻」，並確保河豚至少留一隻。
+function migrateRosterV1(roster){
+  SPECIES.forEach(function(spec){
+    const m = roster[spec.k];
+    if(!m) return;
+    const legacy = m['undefined'] | 0;
+    delete m['undefined'];
+    if(legacy > 0) m._any = (m._any | 0) + legacy;
+  });
+  const pm = roster.puffer = roster.puffer || {};
+  let pn = 0;
+  for(const k in pm) pn += pm[k] | 0;
+  if(pn === 0) pm._any = 1;
+  return roster;
+}
+
+function restoreRoster(roster){
+  let placed = 0;
+  SPECIES.forEach(function(spec){
+    const m = roster[spec.k];
+    if(!m) return;
+    const cap = spec.group === 'fish' ? FISH_CAP : BOTTOM_CAP;
+    function put(v, n){
+      for(let i=0;i<n;i++){
+        if(groupCount(spec.group) >= cap) return;
+        spec.spawn(v); placed++;
+      }
+    }
+    spec.variants.forEach(function(v){
+      if(!v.name) return;
+      let n = m[v.name] | 0;
+      put(v, n < 0 ? 0 : n);
+    });
+    let any = m._any | 0;          // 不指定花色
+    put(null, any < 0 ? 0 : any);
+  });
+  return placed;
+}
+
+(function boot(){
+  const saved = storeRead();
+  if(saved && saved.roster && (saved.v === 1 || saved.v === 2)){
+    restoreRoster(saved.v === 1 ? migrateRosterV1(saved.roster) : saved.roster);
+                                            // 名冊為空就真的是空缸，不要塞回預設
+    if(saved.cam){
+      orbit.tTheta = orbit.theta = clamp(saved.cam.theta, ORB.thetaMin, ORB.thetaMax);
+      orbit.tPhi   = orbit.phi   = clamp(saved.cam.phi,   ORB.phiMin,   ORB.phiMax);
+      orbit.tDist  = orbit.dist  = clamp(saved.cam.dist,  ORB.distMin,  ORB.distMax);
+    }
+    if(saved.audio){
+      ['water','music'].forEach(function(k){
+        const a = saved.audio[k];
+        if(!a) return;
+        SND[k].on = !!a.on;
+        SND[k].vol = clamp(typeof a.vol === 'number' ? a.vol : 0.4, 0, 1);
+        const tog = document.getElementById(k === 'water' ? 'tWater' : 'tMusic');
+        const vol = document.getElementById(k === 'water' ? 'vWater' : 'vMusic');
+        if(tog) tog.setAttribute('aria-pressed', SND[k].on ? 'true' : 'false');
+        if(vol) vol.value = Math.round(SND[k].vol * 100);
+      });
+    }
+    if(saved.night){
+      autoLight = !!saved.night.auto;
+      if(!autoLight){ setNight(!!saved.night.on); U.night.value = nightOn ? 1 : 0; }
+    }
+  }else{
+    defaultStock();
+  }
+  updateCount();
+})();
+
+refreshFishPanel();
+if(autoLight){ setNight(clockSaysNight()); U.night.value = nightOn ? 1 : 0; }
 setInterval(function(){
   if(!autoLight) return;
   const n = clockSaysNight();
@@ -2016,6 +2438,31 @@ setInterval(function(){
 /* ============================================================
    14. 每幀更新
    ============================================================ */
+// 撈網：被撈的個體已經從自己的陣列裡拿掉，接下來只剩動畫
+const scoops = [];
+function scoopMesh(mesh, mats, from){
+  scoops.push({ mesh:mesh, mats:mats, pos:from.clone(), t:0, splashed:false });
+}
+function updateScoops(dt){
+  for(let i=scoops.length-1; i>=0; i--){
+    const s = scoops[i];
+    s.t += dt;
+    s.pos.y += (0.5 + s.t*3.0) * dt * 1.8;
+    s.pos.x += Math.sin(s.t*11) * 0.9 * dt;      // 掙扎
+    s.mesh.position.copy(s.pos);
+    if(!s.splashed && s.pos.y >= WATER_Y){
+      s.splashed = true;
+      ripple(new THREE.Vector3(s.pos.x, WATER_Y + 0.01, s.pos.z), 'surface');
+      sfxFeed();
+    }
+    if(s.pos.y > WATER_Y + 1.1){
+      tankGroup.remove(s.mesh);
+      s.mats.forEach(function(m){ m.dispose(); });   // 幾何共用，只丟材質
+      scoops.splice(i, 1);
+    }
+  }
+}
+
 function updateFish(f, dt, t){
   const acc = tmpV.set(0,0,0);
   const pad = f.yPad || 0;
@@ -2405,12 +2852,20 @@ function frame(){
   renderer.toneMappingExposure = lerp(1.04, 0.99, nv) * (1 - turbidity*0.10);
 
   if(tapTimer > 0) tapTimer -= dt;
+  if(resetArmed > 0){
+    resetArmed -= dt;
+    if(resetArmed <= 0){
+      panelReset.textContent = '重置成預設';
+      panelReset.classList.remove('armed');
+    }
+  }
   updateTurbidity(dt);
   updateFinger(dt);
 
   for(let i=0;i<fishes.length;i++) updateFish(fishes[i], dt, t);
-  if(crayfish) updateCrayfish(crayfish, dt, t);
-  if(crab) updateCrab(crab, dt);
+  updateScoops(dt);
+  for(let i=0;i<crayfishes.length;i++) updateCrayfish(crayfishes[i], dt, t);
+  for(let i=0;i<crabs.length;i++) updateCrab(crabs[i], dt);
   for(let i=0;i<stars.length;i++) updateStar(stars[i], dt);
   updateFoods(dt);
   updateParticles(dt, t);
