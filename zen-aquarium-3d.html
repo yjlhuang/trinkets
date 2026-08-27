@@ -149,9 +149,9 @@
 
 <div id="sound" class="off">
   <div class="srow">
-    <button class="stog" id="tWater" aria-pressed="false" aria-label="水聲開關"></button>
+    <button class="stog" id="tWater" aria-pressed="true" aria-label="水聲開關"></button>
     <span class="slab">水聲</span>
-    <input class="svol" id="vWater" type="range" min="0" max="100" value="65" aria-label="水聲音量">
+    <input class="svol" id="vWater" type="range" min="0" max="100" value="30" aria-label="水聲音量">
   </div>
   <div class="srow">
     <button class="stog" id="tMusic" aria-pressed="false" aria-label="音樂開關"></button>
@@ -293,11 +293,12 @@ scene.add(fillLight);
    ============================================================ */
 const U = {
   time:  { value: 0 },
-  night: { value: 0 }
+  night: { value: 0 },
+  turb:  { value: 0 }     // 水的濁度 0..1
 };
 
 const CAUSTIC_GLSL = `
-  uniform float uTime; uniform float uNight;
+  uniform float uTime; uniform float uNight; uniform float uTurb;
   varying vec3 vWPos;
   float causticLayer(vec2 p, float t){
     vec2 i = p; float c = 1.0; const float inten = 0.0045;
@@ -317,6 +318,7 @@ function addCaustics(mat, strength){
   mat.onBeforeCompile = function(sh){
     sh.uniforms.uTime = U.time;
     sh.uniforms.uNight = U.night;
+    sh.uniforms.uTurb = U.turb;
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed,1.0)).xyz;');
@@ -326,7 +328,7 @@ function addCaustics(mat, strength){
         '#include <dithering_fragment>\n' +
         'float _h = smoothstep(2.6, -0.35, vWPos.y - (' + FLOOR.toFixed(3) + '));\n' +
         'float _c = causticLayer(vWPos.xz * 0.52 + vec2(0.0, uTime*0.035), uTime * 0.30);\n' +
-        'gl_FragColor.rgb += vec3(0.88,0.95,0.84) * _c * ' + strength.toFixed(3) + ' * _h * (1.0 - uNight*0.88);');
+        'gl_FragColor.rgb += vec3(0.88,0.95,0.84) * _c * ' + strength.toFixed(3) + ' * _h * (1.0 - uNight*0.88) * (1.0 - uTurb*0.75);');
   };
   mat.customProgramCacheKey = function(){ return 'caustic'+strength.toFixed(2); };
   return mat;
@@ -354,8 +356,8 @@ sandGeo.rotateX(-Math.PI/2);
   sandGeo.computeVertexNormals();
 })();
 const sandMat = addCaustics(new THREE.MeshStandardMaterial({
-  color:0xd2be95, roughness:0.96, metalness:0.0
-}), 0.42);
+  color:0xc8b389, roughness:0.96, metalness:0.0
+}), 0.31);
 const sand = new THREE.Mesh(sandGeo, sandMat);
 sand.position.y = FLOOR;
 sand.receiveShadow = true;
@@ -473,17 +475,25 @@ const rockMat = addCaustics(new THREE.MeshStandardMaterial({
 
 // iwagumi：主石偏左、副石、添石
 [
-  {x:-3.05, z:-0.55, r:1.10, rot:0.4,  ry:-0.15},
-  {x:-1.75, z: 0.75, r:0.62, rot:1.9,  ry:-0.22},
-  {x:-4.15, z: 0.95, r:0.44, rot:3.1,  ry:-0.14},
-  {x: 1.15, z:-1.55, r:0.52, rot:2.4,  ry:-0.20}
+  {x:-3.05, z:-0.55, r:1.10, rot:0.4},
+  {x:-1.75, z: 0.75, r:0.62, rot:1.9},
+  {x:-4.15, z: 0.95, r:0.44, rot:3.1},
+  {x: 1.15, z:-1.55, r:0.52, rot:2.4}
 ].forEach((s,i)=>{
-  const m = new THREE.Mesh(noisyRock(s.r, i*11.3+2), rockMat);
-  m.position.set(s.x, sandHeight(s.x,s.z) + s.ry*s.r + s.r*0.42, s.z);
-  m.rotation.set(rand(-0.2,0.2), s.rot, rand(-0.15,0.15));
+  const geo = noisyRock(s.r, i*11.3+2);
+  geo.computeBoundingBox();
+  geo.computeBoundingSphere();
+  const m = new THREE.Mesh(geo, rockMat);
+  // 只繞 Y 轉，底部才保證朝下；再把最低點對齊砂面、埋進去約兩成
+  const h = geo.boundingBox.max.y - geo.boundingBox.min.y;
+  m.position.set(s.x, sandHeight(s.x,s.z) - geo.boundingBox.min.y - h*0.20, s.z);
+  m.rotation.set(0, s.rot, 0);
   m.castShadow = true; m.receiveShadow = true;
   tankGroup.add(m);
-  obstacles.push({pos:m.position.clone(), r:s.r*0.95});
+  obstacles.push({
+    pos: m.position.clone().add(geo.boundingSphere.center),
+    r: geo.boundingSphere.radius * 0.86
+  });
 });
 
 // 沉木：偏右的分枝
@@ -502,6 +512,14 @@ function branch(from, to, r0, r1, depth){
   m.castShadow = true; m.receiveShadow = true;
   tankGroup.add(m);
   // 接合處補一顆球，讓轉折是連續的實體
+  // 沿著這一段登記幾顆碰撞球，魚才不會穿過樹枝
+  for(let k=0;k<=2;k++){
+    const tt = 0.2 + k*0.35;
+    obstacles.push({
+      pos: from.clone().lerp(to, tt),
+      r: Math.max(r0, r1) * (1 - tt*0.3) + 0.13
+    });
+  }
   const j = new THREE.Mesh(new THREE.SphereGeometry(r1*1.06, 8, 6), woodMat);
   j.position.copy(to);
   j.scale.set(1, 0.92, 1);
@@ -523,7 +541,6 @@ function branch(from, to, r0, r1, depth){
   const base = new THREE.Vector3(3.2, sandHeight(3.2,-0.4)-0.1, -0.4);
   branch(base, new THREE.Vector3(2.35, base.y+1.35, 0.25), 0.30, 0.20, 2);
   branch(base, new THREE.Vector3(4.15, base.y+1.05, -0.9), 0.24, 0.15, 2);
-  obstacles.push({pos:new THREE.Vector3(3.2, base.y+0.9, -0.3), r:1.05});
 })();
 
 /* ============================================================
@@ -595,6 +612,7 @@ function plantMaterial(sway, causticAmt){
   m.onBeforeCompile = function(sh){
     sh.uniforms.uTime = U.time;
     sh.uniforms.uNight = U.night;
+    sh.uniforms.uTurb = U.turb;
     sh.uniforms.uSway = { value: sway };
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>',
@@ -612,7 +630,7 @@ function plantMaterial(sway, causticAmt){
         '#include <dithering_fragment>\n' +
         'float _h = smoothstep(2.6,-0.35, vWPos.y - (' + FLOOR.toFixed(3) + '));\n' +
         'float _c = causticLayer(vWPos.xz*0.52, uTime*0.30);\n' +
-        'gl_FragColor.rgb += vec3(0.86,0.93,0.80) * _c * ' + causticAmt.toFixed(3) + ' * _h * (1.0-uNight*0.88);');
+        'gl_FragColor.rgb += vec3(0.86,0.93,0.80) * _c * ' + causticAmt.toFixed(3) + ' * _h * (1.0-uNight*0.88) * (1.0-uTurb*0.75);');
   };
   m.customProgramCacheKey = function(){ return 'plant'+sway.toFixed(2)+causticAmt.toFixed(2); };
   return m;
@@ -670,6 +688,51 @@ addPlants(makeBlades({
   h:[0.2,0.42], w:[0.05,0.08], segs:3, taper:1.3, lean:0.6, stiff:0.5,
   colorA:0x2b5c2c, colorB:0x639b41
 }), matCarpet).position.y = 0.95;
+
+/* ============================================================
+   6.5 過濾器出水口與水流
+   缸內的水是一個閉合環流：沿水面往左 → 順左壁下沉 → 沿底砂往右 → 順右壁上升。
+   用流函數 psi = sin(pi*x)*sin(pi*y) 推導出速度場，先天無散度，
+   魚和飼料才不會被水流擠成一堆。
+   ============================================================ */
+const OUTLET = new THREE.Vector3(TANK.w/2 - 1.05, WATER_Y - 0.55, -TANK.d/2 + 0.62);
+const FLOW = { strength: 0.24 };
+
+function flowAt(x, y, z, out){
+  const xn = clamp((x + TANK.w/2) / TANK.w, 0, 1);
+  const yn = clamp((y - FLOOR) / (WATER_Y - FLOOR), 0, 1);
+  const c = FLOW.strength;
+  out.set(
+     c * Math.sin(Math.PI*xn) * Math.cos(Math.PI*yn),
+    -c * 0.62 * Math.cos(Math.PI*xn) * Math.sin(Math.PI*yn),
+     0
+  );
+  // 出水口附近的射流，往 -X 吹
+  const dx = x - OUTLET.x, dy = y - OUTLET.y, dz = z - OUTLET.z;
+  const k = Math.exp(-(dx*dx + dy*dy*1.6 + dz*dz*1.2) * 0.62);
+  out.x -= c * 3.4 * k;
+  out.z += c * 1.1 * k;
+  return out;
+}
+
+// 百合彎管
+(function(){
+  function tube(from, to, r0, r1){
+    const dir = new THREE.Vector3().subVectors(to, from);
+    const len = dir.length();
+    const g = new THREE.CylinderGeometry(r1, r0, len, 12, 1, false);
+    g.translate(0, len/2, 0);
+    const m = new THREE.Mesh(g, glassMat);
+    m.position.copy(from);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), dir.clone().normalize());
+    m.renderOrder = 6;
+    tankGroup.add(m);
+  }
+  const top = new THREE.Vector3(OUTLET.x + 0.62, TANK.h/2 - 0.05, OUTLET.z - 0.10);
+  const bend = new THREE.Vector3(OUTLET.x + 0.62, OUTLET.y + 0.16, OUTLET.z - 0.10);
+  tube(top, bend, 0.075, 0.075);
+  tube(bend, OUTLET.clone(), 0.075, 0.105);
+})();
 
 /* ============================================================
    7. 氣泡 / 懸浮微粒 / 光柱
@@ -849,6 +912,13 @@ function fishMaterial(opt){
     uSplitOff:{ value: opt.splitOff===undefined ? 0 : opt.splitOff },
     uVal:   { value: opt.val===undefined ? 1 : opt.val },
     uInflate:{ value: 0 },
+    uLimb:  { value: 0 },                                            // 步足擺動幅度
+    uLimbFreq:{ value: 4 },
+    uLimbA: { value: opt.limbA === undefined ? 0.20 : opt.limbA },   // |x| 小於此視為軀幹
+    uLimbB: { value: opt.limbB === undefined ? 0.60 : opt.limbB },   // 大於此是足尖
+    uClaw:  { value: 0 },                                            // 螯的開合
+    uClawFreq:{ value: 1.4 },
+    uClawZ: { value: opt.clawZ === undefined ? 0.30 : opt.clawZ },
     uNight: U.night,
     uGlow:  { value: opt.glow || 0 },
     uGlowCol:{ value: new THREE.Color(opt.glowColor===undefined ? 0xffffff : opt.glowColor) }
@@ -858,7 +928,9 @@ function fishMaterial(opt){
     Object.keys(uni).forEach(k => sh.uniforms[k] = uni[k]);
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>',
-        '#include <common>\nuniform float uTime;uniform float uPhase;uniform float uFreq;uniform float uAmp;uniform float uTurn;uniform float uInflate;\nvarying vec3 vLocal;')
+        '#include <common>\nuniform float uTime;uniform float uPhase;uniform float uFreq;uniform float uAmp;uniform float uTurn;uniform float uInflate;\n' +
+        'uniform float uLimb;uniform float uLimbFreq;uniform float uLimbA;uniform float uLimbB;\n' +
+        'uniform float uClaw;uniform float uClawFreq;uniform float uClawZ;\nvarying vec3 vLocal;')
       .replace('#include <begin_vertex>',
         '#include <begin_vertex>\n' +
         'vLocal = position;\n' +
@@ -867,7 +939,16 @@ function fishMaterial(opt){
         'float _t = clamp(0.5 - transformed.z, 0.0, 1.0);\n' +
         'float _w = _t*_t;\n' +
         'transformed.x += sin(uTime*uFreq + uPhase - _t*3.4) * uAmp * _w;\n' +
-        'transformed.x += uTurn * _w * 0.30;\n');
+        'transformed.x += uTurn * _w * 0.30;\n' +
+        // 步足：離中線越遠擺動越大，左右兩側反相，沿身體長軸依序推進
+        'float _lx = abs(position.x);\n' +
+        'float _lw = smoothstep(uLimbA, uLimbB, _lx);\n' +
+        'float _lp = uTime*uLimbFreq + position.z*7.0 + (position.x > 0.0 ? 0.0 : 3.1416);\n' +
+        'transformed.y += sin(_lp) * uLimb * _lw;\n' +
+        'transformed.z += cos(_lp) * uLimb * 0.55 * _lw;\n' +
+        // 螯：只作用在身體前端外側，做開合
+        'float _cw = smoothstep(uClawZ, uClawZ + 0.16, position.z) * _lw;\n' +
+        'transformed.x -= sign(position.x) * (0.5 + 0.5*sin(uTime*uClawFreq)) * uClaw * _cw;\n');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float uVal;\nuniform float uNight;uniform float uGlow;uniform vec3 uGlowCol;\n' + TWOTONE_GLSL)
       .replace('#include <color_fragment>',
@@ -893,6 +974,7 @@ function fishMaterial(opt){
 const fishes = [];
 const foods  = [];
 const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
+const tmpFlow = new THREE.Vector3(), tmpAim = new THREE.Vector3();
 const mBasis = new THREE.Matrix4();
 const qTmp = new THREE.Quaternion();
 const qBank = new THREE.Quaternion();
@@ -1005,6 +1087,23 @@ function makeFish(mesh, mat, o){
   return f;
 }
 
+// 底棲生物用：把水平位置推出碰撞球在該高度的截面
+function floorClamp(p, radius){
+  for(let i=0;i<obstacles.length;i++){
+    const ob = obstacles[i];
+    const dy = p.y - ob.pos.y;
+    const rr2 = ob.r*ob.r - dy*dy;
+    if(rr2 <= 0) continue;
+    const rr = Math.sqrt(rr2) + radius;
+    const dx = p.x - ob.pos.x, dz = p.z - ob.pos.z;
+    const d = Math.hypot(dx, dz);
+    if(d < rr && d > 1e-4){
+      p.x = ob.pos.x + dx/d*rr;
+      p.z = ob.pos.z + dz/d*rr;
+    }
+  }
+}
+
 function newWanderTarget(f){
   const pad = f.yPad || 0;
   const yMin = FLOOR + 0.75 + pad, yMax = WATER_Y - 0.55 - pad;
@@ -1019,7 +1118,12 @@ function newWanderTarget(f){
 /* --- 螯蝦：貼底行走 --- */
 let crayfish = null;
 function spawnCrayfish(){
-  const mat = fishMaterial({map:TEX.crayfish});
+  // 藍魔蝦：先把貼圖壓成明度再上藍，不然紅底乘藍會變濁
+  const mat = fishMaterial({
+    map: TEX.crayfish, flatten: 1.0, val: 2.30,
+    colA: 0x8fe6ff, colB: 0x2a6dff, splitY: 1.0, splitOff: -0.085,
+    limbA: 0.070, limbB: 0.225, clawZ: 0.215
+  });
   mat.userData.uni.uAmp.value = 0.012;
   mat.userData.uni.uFreq.value = 2.2;
   const mesh = new THREE.Mesh(GEO.crayfish, mat);
@@ -1089,7 +1193,12 @@ function spawnAngel(v){
 /* --- 螃蟹：橫著走，走走停停，受驚往石頭底下鑽並舉起前身 --- */
 let crab = null;
 function spawnCrab(){
-  const mat = fishMaterial({map: TEX.crab});
+  // 藍蟹：殼身青藍，螯尖留橘
+  const mat = fishMaterial({
+    map: TEX.crab, flatten: 1.0, val: 2.25,
+    colA: 0xf5502a, colB: 0xffd9a8, splitZ: 1.0, splitOff: -0.30,
+    limbA: 0.215, limbB: 0.575, clawZ: 0.255
+  });
   mat.userData.uni.uAmp.value = 0;      // 蟹殼是硬的，不做彎曲
   mat.userData.uni.uFreq.value = 0;
   const mesh = new THREE.Mesh(GEO.crab, mat);
@@ -1173,12 +1282,28 @@ function updateCrab(c, dt){
     c.pos.z
   );
   c.mesh.rotation.set(-c.lift * 0.34, Math.atan2(c.face.x, c.face.z), Math.sin(c.bob*0.5) * 0.045);
+  floorClamp(c.pos, 0.42);
+
+  const bu = c.mat.userData.uni;
+  bu.uLimb.value     = damp(bu.uLimb.value, 0.010 + Math.min(c.speed,1.3)*0.026, 7, dt);
+  bu.uLimbFreq.value = 2.4 + c.speed*15;
+  bu.uClaw.value     = damp(bu.uClaw.value, 0.012 + c.alarm*0.040 + (goal ? 0.020 : 0), 5, dt);
+  bu.uClawFreq.value = 1.1 + c.alarm*5.5 + (goal ? 2.5 : 0);
 }
 
 /* --- 海星：極慢地在底砂或後方玻璃上爬 --- */
 const stars = [];
-function spawnStar(surface, texIdx){
-  const mat = fishMaterial({map: TEX.star[texIdx % TEX.star.length]});
+const STAR_STYLES = [
+  {tex:1, colA:0xfff3b0, colB:0xffc21e, flatten:0.85, val:1.20, name:'黃海星'},
+  {tex:0, colA:0xd8fff4, colB:0x2fd6b4, flatten:0.80, val:1.35, name:'青海星'},
+  {tex:2, colA:0xffd9a0, colB:0xff6a2a, flatten:0.90, val:1.65, name:'橙海星'}
+];
+function spawnStar(surface, styleIdx){
+  const sy = STAR_STYLES[styleIdx % STAR_STYLES.length];
+  const mat = fishMaterial({
+    map: TEX.star[sy.tex], val: sy.val, flatten: sy.flatten,
+    colA: sy.colA, colB: sy.colB, splitY: 2.0, splitOff: -0.15
+  });
   mat.userData.uni.uAmp.value = 0;
   mat.userData.uni.uFreq.value = 0;
   const mesh = new THREE.Mesh(GEO.star, mat);
@@ -1186,7 +1311,8 @@ function spawnStar(surface, texIdx){
   mesh.scale.setScalar(s);
   mesh.castShadow = true;
   tankGroup.add(mesh);
-  const st = { mesh, mat, surface, size:s, spin: rand(0, 6.283), wait: rand(3, 14), moving:false };
+  const st = { mesh, mat, surface, size:s, spin: rand(0, 6.283), wait: rand(3, 14),
+               moving:false, label: sy.name };
   if(surface === 'floor'){
     st.a = rand(-4.0, 4.0); st.b = rand(-0.8, TANK.d/2 - 0.9);
   }else{
@@ -1224,9 +1350,11 @@ function updateStar(st, dt){
     st.mesh.position.set(st.a, sandHeight(st.a, st.b) + 0.015, st.b);
     st.mesh.rotation.set(0, st.spin, 0);
   }else{
-    // 貼在後方玻璃上，正面朝觀眾
-    st.mesh.position.set(st.a, st.b, -TANK.d/2 + 0.06);
-    st.mesh.rotation.set(Math.PI/2, 0, -st.spin);
+    // 平貼後方玻璃。自轉必須繞海星自己的法線（局部 Y），
+    // Euler 預設 XYZ 是先轉 Z 再轉 X，所以自轉要放 rotation.y，
+    // 放 rotation.z 會把牠翻出平面，看起來就像浮在水裡。
+    st.mesh.position.set(st.a, st.b, -TANK.d/2 + 0.015);
+    st.mesh.rotation.set(Math.PI/2, st.spin, 0);
   }
 }
 
@@ -1456,6 +1584,62 @@ document.addEventListener('visibilitychange', function(){
 /* ============================================================
    12. 互動：敲缸 / 餵食 / 夜燈
    ============================================================ */
+// 手指／游標停在玻璃上不動，好奇的魚會慢慢靠過來
+const finger = {
+  active:false, amount:0, still:99, inside:false,
+  sx:0, sy:0,
+  pos: new THREE.Vector3(), aim: new THREE.Vector3()
+};
+const fingerNDC = new THREE.Vector2();
+const fingerRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.10, 0.16, 40),
+  new THREE.MeshBasicMaterial({color:0xbdf4e6, transparent:true, opacity:0,
+    depthWrite:false, blending:THREE.AdditiveBlending, side:THREE.DoubleSide, fog:false})
+);
+fingerRing.renderOrder = 7;
+fingerRing.visible = false;
+tankGroup.add(fingerRing);
+
+function updateFinger(dt){
+  finger.still += dt;
+  // 停太久魚就看膩了，要再動一下才會重新好奇
+  const ready = finger.inside && !dragging && finger.still > 0.9 && finger.still < 26;
+  if(ready){
+    const r = renderer.domElement.getBoundingClientRect();
+    fingerNDC.x = ((finger.sx - r.left)/r.width)*2 - 1;
+    fingerNDC.y = -((finger.sy - r.top)/r.height)*2 + 1;
+    raycaster.setFromCamera(fingerNDC, camera);
+    const hit = raycaster.intersectObject(glassBox, false)[0];
+    if(hit){
+      finger.pos.copy(hit.point);
+      // 目標點往缸內縮一點，魚才不會一直頂著玻璃
+      finger.aim.copy(hit.point).multiplyScalar(0.80);
+      finger.aim.x = clamp(finger.aim.x, -TANK.w/2+1.0, TANK.w/2-1.0);
+      finger.aim.y = clamp(finger.aim.y, FLOOR+1.0, WATER_Y-0.8);
+      finger.aim.z = clamp(finger.aim.z, -TANK.d/2+0.9, TANK.d/2-0.9);
+      finger.active = true;
+    }else{
+      finger.active = false;
+    }
+  }else{
+    finger.active = false;
+  }
+  const prev = finger.amount;
+  finger.amount = damp(finger.amount, finger.active ? 1 : 0, finger.active ? 0.9 : 2.6, dt);
+  if(prev < 0.5 && finger.amount >= 0.5) mood('魚靠過來了', 4);
+
+  if(finger.amount > 0.01){
+    fingerRing.visible = true;
+    fingerRing.position.copy(finger.pos);
+    fingerRing.lookAt(camera.position);
+    const pulse = 1 + Math.sin(U.time.value*2.2)*0.10;
+    fingerRing.scale.setScalar(pulse * (0.6 + finger.amount*0.6));
+    fingerRing.material.opacity = finger.amount * 0.30;
+  }else if(fingerRing.visible){
+    fingerRing.visible = false;
+  }
+}
+
 const raycaster = new THREE.Raycaster();
 const pointerNDC = new THREE.Vector2();
 const tapPoint = new THREE.Vector3();
@@ -1489,6 +1673,11 @@ function knock(point, normal){
 }
 
 let nightOn = false;
+let autoLight = true;
+function clockSaysNight(){
+  const h = new Date().getHours();
+  return h < 7 || h >= 19;
+}
 function setNight(on){
   nightOn = on;
   document.getElementById('bNight').setAttribute('aria-pressed', on ? 'true':'false');
@@ -1506,6 +1695,8 @@ function ndcFrom(e){
 }
 
 stage.addEventListener('pointerdown', e=>{
+  finger.sx = e.clientX; finger.sy = e.clientY;
+  finger.inside = true; finger.still = 0;
   stage.setPointerCapture(e.pointerId);
   pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
   if(pointers.size === 1){
@@ -1521,6 +1712,8 @@ stage.addEventListener('pointerdown', e=>{
 
 stage.addEventListener('pointermove', e=>{
   wake();
+  finger.sx = e.clientX; finger.sy = e.clientY;
+  finger.inside = true; finger.still = 0;
   if(!pointers.has(e.pointerId)) return;
   const prev = pointers.get(e.pointerId);
   const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
@@ -1556,8 +1749,10 @@ function endPointer(e){
   pointers.delete(e.pointerId);
   if(pointers.size === 0){ dragging = false; stage.classList.remove('dragging'); }
   if(pointers.size < 2) pinchDist = 0;
+  if(e.pointerType === 'touch'){ finger.inside = false; finger.still = 99; }
 }
 stage.addEventListener('pointerup', endPointer);
+stage.addEventListener('pointerleave', ()=>{ finger.inside = false; finger.still = 99; });
 stage.addEventListener('pointercancel', e=>{ pointers.delete(e.pointerId); dragging=false; stage.classList.remove('dragging'); });
 
 stage.addEventListener('wheel', e=>{
@@ -1580,7 +1775,11 @@ document.getElementById('bAdd').addEventListener('click', ()=>{
   mood('放了一隻' + f.label, 4);
   updateCount(); wake();
 });
-document.getElementById('bNight').addEventListener('click', ()=>{ setNight(!nightOn); wake(); });
+document.getElementById('bNight').addEventListener('click', ()=>{
+  autoLight = false;               // 手動按過就不再跟著時鐘
+  setNight(!nightOn); wake();
+});
+
 
 const soundPanel = document.getElementById('sound');
 let soundOpen = false;
@@ -1612,6 +1811,18 @@ function wireTrack(name, togId, volId){
 wireTrack('water', 'tWater', 'vWater');
 wireTrack('music', 'tMusic', 'vMusic');
 
+// 水聲預設開著。瀏覽器不允許未經互動就出聲，
+// 所以真正的播放延到使用者第一次碰畫面時才開始。
+SND.water.on = true;
+function primeAudio(){
+  if(SND.ctx) return;
+  if(!audioInit()) return;
+  if(SND.water.on) trackStart('water');
+  if(SND.music.on) trackStart('music');
+}
+document.addEventListener('pointerdown', primeAudio, {capture:true, once:true});
+document.addEventListener('keydown', primeAudio, {capture:true, once:true});
+
 window.addEventListener('keydown', e=>{
   if(e.key === 'f' || e.key === 'F'){ dropFood(); wake(); }
   if(e.key === 'n' || e.key === 'N'){ setNight(!nightOn); wake(); }
@@ -1627,6 +1838,18 @@ function wake(){
   uiEls.forEach(el=>el.classList.remove('faded'));
 }
 window.addEventListener('mousemove', wake);
+
+// 餵太多沒吃完，沉在底的飼料會讓水變濁；被清乾淨就會慢慢恢復
+let turbidity = 0, turbWarned = false;
+function updateTurbidity(dt){
+  let rest = 0;
+  for(let i=0;i<foods.length;i++) if(foods[i].rest) rest++;
+  const target = clamp((rest - 10) / 42, 0, 1);
+  turbidity = damp(turbidity, target, target > turbidity ? 0.55 : 0.16, dt);
+  U.turb.value = turbidity;
+  if(!turbWarned && turbidity > 0.32){ turbWarned = true; mood('水有點濁了', 6); }
+  if(turbWarned && turbidity < 0.10){ turbWarned = false; mood('水清了', 5); }
+}
 
 let moodT = 0;
 function mood(text, secs){
@@ -1647,10 +1870,20 @@ function updateCount(){
   spawnPuffer();
   spawnCrayfish();
   spawnCrab();
-  spawnStar('back', 0);
-  spawnStar('floor', 2);
+  spawnStar('back', 1);    // 青海星貼後玻璃
+  spawnStar('floor', 0);   // 黃海星在底砂
   updateCount();
 })();
+
+// 開缸時跟著你的系統時間決定開燈或夜燈，之後每分鐘對一次；
+// 只要手動按過「夜燈」就交還給你，不再自動切換。
+setNight(clockSaysNight());
+U.night.value = nightOn ? 1 : 0;
+setInterval(function(){
+  if(!autoLight) return;
+  const n = clockSaysNight();
+  if(n !== nightOn) setNight(n);
+}, 60000);
 
 /* ============================================================
    14. 每幀更新
@@ -1746,6 +1979,23 @@ function updateFish(f, dt, t){
   if(f.pos.y > yMax) acc.y -= (f.pos.y - yMax) * 7;
   if(f.pos.y < yMin) acc.y += (yMin - f.pos.y) * 7;
 
+  // --- 手指停在玻璃上，好奇的魚會靠過來 ---
+  if(finger.amount > 0.02 && f.state === 'cruise' && !nightOn){
+    const w = f.curiosity * finger.amount;
+    tmpV2.subVectors(finger.aim, f.pos);
+    const d = tmpV2.length();
+    if(d > 1e-3){
+      tmpV2.divideScalar(d);
+      // 太近就停住張望，不要一直撞玻璃
+      acc.addScaledVector(tmpV2, (d > 0.55 ? 1.5 : -0.8) * w);
+      if(d < 1.6) speedMul *= 0.75;
+    }
+  }
+
+  // --- 水流：頂著流游（鰭條反射），同時被水帶著走 ---
+  flowAt(f.pos.x, f.pos.y, f.pos.z, tmpFlow);
+  acc.addScaledVector(tmpFlow, -1.7);
+
   // --- 夜間 ---
   if(nightOn){ speedMul *= 0.42; acc.y -= 0.25; }
 
@@ -1755,6 +2005,21 @@ function updateFish(f, dt, t){
   const sp = f.vel.length();
   if(sp > 1e-5) f.vel.multiplyScalar(damp(sp, targetSpeed, 2.2, dt) / sp);
   f.pos.addScaledVector(f.vel, dt);
+  f.pos.addScaledVector(tmpFlow, dt);
+
+  // --- 硬性排除：位置層級把魚推出石頭與沉木，避免穿模 ---
+  for(let i=0;i<obstacles.length;i++){
+    const ob = obstacles[i];
+    tmpV2.subVectors(f.pos, ob.pos);
+    const d = tmpV2.length();
+    const rr = ob.r + f.size*0.22;
+    if(d < rr && d > 1e-4){
+      tmpV2.divideScalar(d);
+      f.pos.addScaledVector(tmpV2, rr - d);
+      const inward = f.vel.dot(tmpV2);
+      if(inward < 0) f.vel.addScaledVector(tmpV2, -inward);   // 去掉朝內的速度
+    }
+  }
 
   // --- 朝向（模型 +Z 為頭） ---
   if(f.vel.lengthSq() > 1e-6){
@@ -1840,8 +2105,14 @@ function updateCrayfish(c, dt, t){
   c.mesh.position.set(c.pos.x, sandHeight(c.pos.x,c.pos.z) + Math.abs(Math.sin(c.bob))*0.018, c.pos.z);
   const ang = Math.atan2(c.dir.x, c.dir.z);
   c.mesh.rotation.set(0, ang, Math.sin(c.bob*0.5)*0.05);
-  c.mat.userData.uni.uFreq.value = 3.0;
-  c.mat.userData.uni.uAmp.value  = 0.008 + c.speed*0.02;
+  const cu = c.mat.userData.uni;
+  cu.uFreq.value = 3.0;
+  cu.uAmp.value  = 0.008 + c.speed*0.02;
+  cu.uLimb.value     = damp(cu.uLimb.value, 0.008 + Math.min(c.speed,0.8)*0.030, 6, dt);
+  cu.uLimbFreq.value = 2.0 + c.speed*17;
+  cu.uClaw.value     = damp(cu.uClaw.value, goal ? 0.026 : 0.012, 4, dt);
+  cu.uClawFreq.value = goal ? 4.2 : 1.1;
+  floorClamp(c.pos, 0.30);
 }
 
 function updateFoods(dt){
@@ -1855,6 +2126,8 @@ function updateFoods(dt){
       f.p.addScaledVector(f.v, dt);
       f.p.x += Math.sin(f.life*2.2 + f.ph) * 0.09 * dt;
       f.p.z += Math.cos(f.life*1.7 + f.ph) * 0.09 * dt;
+      flowAt(f.p.x, f.p.y, f.p.z, tmpFlow);
+      f.p.addScaledVector(tmpFlow, dt * 0.9);
       const gy = sandHeight(f.p.x, f.p.z) + 0.02;
       if(f.p.y <= gy){ f.p.y = gy; f.rest = true; f.v.set(0,0,0); }
     }
@@ -1875,6 +2148,8 @@ function updateParticles(dt, t){
     const b = bubData[i];
     b.y += b.sp * dt * (0.6 + b.s*6);
     if(b.y > WATER_Y - 0.05){ b.y = FLOOR + 0.1; }
+    b.x0 += flowAt(b.x0, b.y, b.z0, tmpFlow).x * dt * 0.55;
+    if(b.y <= FLOOR + 0.12) b.x0 = 4.05 + rand(-0.16,0.16);
     bubPos[i*3]   = b.x0 + Math.sin(t*1.6 + b.ph)*0.09;
     bubPos[i*3+1] = b.y;
     bubPos[i*3+2] = b.z0 + Math.cos(t*1.3 + b.ph)*0.09;
@@ -1883,9 +2158,13 @@ function updateParticles(dt, t){
 
   for(let i=0;i<MOTE_N;i++){
     const m = moteData[i];
-    m.y += m.sp * dt * 0.35;
+    flowAt(m.x, m.y, m.z, tmpFlow);
+    m.x += tmpFlow.x * dt * 0.85;
+    m.y += tmpFlow.y * dt * 0.85 + m.sp * dt * 0.30;
     if(m.y > WATER_Y-0.1) m.y = FLOOR+0.15;
-    motePos[i*3]   = m.x + Math.sin(t*0.35 + m.ph)*0.35;
+    if(m.x >  TANK.w/2-0.25) m.x = TANK.w/2-0.25;
+    if(m.x < -TANK.w/2+0.25) m.x = -TANK.w/2+0.25;
+    motePos[i*3]   = m.x + Math.sin(t*0.35 + m.ph)*0.22;
     motePos[i*3+1] = m.y;
     motePos[i*3+2] = m.z + Math.cos(t*0.28 + m.ph*1.4)*0.28;
   }
@@ -1926,10 +2205,17 @@ function frame(){
   rimLight.intensity = lerp(0.34, 0.85, nv);
   rimLight.color.setHSL(lerp(0.52,0.60,nv), lerp(0.42,0.62,nv), lerp(0.62,0.56,nv));
   fillLight.intensity= lerp(0.46, 0.28, nv);
-  scene.fog.color.setHSL(lerp(0.50,0.58,nv), lerp(0.36,0.46,nv), lerp(0.13,0.055,nv));
-  renderer.toneMappingExposure = lerp(1.04, 0.99, nv);
+  scene.fog.color.setHSL(
+    lerp(lerp(0.50,0.58,nv), 0.24, turbidity*0.75),
+    lerp(0.36,0.46,nv),
+    lerp(lerp(0.13,0.055,nv), 0.10, turbidity*0.6));
+  scene.fog.density = lerp(0.038, 0.115, turbidity);
+  keyLight.intensity *= (1 - turbidity*0.28);
+  renderer.toneMappingExposure = lerp(1.04, 0.99, nv) * (1 - turbidity*0.10);
 
   if(tapTimer > 0) tapTimer -= dt;
+  updateTurbidity(dt);
+  updateFinger(dt);
 
   for(let i=0;i<fishes.length;i++) updateFish(fishes[i], dt, t);
   if(crayfish) updateCrayfish(crayfish, dt, t);
