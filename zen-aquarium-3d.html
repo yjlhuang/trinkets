@@ -17,12 +17,16 @@
   }
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;background:#05090a;overflow:hidden;
-    -webkit-tap-highlight-color:transparent;}
+    -webkit-tap-highlight-color:transparent;
+    /* iOS 長按會跳出文字選取／拷貝選單，蓋掉與魚的互動 */
+    -webkit-touch-callout:none;
+    -webkit-user-select:none;-moz-user-select:none;user-select:none;}
   body{
     font-family:"PingFang TC","Noto Sans TC","Hiragino Sans TC","Microsoft JhengHei",system-ui,sans-serif;
     color:var(--paper);
   }
-  #stage{position:fixed;inset:0;touch-action:none;cursor:grab}
+  #stage{position:fixed;inset:0;touch-action:none;cursor:grab;
+    -webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
   #stage.dragging{cursor:grabbing}
   canvas{display:block}
 
@@ -701,8 +705,30 @@ function plantMaterial(sway, causticAmt){
 const plantGroup = new THREE.Group();
 tankGroup.add(plantGroup);
 
-// 海馬用尾巴勾附的著生點：中景草叢與後景水蘭的莖上
+// 海馬用尾巴勾附的著生點：中景草叢與後景水蘭的莖上。
+// 水草是照造景擺的，石頭與沉木也在那一帶，所以登記前要先把落在
+// 硬景裡的點推出來，否則海馬會勾在石頭中間。
 const hitchPoints = [];
+function addHitch(p){
+  const away = new THREE.Vector3();
+  for(let pass=0; pass<5; pass++){
+    let moved = false;
+    for(let i=0;i<obstacles.length;i++){
+      const ob = obstacles[i];
+      const d = p.distanceTo(ob.pos);
+      const rr = ob.r + 0.55;                 // 加上海馬自己的體寬
+      if(d < rr && d > 1e-4){
+        p.addScaledVector(away.subVectors(p, ob.pos).divideScalar(d), rr - d);
+        moved = true;
+      }
+    }
+    p.x = clamp(p.x, -TANK.w/2 + 0.9, TANK.w/2 - 0.9);
+    p.z = clamp(p.z, -TANK.d/2 + 0.8, TANK.d/2 - 0.8);
+    p.y = clamp(p.y, FLOOR + 0.9, WATER_Y - 1.0);
+    if(!moved) break;
+  }
+  hitchPoints.push(p);
+}
 
 function addPlants(geo, mat){
   const m = new THREE.Mesh(geo, mat);
@@ -719,7 +745,7 @@ const matRed   = plantMaterial(0.7, 0.11);
 // 後景水蘭（沿著後壁）
 for(let i=0;i<5;i++){
   const x = -4.6 + i*2.3 + rand(-0.35,0.35);
-  hitchPoints.push(new THREE.Vector3(x, FLOOR + rand(1.3, 2.3), -TANK.d/2 + rand(0.7, 1.2)));
+  addHitch(new THREE.Vector3(x, FLOOR + rand(1.3, 2.3), -TANK.d/2 + rand(0.7, 1.2)));
   addPlants(makeBlades({
     count: 46, x:x, z: -TANK.d/2 + rand(0.45,1.05), radius: 1.05, squash:0.45,
     h:[1.9, 3.5], w:[0.10,0.20], segs:7, taper:2.4, lean:0.30, stiff:1.25,
@@ -728,7 +754,7 @@ for(let i=0;i<5;i++){
 }
 // 中景叢
 [[-2.35,0.55],[0.15,-0.15],[1.95,0.55],[-4.35,0.15],[4.35,0.25]].forEach(p=>{
-  hitchPoints.push(new THREE.Vector3(p[0] + rand(-0.3,0.3), sandHeight(p[0],p[1]) + rand(0.55, 0.95), p[1]));
+  addHitch(new THREE.Vector3(p[0] + rand(-0.3,0.3), sandHeight(p[0],p[1]) + rand(0.55, 0.95), p[1]));
   addPlants(makeBlades({
     count: 60, x:p[0], z:p[1], radius:0.72, squash:0.9,
     h:[0.55,1.15], w:[0.07,0.13], segs:5, taper:1.8, lean:0.42, stiff:0.8,
@@ -765,10 +791,17 @@ addPlants(makeBlades({
 const OUTLET = new THREE.Vector3(TANK.w/2 - 1.05, WATER_Y - 0.55, -TANK.d/2 + 0.62);
 const FLOW = { strength: 0.24 };
 
+function smoothstep(a, b, x){
+  const t = clamp((x - a) / (b - a), 0, 1);
+  return t * t * (3 - 2 * t);
+}
+
 function flowAt(x, y, z, out){
   const xn = clamp((x + TANK.w/2) / TANK.w, 0, 1);
   const yn = clamp((y - FLOOR) / (WATER_Y - FLOOR), 0, 1);
-  const c = FLOW.strength;
+  // 水草叢會把水流打散，越靠近底層越弱——真實水草缸就是這樣，
+  // 這也讓慢泳的海馬有辦法待在草叢間而不是被沖走
+  const c = FLOW.strength * (0.30 + 0.70 * smoothstep(FLOOR + 0.5, FLOOR + 2.6, y));
   out.set(
      c * Math.sin(Math.PI*xn) * Math.cos(Math.PI*yn),
     -c * 0.62 * Math.cos(Math.PI*xn) * Math.sin(Math.PI*yn),
@@ -1151,7 +1184,7 @@ function spawnPuffer(st){
   mesh.castShadow = true;
   tankGroup.add(mesh);
   const f = makeFish(mesh, mats[0], {
-    kind:'puffer', size:s,
+    kind:'puffer', size:s, flowDrift: 0.45,
     baseSpeed: rand(0.10, 0.15) * SPEED,
     depthBias: rand(-0.2, 0.3),
     curiosity: rand(0.15, 0.5),
@@ -1284,7 +1317,7 @@ function spawnAngel(v){
   mesh.castShadow = true;
   tankGroup.add(mesh);
   const f = makeFish(mesh, matBody, {
-    kind:'angel', size:s,
+    kind:'angel', size:s, flowDrift: 0.85,
     baseSpeed: rand(0.26, 0.37) * SPEED,
     depthBias: rand(-0.30, 0.30),
     curiosity: rand(0.3, 0.8),
@@ -1326,14 +1359,14 @@ function spawnSeahorse(v){
   mesh.castShadow = true;
   tankGroup.add(mesh);
   const f = makeFish(mesh, mat, {
-    kind:'seahorse', size:s, upright:true,
+    kind:'seahorse', size:s, upright:true, flowDrift: 0.22,
     baseSpeed: rand(0.085, 0.135) * SPEED,
     depthBias: rand(-0.45, 0.15),
     curiosity: rand(0.1, 0.4),
     label: v.name,
     yPad: 0.52 * s,
     yaw: rand(0, 6.283), lean: 0,
-    hitch: null, hitchT: 0, restT: rand(6, 25)
+    hitch: null, hitchT: 0, restT: rand(4, 16)
   });
   // 背鰭高頻小幅顫動，是海馬最好認的動作
   mat.userData.uni.uFreq.value = 14;
@@ -2484,6 +2517,14 @@ function updateFish(f, dt, t){
     if(f.hitchT > 0 && f.startle < 0.05){
       f.hitchT -= dt;
       f.pos.lerp(f.hitch, 1 - Math.exp(-2.5*dt));
+      // 這一段會提前 return，跳過後面的硬性排除，所以在這裡自己擋一次
+      for(let oi=0; oi<obstacles.length; oi++){
+        const ob = obstacles[oi];
+        tmpV2.subVectors(f.pos, ob.pos);
+        const od = tmpV2.length();
+        const orr = ob.r + f.size*0.22;
+        if(od < orr && od > 1e-4) f.pos.addScaledVector(tmpV2.divideScalar(od), orr - od);
+      }
       // 隨水流輕輕搖
       flowAt(f.pos.x, f.pos.y, f.pos.z, tmpFlow);
       f.pos.x += tmpFlow.x * dt * 0.25;
@@ -2498,18 +2539,22 @@ function updateFish(f, dt, t){
       if(f.hitchT <= 0){ f.hitch.taken = false; f.hitch = null; f.restT = rand(10, 34); }
       return;
     }
-    if(f.hitch && (f.hitchT <= 0 || f.startle >= 0.05)){
+    // 只有「被嚇到」才在這裡鬆開。
+    // 原本的條件還包含 hitchT <= 0，但那個值在「已經選好著生點、還在游過去」
+    // 的期間也是 0，於是海馬選定的下一幀就立刻放棄，永遠到不了草上。
+    // 勾住之後時間到的鬆開，是在上面那段的 hitchT <= 0 處理的。
+    if(f.hitch && f.startle >= 0.05){
       f.hitch.taken = false; f.hitch = null; f.restT = rand(10, 34);
     }
     f.restT -= dt;
-    if(f.restT <= 0 && !f.hitch && f.startle < 0.05 && !nightOn){
+    if(f.restT <= 0 && !f.hitch && f.startle < 0.05){
       const h = nearestHitch(f.pos);
       if(h){ h.taken = true; f.hitch = h; f.target.copy(h); }
       f.restT = 6;
     }
     if(f.hitch){
       f.target.copy(f.hitch);
-      if(f.pos.distanceTo(f.hitch) < 0.30) f.hitchT = rand(18, 48);
+      if(f.pos.distanceTo(f.hitch) < 0.45) f.hitchT = rand(18, 48);
     }
   }
 
@@ -2562,6 +2607,8 @@ function updateFish(f, dt, t){
   }
 
   if(f.fed > 0){ speedMul += f.fed*0.5; f.fed -= dt; }
+  // 海馬決定要去勾某根草時會有目的地游過去，不然以牠的巡游速度得花上一分多鐘
+  if(f.hitch) speedMul *= 2.6;
 
   // --- 分離 ---
   for(let i=0;i<fishes.length;i++){
@@ -2606,8 +2653,11 @@ function updateFish(f, dt, t){
   }
 
   // --- 水流：頂著流游（鰭條反射），同時被水帶著走 ---
+  // 受影響程度依泳力而定。海馬與河豚游得比水流還慢，若照單全收會被沖著跑，
+  // 慢下來的設定就完全看不出來，海馬也永遠游不到著生點。
   flowAt(f.pos.x, f.pos.y, f.pos.z, tmpFlow);
-  acc.addScaledVector(tmpFlow, -1.7);
+  const drift = f.flowDrift === undefined ? 1 : f.flowDrift;
+  acc.addScaledVector(tmpFlow, -1.7 * drift);
 
   // --- 夜間 ---
   if(nightOn){ speedMul *= 0.42; acc.y -= 0.25; }
@@ -2618,7 +2668,7 @@ function updateFish(f, dt, t){
   const sp = f.vel.length();
   if(sp > 1e-5) f.vel.multiplyScalar(damp(sp, targetSpeed, 2.2, dt) / sp);
   f.pos.addScaledVector(f.vel, dt);
-  f.pos.addScaledVector(tmpFlow, dt);
+  f.pos.addScaledVector(tmpFlow, dt * drift);
 
   // --- 硬性排除：位置層級把魚推出石頭與沉木，避免穿模 ---
   for(let i=0;i<obstacles.length;i++){
@@ -2893,6 +2943,43 @@ function frame(){
   }
 }
 frame();
+
+/* ============================================================
+   15.5 除錯用的唯讀快照
+   內部狀態都關在 IIFE 裡，從外面看不到，行為對不對只能用眼睛猜。
+   開一個唯讀出口，自動測試才驗得到「海馬真的勾上水草了」這種事。
+   ============================================================ */
+window.tankDebug = function(){
+  let hitched = 0;
+  for(let i=0;i<fishes.length;i++) if(fishes[i].hitchT > 0) hitched++;
+  const byKind = {};
+  for(let i=0;i<fishes.length;i++) byKind[fishes[i].kind] = (byKind[fishes[i].kind] || 0) + 1;
+  return {
+    fish: fishes.length, byKind: byKind, hitched: hitched,
+    hitchPoints: hitchPoints.length,
+    minHitchClearance: (function(){
+      let m = 1e9;
+      for(let i=0;i<hitchPoints.length;i++)
+        for(let j=0;j<obstacles.length;j++)
+          m = Math.min(m, hitchPoints[i].distanceTo(obstacles[j].pos) - obstacles[j].r);
+      return Math.round(m*1000)/1000;
+    })(),
+    hitchedInsideRock: (function(){
+      let n = 0;
+      for(let i=0;i<fishes.length;i++){
+        const f = fishes[i];
+        if(f.hitchT <= 0) continue;
+        for(let j=0;j<obstacles.length;j++)
+          if(f.pos.distanceTo(obstacles[j].pos) < obstacles[j].r){ n++; break; }
+      }
+      return n;
+    })(),
+    bottom: { crayfish: crayfishes.length, crab: crabs.length, star: stars.length },
+    scooping: scoops.length,
+    night: nightOn, turbidity: Math.round(turbidity * 100) / 100,
+    cam: { theta: Math.round(orbit.tTheta*1000)/1000, dist: Math.round(orbit.tDist*100)/100 }
+  };
+};
 
 /* ============================================================
    16. Resize
