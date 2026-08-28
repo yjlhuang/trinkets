@@ -150,7 +150,11 @@ vy = -∂ψ/∂x  ∝ -cos(πx)·sin(πy)
 
 ### 九、錯誤不要被吃掉
 
-沙箱化的 iframe 只會把 `Uncaught Error: Script error.` 傳給外層，訊息與行號全被遮掉，什麼都查不到。頁內自己接一次 `error` 與 `unhandledrejection` 就拿得到完整內容，順手寫進 console、顯示在右上角，也收進 `tankDebug().lastError`。
+`Uncaught Error: Script error.` 是瀏覽器對**跨來源腳本**丟出的例外的統一遮蔽，訊息、行號、堆疊全部拿不到。這裡唯一的跨來源腳本是 cdnjs 的 three.js，所以任何從 three.js 內部丟出的例外都會變成這一行——**連頁內自己接的 `window.onerror` 也一樣看不到**。解法是給 `<script>` 加上 `crossorigin="anonymous"`（cdnjs 有回 `Access-Control-Allow-Origin: *`），細節就傳得回來了。
+
+頁內接一次 `error` 與 `unhandledrejection`，把訊息、來源、行號、前四行堆疊寫進 console 與 `tankDebug().lastError`，同一個錯誤只在畫面上顯示前三次以免洗版。
+
+主迴圈的 `requestAnimationFrame` 排在最前面，所以就算後面拋例外，迴圈本身不會斷——但 `renderer.render()` 到不了，症狀是**畫面凍住而聲音照跑**。單一錯誤不該讓整缸停擺，所以繪製主體包在 try 裡，接住、回報、繼續。自動測試會設 `window.tankStrict = true` 讓例外照常往外丟，否則測試就會變成睜眼瞎。
 
 ### 十、資產處理
 
