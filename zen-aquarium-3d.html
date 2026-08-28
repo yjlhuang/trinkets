@@ -1676,17 +1676,26 @@ function b64ToU8(str){
   return u;
 }
 
+// 整段建完才掛上去。中途失敗如果留下已經設好的 SND.ctx，
+// 下一次呼叫會走上面那條捷徑、帶著半套音訊圖回報成功，
+// 接著任何音效一觸發就會在 connect(null) 炸掉。
+function audioReady(){
+  return !!(SND.ctx && SND.master && SND.verb && SND.clickBuf);
+}
 function audioInit(){
-  if(SND.ctx){ if(SND.ctx.state === 'suspended') SND.ctx.resume(); return true; }
+  if(audioReady()){
+    if(SND.ctx.state === 'suspended') SND.ctx.resume();
+    return true;
+  }
+  let c = null;
   try{
     const AC = window.AudioContext || window.webkitAudioContext;
     if(!AC) return false;
-    const c = new AC();
-    SND.ctx = c;
+    c = new AC();
 
-    SND.master = c.createGain();
-    SND.master.gain.value = 0.9;
-    SND.master.connect(c.destination);
+    const master = c.createGain();
+    master.gain.value = 0.9;
+    master.connect(c.destination);
 
     // 殘響：衰減雜訊當脈衝響應，給音效一點空間感
     const len = Math.floor(c.sampleRate * 2.6);
@@ -1695,22 +1704,28 @@ function audioInit(){
       const d = imp.getChannelData(ch);
       for(let i=0;i<len;i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/len, 2.9);
     }
-    SND.verb = c.createConvolver();
-    SND.verb.buffer = imp;
+    const verb = c.createConvolver();
+    verb.buffer = imp;
     const vg = c.createGain(); vg.gain.value = 0.6;
-    SND.verb.connect(vg); vg.connect(SND.master);
+    verb.connect(vg); vg.connect(master);
 
     // 敲擊用的短雜訊
     const cn = Math.floor(c.sampleRate * 0.08);
-    SND.clickBuf = c.createBuffer(1, cn, c.sampleRate);
-    const cd = SND.clickBuf.getChannelData(0);
+    const clickBuf = c.createBuffer(1, cn, c.sampleRate);
+    const cd = clickBuf.getChannelData(0);
     for(let i=0;i<cn;i++) cd[i] = (Math.random()*2-1) * Math.pow(1 - i/cn, 3);
 
+    SND.master = master; SND.verb = verb; SND.clickBuf = clickBuf; SND.ctx = c;
     return true;
-  }catch(e){ return false; }
+  }catch(e){
+    try{ if(c && c.close) c.close(); }catch(e2){}
+    SND.ctx = null; SND.master = null; SND.verb = null; SND.clickBuf = null;
+    return false;
+  }
 }
 
 function loadClip(name, cb){
+  if(!audioReady()) return;
   if(SND.buf[name]){ cb(SND.buf[name]); return; }
   if(typeof CLIP_B64 === 'undefined' || !CLIP_B64[name]){ mood('找不到音檔', 4); return; }
   let bytes;
@@ -1722,9 +1737,11 @@ function loadClip(name, cb){
 }
 
 function trackStart(name){
+  if(!audioReady()) return;
   const T = SND[name];
   loadClip(name, function(buf){
-    if(!T.on || T.src) return;
+    if(!T.on || T.src || !audioReady()) return;
+    try{
     const c = SND.ctx, t = c.currentTime;
     const src = c.createBufferSource();
     src.buffer = buf; src.loop = true;
@@ -1734,6 +1751,7 @@ function trackStart(name){
     src.connect(g); g.connect(SND.master);
     src.start(t + 0.02);
     T.src = src; T.gain = g;
+    }catch(e){ T.src = null; T.gain = null; }
   });
 }
 
@@ -1757,7 +1775,8 @@ function trackVolume(name, v){
 
 /* --- 互動音效，跟著水聲一起開關 --- */
 function sfxKnock(){
-  if(!SND.ctx || !SND.water.on) return;
+  if(!audioReady() || !SND.water.on) return;
+  try{
   const c = SND.ctx, t = c.currentTime;
   const o = c.createOscillator(); o.type = 'sine';
   o.frequency.setValueAtTime(158, t);
@@ -1776,10 +1795,12 @@ function sfxKnock(){
   ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.07);
   n.connect(bp); bp.connect(ng); ng.connect(SND.master);
   n.start(t);
+  }catch(e){ /* 音效不該影響互動 */ }
 }
 
 function sfxFeed(){
-  if(!SND.ctx || !SND.water.on) return;
+  if(!audioReady() || !SND.water.on) return;
+  try{
   const c = SND.ctx;
   for(let i=0;i<randi(4,7);i++){
     const t = c.currentTime + i*rand(0.03, 0.11);
@@ -1794,6 +1815,7 @@ function sfxFeed(){
     o.connect(g); g.connect(SND.master); g.connect(SND.verb);
     o.start(t); o.stop(t + 0.11);
   }
+  }catch(e){ /* 音效不該影響互動 */ }
 }
 
 // 切到別的分頁就靜音，回來再接上
@@ -2949,6 +2971,23 @@ frame();
    內部狀態都關在 IIFE 裡，從外面看不到，行為對不對只能用眼睛猜。
    開一個唯讀出口，自動測試才驗得到「海馬真的勾上水草了」這種事。
    ============================================================ */
+// 沙箱化的 iframe 只會把「Script error.」傳給外層，訊息與行號都被遮掉。
+// 在頁內自己接一次就拿得到完整內容，順手顯示在右上角，出事時看得到是什麼。
+let lastError = null;
+function reportError(msg, src, line){
+  lastError = { msg: String(msg || '未知錯誤'), src: src || '', line: line || 0,
+                at: new Date().toISOString() };
+  try{ console.error('[水草缸]', lastError.msg, lastError.src + ':' + lastError.line); }catch(e){}
+  try{ if(typeof mood === 'function') mood('錯誤 ' + lastError.msg.slice(0, 36), 10); }catch(e){}
+}
+window.addEventListener('error', function(e){
+  reportError(e && e.message, e && e.filename, e && e.lineno);
+});
+window.addEventListener('unhandledrejection', function(e){
+  const r = e && e.reason;
+  reportError(r && r.message ? r.message : r, 'promise', 0);
+});
+
 window.tankDebug = function(){
   let hitched = 0;
   for(let i=0;i<fishes.length;i++) if(fishes[i].hitchT > 0) hitched++;
@@ -2977,7 +3016,9 @@ window.tankDebug = function(){
     bottom: { crayfish: crayfishes.length, crab: crabs.length, star: stars.length },
     scooping: scoops.length,
     night: nightOn, turbidity: Math.round(turbidity * 100) / 100,
-    cam: { theta: Math.round(orbit.tTheta*1000)/1000, dist: Math.round(orbit.tDist*100)/100 }
+    cam: { theta: Math.round(orbit.tTheta*1000)/1000, dist: Math.round(orbit.tDist*100)/100 },
+    audioReady: audioReady(),
+    lastError: lastError
   };
 };
 
