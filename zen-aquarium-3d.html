@@ -1679,12 +1679,30 @@ function b64ToU8(str){
 // 整段建完才掛上去。中途失敗如果留下已經設好的 SND.ctx，
 // 下一次呼叫會走上面那條捷徑、帶著半套音訊圖回報成功，
 // 接著任何音效一觸發就會在 connect(null) 炸掉。
+// resume() / suspend() 回傳 promise。音訊裝置起不來是環境問題
+// （沒有輸出裝置、被別的程式佔用、分頁還沒拿到播放權限），
+// 不接住的話會變成 unhandled rejection，被錯誤回報當成程式壞掉丟到畫面上。
+let audioDeviceWarned = false;
+function audioDevice(p){
+  if(p && typeof p.catch === 'function'){
+    p.catch(function(e){
+      const msg = (e && e.message) ? e.message : String(e);
+      try{ console.warn('[水草缸] 音訊裝置無法啟動：', msg); }catch(e2){}
+      if(!audioDeviceWarned){
+        audioDeviceWarned = true;
+        try{ if(typeof mood === 'function') mood('這台裝置放不出聲音', 6); }catch(e2){}
+      }
+    });
+  }
+  return p;
+}
+
 function audioReady(){
   return !!(SND.ctx && SND.master && SND.verb && SND.clickBuf);
 }
 function audioInit(){
   if(audioReady()){
-    if(SND.ctx.state === 'suspended') SND.ctx.resume();
+    if(SND.ctx.state === 'suspended') audioDevice(SND.ctx.resume());
     return true;
   }
   let c = null;
@@ -1822,8 +1840,8 @@ function sfxFeed(){
 document.addEventListener('visibilitychange', function(){
   if(document.hidden && typeof writeState === 'function') writeState();
   if(!SND.ctx) return;
-  if(document.hidden) SND.ctx.suspend();
-  else if(SND.water.on || SND.music.on) SND.ctx.resume();
+  if(document.hidden) audioDevice(SND.ctx.suspend());
+  else if(SND.water.on || SND.music.on) audioDevice(SND.ctx.resume());
 });
 // 關頁面／切走前立刻落檔，不等 debounce
 window.addEventListener('pagehide', function(){
@@ -2536,7 +2554,7 @@ function updateFish(f, dt, t){
 
   // --- 海馬：勾附水草 ---
   if(f.kind === 'seahorse'){
-    if(f.hitchT > 0 && f.startle < 0.05){
+    if(f.hitchT > 0 && f.hitch && f.startle < 0.05){
       f.hitchT -= dt;
       f.pos.lerp(f.hitch, 1 - Math.exp(-2.5*dt));
       // 這一段會提前 return，跳過後面的硬性排除，所以在這裡自己擋一次
@@ -2565,8 +2583,11 @@ function updateFish(f, dt, t){
     // 原本的條件還包含 hitchT <= 0，但那個值在「已經選好著生點、還在游過去」
     // 的期間也是 0，於是海馬選定的下一幀就立刻放棄，永遠到不了草上。
     // 勾住之後時間到的鬆開，是在上面那段的 hitchT <= 0 處理的。
+    // 被嚇到就鬆開。這裡一定要把 hitchT 也歸零：
+    // 只清掉 hitch 的話，等驚嚇衰減後上面那段的 hitchT > 0 又會成立，
+    // 卻對著已經是 null 的 hitch 呼叫 lerp。敲缸嚇到勾在草上的海馬就會炸。
     if(f.hitch && f.startle >= 0.05){
-      f.hitch.taken = false; f.hitch = null; f.restT = rand(10, 34);
+      f.hitch.taken = false; f.hitch = null; f.hitchT = 0; f.restT = rand(10, 34);
     }
     f.restT -= dt;
     if(f.restT <= 0 && !f.hitch && f.startle < 0.05){
