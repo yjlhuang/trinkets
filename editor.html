@@ -111,6 +111,37 @@
   .btn-sep:active { background: #1e1e2a; border-color: var(--accent2); color: var(--accent2); }
   .action-row { display: flex; align-items: center; gap: 4px; padding: 5px 8px; }
 
+
+  /* ── TOP SAFE-AREA BAR ── */
+  #top-safe-bar {
+    flex-shrink: 0;
+    height: calc(12px + env(safe-area-inset-top));
+    padding-top: env(safe-area-inset-top);
+    background: #0a0a0e;
+  }
+
+
+  /* ── MD TOOLBAR ── */
+  #mdPanel {
+    display: none; flex-wrap: wrap; gap: 5px;
+    padding: 6px 8px;
+    background: #161e1a;
+    border-top: 1px solid #2a4a38;
+  }
+  #mdPanel.open { display: flex; }
+  .btn-md {
+    flex-shrink: 0; padding: 5px 9px; border-radius: 5px;
+    font-size: 12px; font-family: 'Noto Sans TC', sans-serif;
+    cursor: pointer; user-select: none;
+    background: #1e2d25; border: 1px solid #2e5040; color: #e8e8f0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-md:active { opacity: 0.65; }
+  .btn-md.pur { color: #c084fc; border-color: #4a2a6a; }
+  .btn-md.grn { color: #6ee7b7; border-color: #2a5540; font-family: 'JetBrains Mono', monospace; }
+  .btn-md.ylw { color: #fde68a; border-color: #5a4a20; }
+  .btn-md.sep-md { width: 1px; padding: 0; background: #2a4a38; border: none; margin: 2px 0; }
+
   /* ── EMOJI BAR ── */
   .emoji-bar { flex-shrink: 0; background: var(--surface); border-top: 1px solid var(--border); }
   .emoji-row-main { display: flex; align-items: center; gap: 1px; padding: 3px 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
@@ -137,6 +168,8 @@
 <body>
 <div id="app">
 
+  <div id="top-safe-bar"></div>
+
   <div id="editor-wrap">
     <textarea id="editor" placeholder="在這裡貼上或輸入復盤文字…"></textarea>
   </div>
@@ -159,19 +192,39 @@
       <button class="btn" id="btnRedo" onclick="doRedo()">↪</button>
       <div class="dv"></div>
       <button class="btn acc" onclick="copyAll()">全選複製</button>
+      <button class="btn" onclick="downloadMd()" title="下載 MD 檔">⬇ MD</button>
       <button class="btn red" id="btnClear" onclick="clearAll()">清空</button>
       <button class="btn" onclick="cleanMd()">洗MD</button>
       <button class="btn" onclick="shrinkNewlines()" title="連續換行減少一個">縮</button>
       <button class="btn" onclick="growNewlines()" title="連續換行增加一個">增</button>
       <div class="dv"></div>
-      <button class="btn ylw" onclick="ins('【')">【</button>
-      <button class="btn ylw" onclick="ins('】')">】</button>
+      <button class="btn ylw" onclick="insKakko()">【 】</button>
       <div class="dv"></div>
       <button class="btn grn"  onclick="setStart()">起</button>
       <button class="btn grn"  onclick="setEnd()">終</button>
       <button class="btn grn"  id="btnRangeCopy" onclick="rangeCopy()" disabled>⧉</button>
       <button class="btn grn2" id="btnRangeCut"  onclick="rangeCut()"  disabled>✂️</button>
       <button class="btn"      onclick="clearRange()">✕</button>
+      <div class="dv"></div>
+      <button class="btn" id="btnMdToggle" onclick="toggleMdPanel()" title="Markdown 工具">MD ▾</button>
+    </div>
+    <!-- MD formatting panel (collapsible) -->
+    <div id="mdPanel">
+      <button class="btn-md" style="font-weight:700"    onclick="wrapMd('**','**','粗體')">B</button>
+      <button class="btn-md" style="font-style:italic"  onclick="wrapMd('*','*','斜體')">I</button>
+      <button class="btn-md" style="text-decoration:line-through" onclick="wrapMd('~~','~~','刪除線')">S</button>
+      <span class="btn-md sep-md"></span>
+      <button class="btn-md pur" onclick="prefixMd('# ')">H1</button>
+      <button class="btn-md pur" onclick="prefixMd('## ')">H2</button>
+      <button class="btn-md pur" onclick="prefixMd('### ')">H3</button>
+      <span class="btn-md sep-md"></span>
+      <button class="btn-md grn" onclick="wrapMd('`','`','code')"><code style="font-size:11px">`code`</code></button>
+      <button class="btn-md grn" onclick="insertCodeBlock()"><code style="font-size:11px">```塊</code></button>
+      <span class="btn-md sep-md"></span>
+      <button class="btn-md ylw" onclick="ins('\n---\n')">— 分隔</button>
+      <button class="btn-md ylw" onclick="prefixMd('- ')">- 列表</button>
+      <button class="btn-md ylw" onclick="prefixMd('1. ')">1. 列表</button>
+      <button class="btn-md ylw" onclick="prefixMd('> ')">› 引用</button>
     </div>
     <!-- Range status slim bar -->
     <div id="rangeBar">
@@ -286,6 +339,61 @@ function toast(msg) {
 }
 
 // ── INSERT ──
+
+// ── MD TOOLBAR FUNCTIONS ──
+function toggleMdPanel() {
+  const panel = document.getElementById('mdPanel');
+  const btn = document.getElementById('btnMdToggle');
+  const open = panel.classList.toggle('open');
+  btn.textContent = open ? 'MD ▴' : 'MD ▾';
+}
+function wrapMd(before, after, placeholder) {
+  const s = editor.selectionStart, e = editor.selectionEnd, v = editor.value;
+  const sel = v.slice(s, e) || placeholder;
+  const next = v.slice(0, s) + before + sel + after + v.slice(e);
+  editor.value = next;
+  editor.selectionStart = s + before.length;
+  editor.selectionEnd = s + before.length + sel.length;
+  editor.focus(); pushUndo(next); localStorage.setItem('fuban_content', next);
+}
+function prefixMd(prefix) {
+  const s = editor.selectionStart, v = editor.value;
+  const lineStart = v.lastIndexOf('\n', s - 1) + 1;
+  const next = v.slice(0, lineStart) + prefix + v.slice(lineStart);
+  editor.value = next;
+  editor.selectionStart = editor.selectionEnd = s + prefix.length;
+  editor.focus(); pushUndo(next); localStorage.setItem('fuban_content', next);
+}
+function insertCodeBlock() {
+  const s = editor.selectionStart, e = editor.selectionEnd, v = editor.value;
+  const sel = v.slice(s, e);
+  const block = '\n\`\`\`\n' + (sel || '') + '\n\`\`\`\n';
+  const next = v.slice(0, s) + block + v.slice(e);
+  editor.value = next;
+  editor.selectionStart = s + 5;
+  editor.selectionEnd = s + 5 + (sel || '').length;
+  editor.focus(); pushUndo(next); localStorage.setItem('fuban_content', next);
+}
+
+function insKakko() {
+  const s = editor.selectionStart, e = editor.selectionEnd, v = editor.value;
+  const sel = v.slice(s, e);
+  const next = v.slice(0, s) + '【' + sel + '】' + v.slice(e);
+  editor.value = next;
+  editor.selectionStart = sel.length ? s + 1 : s + 1;
+  editor.selectionEnd   = sel.length ? s + 1 + sel.length : s + 1;
+  editor.focus(); pushUndo(next); localStorage.setItem('fuban_content', next);
+}
+function downloadMd() {
+  const blob = new Blob([editor.value], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '復盤_' + new Date().toISOString().slice(0,10) + '.md';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast('📥 MD 檔已下載');
+}
 function ins(str) {
   const s = editor.selectionStart, e = editor.selectionEnd, v = editor.value;
   const next = v.slice(0,s)+str+v.slice(e);
@@ -384,21 +492,29 @@ function updateRangeButtons() {
   document.getElementById('btnRangeCopy').disabled = !ok;
   document.getElementById('btnRangeCut').disabled  = !ok;
 }
-function setStart() { rangeStart=editor.selectionStart; rangeEnd=null; updateRangeUI(); updateRangeButtons(); editor.focus(); toast('📍 起點 '+rangeStart); }
+function setStart() {
+  rangeStart = editor.selectionStart;
+  if (rangeEnd !== null && rangeStart > rangeEnd) { const t = rangeStart; rangeStart = rangeEnd; rangeEnd = t; toast('📍 起點已設定（自動對調）'); }
+  else toast('📍 起點 ' + rangeStart);
+  updateRangeUI(); updateRangeButtons(); editor.focus();
+}
 function setEnd() {
-  if (rangeStart===null) { toast('請先設起點'); return; }
-  rangeEnd=editor.selectionEnd;
-  if (rangeEnd<=rangeStart) { toast('終點需在起點之後'); return; }
-  updateRangeUI(); updateRangeButtons(); editor.focus(); toast('🔖 '+(rangeEnd-rangeStart)+' 字');
+  rangeEnd = editor.selectionEnd;
+  if (rangeStart !== null && rangeEnd < rangeStart) { const t = rangeEnd; rangeEnd = rangeStart; rangeStart = t; toast('🔖 終點已設定（自動對調）'); }
+  else toast(rangeStart !== null ? '🔖 ' + (rangeEnd - rangeStart) + ' 字' : '🔖 終點 ' + rangeEnd);
+  updateRangeUI(); updateRangeButtons(); editor.focus();
 }
 function updateRangeUI() {
   const el = document.getElementById('rangeStatus');
-  if (rangeStart===null) { el.innerHTML='尚未設定起點'; return; }
-  if (rangeEnd===null) {
-    const p = editor.value.slice(rangeStart,rangeStart+8).replace(/\n/g,'↵');
-    el.innerHTML='起<span class="hi">'+rangeStart+'</span>「'+p+'…」';
+  if (rangeStart === null && rangeEnd === null) { el.innerHTML = '尚未設定起點或終點'; return; }
+  if (rangeStart !== null && rangeEnd === null) {
+    const p = editor.value.slice(rangeStart, rangeStart+8).replace(/\n/g,'↵');
+    el.innerHTML = '起<span class="hi">'+rangeStart+'</span>「'+p+'…」　待設終點';
+  } else if (rangeStart === null && rangeEnd !== null) {
+    const p = editor.value.slice(Math.max(0, rangeEnd-8), rangeEnd).replace(/\n/g,'↵');
+    el.innerHTML = '待設起點　終<span class="hi">'+rangeEnd+'</span>「…'+p+'」';
   } else {
-    el.innerHTML='起<span class="hi">'+rangeStart+'</span>→終<span class="hi">'+rangeEnd+'</span>（<span class="hi">'+(rangeEnd-rangeStart)+'</span>字）';
+    el.innerHTML = '起<span class="hi">'+rangeStart+'</span>→終<span class="hi">'+rangeEnd+'</span>（<span class="hi">'+(rangeEnd-rangeStart)+'</span>字）';
   }
 }
 function rangeCopy() {
@@ -414,7 +530,7 @@ function rangeCut() {
     rangeStart=rangeEnd=null; updateRangeUI(); updateRangeButtons();
   }).catch(()=>toast('剪下失敗'));
 }
-function clearRange() { rangeStart=rangeEnd=null; updateRangeUI(); updateRangeButtons(); toast('起點已清除'); }
+function clearRange() { rangeStart=rangeEnd=null; updateRangeUI(); updateRangeButtons(); toast('範圍已清除'); }
 
 editor.addEventListener('keydown', e => {
   if ((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key==='z') { e.preventDefault(); doUndo(); }
