@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>單字小考產生器</title>
+<style>
+:root{
+  --ink:#1a1a1a;
+  --paper:#faf9f6;
+  --line:#d8d5cc;
+  --accent:#8a3324;
+  --accent-soft:#f0e2dc;
+  --muted:#77746c;
+  --ok:#3d6b3d;
+  --ok-soft:#e3ecdf;
+  --warn:#a13a2f;
+  --warn-soft:#f8e3df;
+  --mono:"Consolas","SFMono-Regular","Courier New",monospace;
+  --serif:"Noto Serif TC","Georgia",serif;
+  --sans:"Noto Sans TC","Microsoft JhengHei","PingFang TC",sans-serif;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0;
+  font-family:var(--sans);
+  background:var(--paper);
+  color:var(--ink);
+  line-height:1.5;
+}
+.app{max-width:920px;margin:0 auto;padding:28px 20px 80px;}
+
+/* ── header / stepper ─────────────────────────── */
+.masthead{margin-bottom:28px;}
+.masthead h1{
+  font-family:var(--serif);
+  font-size:22px;
+  font-weight:600;
+  letter-spacing:.5px;
+  margin:0 0 4px;
+}
+.masthead p{margin:0;color:var(--muted);font-size:13px;}
+
+.stepper{display:flex;gap:0;margin:22px 0 30px;border-bottom:1px solid var(--line);}
+.step-tab{
+  flex:1;text-align:center;padding:10px 4px 12px;font-size:12.5px;color:var(--muted);
+  border-bottom:2px solid transparent;margin-bottom:-1px;position:relative;
+}
+.step-tab .num{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:20px;height:20px;border-radius:50%;border:1px solid var(--line);
+  font-size:11px;margin-right:6px;color:var(--muted);
+}
+.step-tab.active{color:var(--ink);border-bottom-color:var(--accent);font-weight:600;}
+.step-tab.active .num{background:var(--accent);border-color:var(--accent);color:#fff;}
+.step-tab.done .num{background:var(--ok);border-color:var(--ok);color:#fff;}
+.step-tab.done{color:var(--ink);}
+
+.panel{display:none;}
+.panel.active{display:block;animation:fade .25s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+
+/* ── shared bits ─────────────────────────── */
+.card{
+  background:#fff;border:1px solid var(--line);border-radius:6px;padding:20px 22px;margin-bottom:16px;
+}
+.card h2{font-family:var(--serif);font-size:16px;margin:0 0 4px;font-weight:600;}
+.card .hint{color:var(--muted);font-size:12.5px;margin:0 0 14px;}
+label.field-label{display:block;font-size:12.5px;font-weight:600;margin-bottom:6px;color:#333;}
+
+textarea{
+  width:100%;min-height:220px;border:1px solid var(--line);border-radius:5px;
+  padding:12px 14px;font-family:var(--mono);font-size:12.5px;line-height:1.6;
+  resize:vertical;background:#fffefc;color:var(--ink);
+}
+textarea:focus{outline:none;border-color:var(--accent);}
+
+.mode-toggle{display:flex;gap:8px;margin-bottom:14px;}
+.mode-btn{
+  flex:1;padding:9px 10px;border:1px solid var(--line);background:#fff;border-radius:5px;
+  font-size:12.5px;cursor:pointer;color:var(--muted);text-align:center;
+}
+.mode-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);font-weight:600;}
+
+input[type=file]{
+  width:100%;padding:10px 12px;border:1px dashed var(--line);border-radius:5px;
+  font-size:12.5px;background:#fffefc;color:var(--muted);
+}
+.drop-zone{
+  position:relative;border:2px dashed var(--line);border-radius:8px;padding:28px 16px;
+  text-align:center;background:#fffefc;cursor:pointer;transition:border-color .15s, background .15s;
+}
+.drop-zone:hover{border-color:#b8a89a;}
+.drop-zone.drag-over{border-color:var(--accent);background:var(--accent-soft);}
+.drop-zone .drop-zone-inner{pointer-events:none;}
+.drop-icon{font-size:22px;color:var(--muted);margin-bottom:6px;}
+.drop-zone.drag-over .drop-icon{color:var(--accent);}
+.drop-text{font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:2px;}
+.drop-sub{font-size:11.5px;color:var(--muted);}
+.drop-zone input[type=file]{
+  position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;
+  border:none;padding:0;
+}
+.file-chip{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:8px 12px;border:1px solid var(--line);border-radius:5px;margin-bottom:6px;
+  font-size:12.5px;background:#fff;
+}
+.file-chip .fname{font-weight:600;color:var(--ink);}
+.file-chip .fmeta{color:var(--muted);}
+.file-chip .fremove{
+  cursor:pointer;color:var(--muted);border:1px solid var(--line);border-radius:4px;
+  width:20px;height:20px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.file-chip .fremove:hover{color:var(--warn);border-color:var(--warn);}
+.file-chip.err{border-color:var(--warn);background:var(--warn-soft);}
+
+.copy-example-row{display:flex;align-items:center;gap:10px;margin-top:10px;}
+.copy-example-btn{
+  font-size:12px;padding:6px 12px;border:1px solid var(--line);border-radius:5px;
+  background:#fff;color:var(--ink);cursor:pointer;
+}
+.copy-example-btn:hover{background:#f4f2ee;border-color:#b8a89a;}
+.copy-example-status{font-size:11.5px;color:var(--ok);}
+
+.btn-row{display:flex;gap:10px;margin-top:18px;justify-content:flex-end;}
+button{
+  font-family:var(--sans);font-size:13px;cursor:pointer;border-radius:5px;
+  padding:10px 18px;border:1px solid var(--line);background:#fff;color:var(--ink);
+}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+button.primary:hover{background:#742a1e;}
+button.ghost:hover{background:#f4f2ee;}
+button:disabled{opacity:.4;cursor:not-allowed;}
+button.small{padding:5px 10px;font-size:12px;}
+
+.status-line{font-size:12.5px;color:var(--muted);margin-top:10px;}
+.status-line.err{color:var(--warn);}
+.status-line.ok{color:var(--ok);}
+
+/* ── step 2: count settings ─────────────────────────── */
+.count-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:6px;}
+.count-box{border:1px solid var(--line);border-radius:5px;padding:14px 16px;}
+.count-box h3{font-size:13px;margin:0 0 10px;font-weight:600;}
+.count-box .pool-size{font-size:11.5px;color:var(--muted);margin-bottom:10px;}
+.count-input-row{display:flex;align-items:center;gap:10px;}
+.count-input-row input[type=number]{
+  width:70px;padding:7px 8px;border:1px solid var(--line);border-radius:4px;font-size:13px;
+  font-family:var(--mono);
+}
+.rand-check{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);margin-top:8px;}
+.total-badge{
+  display:inline-block;margin-top:14px;font-size:12.5px;padding:6px 12px;border-radius:4px;
+  background:var(--accent-soft);color:var(--accent);font-weight:600;
+}
+.total-badge.warn{background:var(--warn-soft);color:var(--warn);}
+
+/* ── step 3: review list ─────────────────────────── */
+.review-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px;}
+.review-count{font-size:12.5px;color:var(--muted);}
+.review-count b{color:var(--ink);}
+.legend{display:flex;gap:14px;font-size:11.5px;color:var(--muted);}
+.legend span{display:inline-flex;align-items:center;gap:4px;}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.dot.c2e{background:#7a8ba3;}
+.dot.e2c{background:var(--accent);}
+.dot.phr{background:#b08a3e;}
+
+.word-list{border:1px solid var(--line);border-radius:6px;overflow:hidden;}
+.word-row{
+  display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px dotted var(--line);
+  font-size:13px;background:#fff;
+}
+.word-row:last-child{border-bottom:none;}
+.word-row.phr-row{background:#fdfaf4;}
+.word-row .rn{width:22px;color:var(--muted);font-size:11.5px;text-align:right;flex-shrink:0;}
+.word-row .tag{
+  font-size:10.5px;padding:1px 6px;border-radius:10px;flex-shrink:0;font-family:var(--mono);
+  border:1px solid var(--line);color:var(--muted);
+}
+.word-row .body{flex:1;min-width:0;}
+.word-row .en{font-weight:600;}
+.word-row .pos{color:var(--muted);font-size:11.5px;margin-right:4px;}
+.word-row .zh{color:#444;}
+.word-row .sep{color:var(--line);margin:0 6px;}
+.e2c-toggle{
+  flex-shrink:0;font-size:11px;padding:4px 9px;border-radius:12px;border:1px solid var(--line);
+  cursor:pointer;color:var(--muted);background:#fff;white-space:nowrap;
+}
+.e2c-toggle.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.row-btn{
+  flex-shrink:0;width:24px;height:24px;border-radius:4px;border:1px solid var(--line);background:#fff;
+  color:var(--muted);cursor:pointer;font-size:13px;line-height:1;display:flex;align-items:center;justify-content:center;
+}
+.row-btn:hover{border-color:var(--warn);color:var(--warn);}
+.phr-divider{
+  padding:6px 12px;font-size:11px;color:#9c7d3f;background:#fdf6e8;border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);font-weight:600;letter-spacing:.5px;
+}
+
+/* inline-editable fields inside review rows */
+.edit-input{
+  border:1px solid transparent;background:transparent;font-family:inherit;font-size:13px;
+  color:inherit;padding:2px 4px;border-radius:3px;min-width:0;
+}
+.edit-input:hover{border-color:var(--line);background:#fff;}
+.edit-input:focus{outline:none;border-color:var(--accent);background:#fff;}
+.edit-input.pos-input{width:52px;color:var(--muted);font-size:11.5px;flex-shrink:0;}
+.edit-input.zh-input{flex:1 1 40%;color:#444;min-width:60px;}
+.edit-input.en-input{flex:1 1 40%;font-weight:600;min-width:60px;}
+.word-row .body{flex:1;min-width:0;display:flex;align-items:center;gap:2px;}
+.word-row .body .sep{flex-shrink:0;color:var(--line);}
+
+/* manual add form */
+.add-row-wrap{border-top:1px solid var(--line);background:#f7f5f0;}
+.add-row-toggle{
+  padding:10px 12px;font-size:12.5px;color:var(--accent);cursor:pointer;text-align:center;
+  font-weight:600;background:#fff;
+}
+.add-row-toggle:hover{background:#faf8f4;}
+.add-row-form{padding:12px;display:none;gap:8px;flex-wrap:wrap;align-items:flex-end;}
+.add-row-form.open{display:flex;}
+.add-field{display:flex;flex-direction:column;gap:4px;}
+.add-field label{font-size:11px;color:var(--muted);}
+.add-field input[type=text]{
+  padding:7px 9px;border:1px solid var(--line);border-radius:4px;font-size:12.5px;font-family:inherit;
+}
+.add-field.pos-field input{width:80px;}
+.add-field.zh-field input{width:160px;}
+.add-field.en-field input{width:160px;}
+.add-phrase-check{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding-bottom:8px;}
+.add-row-submit{padding:8px 16px;}
+
+.empty-note{padding:24px;text-align:center;color:var(--muted);font-size:13px;}
+
+/* ── step 4: export ─────────────────────────── */
+.export-summary{display:flex;gap:20px;margin-bottom:16px;flex-wrap:wrap;}
+.export-stat{border:1px solid var(--line);border-radius:5px;padding:12px 18px;flex:1;min-width:120px;}
+.export-stat .n{font-family:var(--serif);font-size:22px;font-weight:600;}
+.export-stat .l{font-size:11.5px;color:var(--muted);}
+.preview-frame-wrap{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#e8ecef;}
+iframe{width:100%;height:520px;border:none;display:block;}
+
+.footer-actions{display:flex;gap:10px;justify-content:center;margin-top:22px;}
+.footer-actions button{padding:12px 24px;font-size:14px;}
+
+@media (max-width:640px){
+  .count-grid{grid-template-columns:1fr;}
+  .step-tab span.label{display:none;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="masthead">
+    <h1>單字小考產生器</h1>
+    <p>貼上單字庫 → 設定抽題數量 → 確認清單 → 匯出 HTML／PDF</p>
+  </div>
+
+  <div class="stepper">
+    <div class="step-tab active" data-step="1"><span class="num">1</span><span class="label">貼上單字庫</span></div>
+    <div class="step-tab" data-step="2"><span class="num">2</span><span class="label">設定題數</span></div>
+    <div class="step-tab" data-step="3"><span class="num">3</span><span class="label">確認清單</span></div>
+    <div class="step-tab" data-step="4"><span class="num">4</span><span class="label">匯出</span></div>
+  </div>
+
+  <!-- ══════════ STEP 1 ══════════ -->
+  <div class="panel active" id="panel-1">
+    <div class="card">
+      <h2>上傳單字庫</h2>
+      <p class="hint">上傳一個或多個雜誌格式 JSON 檔案，或直接貼上 JSON 內容（可貼多份）。也可以純文字貼上。</p>
+
+      <div class="mode-toggle">
+        <div class="mode-btn active" data-mode="upload">上傳 JSON 檔案</div>
+        <div class="mode-btn" data-mode="magazine">貼上 JSON 內容</div>
+        <div class="mode-btn" data-mode="text">純文字</div>
+      </div>
+
+      <div id="input-upload-wrap">
+        <label class="field-label">選擇一個或多個 .json 檔案，或直接拖曳檔案到下面區域</label>
+        <div id="drop-zone" class="drop-zone">
+          <div class="drop-zone-inner">
+            <div class="drop-icon">⬆</div>
+            <div class="drop-text">將 .json 檔案拖曳到這裡</div>
+            <div class="drop-sub">或點擊選擇檔案（可一次選取多個）</div>
+          </div>
+          <input type="file" id="file-input" accept=".json,application/json" multiple>
+        </div>
+        <div id="file-list" style="margin-top:10px;"></div>
+      </div>
+
+      <div id="input-magazine-wrap" style="display:none;">
+        <label class="field-label">貼上雜誌格式 JSON 內容（可貼多份，直接接續貼在同一個框內即可，工具會自動抓出每一份的 words 陣列）</label>
+        <textarea id="ta-magazine" placeholder='{
+  "unit": 1,
+  "words": [
+    {
+      "id": 1001,
+      "word": "collapse",
+      "pos": "n",
+      "meaning": "n. 崩潰、瓦解；倒塌"
+    },
+    {
+      "id": 501041,
+      "word": "strike a chord (with sb.)",
+      "pos": "phr",
+      "meaning": "phr. 引起（某人的）共鳴"
+    }
+  ],
+  "config": { "choice_total": 25 }
+}'></textarea>
+        <p class="hint" style="margin-top:10px;">會自動讀取每份的 <code>words</code> 陣列；<code>pos</code> 含 phr 或 <code>meaning</code> 開頭是 phr. 都視為片語。</p>
+        <div class="copy-example-row">
+          <button type="button" class="copy-example-btn" data-target="magazine">📋 複製 JSON 範例</button>
+          <span class="copy-example-status" id="copy-status-magazine"></span>
+        </div>
+      </div>
+
+      <div id="input-text-wrap" style="display:none;">
+        <label class="field-label">每行一個字，格式：詞性 / 中文 / 英文（用「/」、「／」或 tab 分隔；中文釋義裡的逗號、頓號不影響）</label>
+        <textarea id="ta-text" placeholder="adj. / 顯而易見的 / apparent
+n. / 週年紀念日 / anniversary
+v/n. / 幫助，援助 / aid
+phr. / 由於 / by virtue of
+phr. / 想出 / come up with
+phr. / 引起（某人的）共鳴 / strike a chord (with sb.)"></textarea>
+        <p class="hint" style="margin-top:10px;">👆 貼上時請照這個格式；點下面按鈕可以直接複製一段範例貼去修改。詞性欄要含片語請打 <code>phr.</code>（複合詞性如 <code>v/n.</code> 也支援，前後多打空格或格式不整齊也沒關係）。</p>
+        <div class="copy-example-row">
+          <button type="button" class="copy-example-btn" data-target="text">📋 複製純文字範例</button>
+          <span class="copy-example-status" id="copy-status-text"></span>
+        </div>
+      </div>
+
+      <div class="status-line" id="step1-status"></div>
+      <div class="btn-row">
+        <button class="primary" id="btn-parse">解析並下一步</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ STEP 2 ══════════ -->
+  <div class="panel" id="panel-2">
+    <div class="card">
+      <h2>設定抽題數量</h2>
+      <p class="hint">單字與片語可分別指定數量；不指定就隨機抽（片語固定會排在考卷最後）。</p>
+
+      <div class="count-grid">
+        <div class="count-box">
+          <h3>一般單字</h3>
+          <div class="pool-size" id="word-pool-size">共 0 個可用</div>
+          <div class="count-input-row">
+            <input type="number" id="word-count-input" min="0" placeholder="數量">
+            <label class="rand-check"><input type="checkbox" id="word-rand" checked> 隨機決定</label>
+          </div>
+        </div>
+        <div class="count-box">
+          <h3>片語（phr.）</h3>
+          <div class="pool-size" id="phr-pool-size">共 0 個可用</div>
+          <div class="count-input-row">
+            <input type="number" id="phr-count-input" min="0" placeholder="數量">
+            <label class="rand-check"><input type="checkbox" id="phr-rand" checked> 隨機決定</label>
+          </div>
+        </div>
+      </div>
+
+      <div id="total-badge" class="total-badge">預計抽出 0 題</div>
+      <div class="status-line err" id="step2-status"></div>
+
+      <div class="count-box" style="margin-top:16px;">
+        <h3>考卷資訊</h3>
+        <div class="count-input-row">
+          <label class="field-label" style="margin:0;white-space:nowrap;">一題　<input type="number" id="score-per-item" min="0" step="0.5" placeholder="3" style="width:60px;padding:7px 8px;border:1px solid var(--line);border-radius:4px;font-family:var(--mono);"> 分</label>
+          <label class="field-label" style="margin:0;white-space:nowrap;">總分　<input type="number" id="score-total" min="0" placeholder="120" style="width:70px;padding:7px 8px;border:1px solid var(--line);border-radius:4px;font-family:var(--mono);"></label>
+        </div>
+        <p class="hint" id="score-hint" style="margin:10px 0 8px;">未填寫時預設「一題 3 分、總分 120」；抽出題目後也會顯示自動建議值可參考。</p>
+        <label class="field-label" style="margin-top:6px;">範圍（選填，會顯示在考卷右上角，沒填就空著）</label>
+        <input type="text" id="quiz-scope-input" placeholder="例如：Unit 1 ~ Unit 2" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px;">
+      </div>
+
+      <div class="btn-row">
+        <button class="ghost" id="btn-back-1">上一步</button>
+        <button class="primary" id="btn-draw">抽字並下一步</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ STEP 3 ══════════ -->
+  <div class="panel" id="panel-3">
+    <div class="card">
+      <h2>確認清單</h2>
+      <p class="hint">刪掉不要的字（會自動從原始清單補一個進來）。點右側鈕可切換該題為「英翻中」。片語固定列在最後。</p>
+
+      <div class="review-toolbar">
+        <div class="review-count">共 <b id="review-total">0</b> 題（單字 <span id="review-word-n">0</span>／片語 <span id="review-phr-n">0</span>）</div>
+        <div class="legend">
+          <span><span class="dot c2e"></span>中翻英（預設）</span>
+          <span><span class="dot e2c"></span>英翻中</span>
+        </div>
+      </div>
+
+      <div class="word-list" id="word-list"></div>
+      <div class="status-line" id="step3-status"></div>
+
+      <div class="btn-row">
+        <button class="ghost" id="btn-back-2">上一步</button>
+        <button class="primary" id="btn-to-export">確認沒問題，下一步</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ STEP 4 ══════════ -->
+  <div class="panel" id="panel-4">
+    <div class="card">
+      <h2>匯出</h2>
+      <p class="hint">下方是最終考卷預覽（含解答卷）。下載 HTML 後用瀏覽器開啟，Ctrl+P 選擇「另存為 PDF」即可得到 PDF（邊界＝無／縮放＝100%／勾選背景圖形）。</p>
+
+      <div class="export-summary">
+        <div class="export-stat"><div class="n" id="sum-total">0</div><div class="l">總題數</div></div>
+        <div class="export-stat"><div class="n" id="sum-word">0</div><div class="l">單字</div></div>
+        <div class="export-stat"><div class="n" id="sum-phr">0</div><div class="l">片語</div></div>
+        <div class="export-stat"><div class="n" id="sum-e2c">0</div><div class="l">英翻中題數</div></div>
+      </div>
+
+      <div class="preview-frame-wrap">
+        <iframe id="preview-frame"></iframe>
+      </div>
+
+      <div class="footer-actions">
+        <button class="ghost" id="btn-back-3">上一步再調整</button>
+        <button class="primary" id="btn-download">下載 HTML（可用瀏覽器另存 PDF）</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   STATE
+   ══════════════════════════════════════════════════════════ */
+let originalPool = [];   // 完整貼上的原始清單，每項 {pos, zh, en}
+let drawnWords = [];     // 目前抽出、確認中的清單，每項 {pos, zh, en, mode, isPhrase, _id}
+let usedIds = new Set(); // 已經被抽走的原始清單 index，避免補字重複
+let idCounter = 0;
+let suggestedTotalFromConfig = null; // 從 JSON config.choice_total 讀到的建議總分（如有）
+let finalScores = {perItem:3, total:120}; // 最終配分（Step2 確認抽字時算出）
+let quizScopeText = ""; // 考卷右上角「範圍」文字，選填
+
+function isPhrase(w){
+  return w._forcePhrase===true || /phr/i.test(w.pos || "");
+}
+
+/* 把 meaning 字串（例如 "v/n. 幫助，援助" 或 "phr. 引起（某人的）共鳴"）
+   拆成 { posLabel: "v/n.", zh: "幫助，援助" }
+   規則：詞性縮寫只由英文字母與斜線組成，後面接第一個句點，句點後才是中文釋義 */
+function splitMeaning(meaning){
+  const m = (meaning||"").trim();
+  const match = m.match(/^([A-Za-z]+(?:\/[A-Za-z]+)*\.)\s*(.*)$/);
+  if(match){
+    return {posLabel: match[1], zh: match[2].trim()};
+  }
+  // 找不到句點結構就整段當中文，詞性留空
+  return {posLabel: "", zh: m};
+}
+
+/* ══════════════════════════════════════════════════════════
+   STEP NAV
+   ══════════════════════════════════════════════════════════ */
+function goToStep(n){
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.getElementById("panel-"+n).classList.add("active");
+  document.querySelectorAll(".step-tab").forEach(t=>{
+    const step = parseInt(t.dataset.step);
+    t.classList.toggle("active", step===n);
+    t.classList.toggle("done", step<n);
+  });
+}
+document.querySelectorAll(".step-tab").forEach(t=>{
+  t.addEventListener("click", ()=>{
+    const step = parseInt(t.dataset.step);
+    if(step===1 || (step<=2 && originalPool.length) || (step<=3 && drawnWords.length) || (step<=4 && drawnWords.length)){
+      if(step>=3) renderReview();
+      if(step===4) renderExport();
+      goToStep(step);
+    }
+  });
+});
+
+/* ── copy-to-clipboard examples ── */
+const EXAMPLE_TEXT = `adj. / 顯而易見的/ apparent
+adj./ 另類的，選擇的 (n) 替代方案/alternative
+v/n. / 幫 助,援 助/ aid
+phr.  / 由於 / by virtue of`;
+
+const EXAMPLE_MAGAZINE = `{
+  "unit": 1,
+  "words": [
+    {
+      "id": 1001,
+      "word": "collapse",
+      "pos": "n",
+      "meaning": "n. 崩潰、瓦解；倒塌"
+    },
+    {
+      "id": 501041,
+      "word": "strike a chord (with sb.)",
+      "pos": "phr",
+      "meaning": "phr. 引起（某人的）共鳴"
+    }
+  ],
+  "config": { "choice_total": 25 }
+}`;
+
+document.querySelectorAll(".copy-example-btn").forEach(btn=>{
+  btn.addEventListener("click", async ()=>{
+    const target = btn.dataset.target;
+    const text = target==="magazine" ? EXAMPLE_MAGAZINE : EXAMPLE_TEXT;
+    const statusEl = document.getElementById("copy-status-"+target);
+    try{
+      await navigator.clipboard.writeText(text);
+      statusEl.textContent = "已複製！可以貼到上面的欄位。";
+    }catch(err){
+      // clipboard API 不可用時，直接把範例填進欄位
+      const ta = target==="magazine" ? document.getElementById("ta-magazine") : document.getElementById("ta-text");
+      ta.value = text;
+      statusEl.textContent = "已直接填入下方欄位（瀏覽器不支援複製到剪貼簿）。";
+    }
+    setTimeout(()=>{ statusEl.textContent = ""; }, 3500);
+  });
+});
+
+/* ══════════════════════════════════════════════════════════
+   STEP 1: PARSE INPUT
+   ══════════════════════════════════════════════════════════ */
+document.querySelectorAll(".mode-btn").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll(".mode-btn").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    const mode = b.dataset.mode;
+    document.getElementById("input-upload-wrap").style.display = mode==="upload" ? "" : "none";
+    document.getElementById("input-magazine-wrap").style.display = mode==="magazine" ? "" : "none";
+    document.getElementById("input-text-wrap").style.display = mode==="text" ? "" : "none";
+  });
+});
+
+/* ── file upload handling ── */
+let uploadedFiles = []; // { name, raw, parsedCount, error }
+
+async function addFiles(fileListLike){
+  const files = Array.from(fileListLike || []).filter(f=>{
+    return f.name.toLowerCase().endsWith(".json") || f.type==="application/json";
+  });
+  for(const f of files){
+    try{
+      const text = await f.text();
+      uploadedFiles.push({name:f.name, raw:text, error:null});
+    }catch(err){
+      uploadedFiles.push({name:f.name, raw:"", error:"讀取檔案失敗"});
+    }
+  }
+  renderFileList();
+}
+
+document.getElementById("file-input").addEventListener("change", async (e)=>{
+  await addFiles(e.target.files);
+  e.target.value = ""; // 允許重複選同一個檔案
+});
+
+const dropZone = document.getElementById("drop-zone");
+["dragenter","dragover"].forEach(evt=>{
+  dropZone.addEventListener(evt, (e)=>{
+    e.preventDefault(); e.stopPropagation();
+    dropZone.classList.add("drag-over");
+  });
+});
+["dragleave","dragend"].forEach(evt=>{
+  dropZone.addEventListener(evt, (e)=>{
+    e.preventDefault(); e.stopPropagation();
+    dropZone.classList.remove("drag-over");
+  });
+});
+dropZone.addEventListener("drop", async (e)=>{
+  e.preventDefault(); e.stopPropagation();
+  dropZone.classList.remove("drag-over");
+  if(e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length){
+    await addFiles(e.dataTransfer.files);
+  }
+});
+
+function renderFileList(){
+  const wrap = document.getElementById("file-list");
+  wrap.innerHTML = "";
+  uploadedFiles.forEach((f, idx)=>{
+    const chip = document.createElement("div");
+    chip.className = "file-chip" + (f.error ? " err" : "");
+    let metaText = f.error || "";
+    if(!f.error){
+      try{
+        const data = JSON.parse(f.raw);
+        const list = Array.isArray(data) ? data : data.words;
+        metaText = Array.isArray(list) ? `${list.length} 個項目` : "找不到 words 陣列";
+        if(!Array.isArray(list)) chip.classList.add("err");
+      }catch(err){
+        metaText = "JSON 格式錯誤";
+        chip.classList.add("err");
+      }
+    }
+    chip.innerHTML = `<div><span class="fname">${escapeHTML(f.name)}</span> <span class="fmeta">— ${escapeHTML(metaText)}</span></div>`;
+    const rm = document.createElement("div");
+    rm.className = "fremove";
+    rm.textContent = "×";
+    rm.addEventListener("click", ()=>{ uploadedFiles.splice(idx,1); renderFileList(); });
+    chip.appendChild(rm);
+    wrap.appendChild(chip);
+  });
+}
+
+function parsePlainText(raw){
+  const lines = raw.split("\n").map(l=>l.trim()).filter(Boolean);
+  const items = [];
+  const errors = [];
+  lines.forEach((line, idx)=>{
+    // 先保護複合詞性中的斜線（如 v/n. 、 n/adj.），避免被誤當成欄位分隔符
+    // 規則：開頭是「英文字母+斜線+英文字母...+句點」這種詞性樣式，先把裡面的 / 換成暫存符號
+    let protectedLine = line.replace(/^([A-Za-z]+(?:\/[A-Za-z]+)+\.)/, (m)=>m.replace(/\//g, "\u0001"));
+    // 分隔符固定用 / 、 ／、或 tab（逗號可能是中文內部標點，不當分隔符用）
+    const parts = protectedLine.split(/\t|\/|／/).map(s=>s.trim().replace(/\u0001/g,"/")).filter(Boolean);
+    if(parts.length < 3){
+      errors.push(`第 ${idx+1} 行格式不足三欄：「${line}」`);
+      return;
+    }
+    const [pos, zh, ...rest] = parts;
+    const en = rest.join(" ").trim();
+    items.push({pos, zh, en});
+  });
+  return {items, errors};
+}
+
+function parseOneMagazineObject(data, errors, sourceLabel){
+  const list = Array.isArray(data) ? data : data.words;
+  if(!Array.isArray(list)){
+    errors.push(`${sourceLabel}：找不到 words 陣列`);
+    return {items:[], configTotal:null};
+  }
+  const items = [];
+  list.forEach((w,idx)=>{
+    if(!w.word){ errors.push(`${sourceLabel} 第 ${idx+1} 筆缺少 word 欄位`); return; }
+    const {posLabel, zh} = splitMeaning(w.meaning);
+    const phraseFlag = /phr/i.test(w.pos||"") || /phr/i.test(posLabel||"");
+    items.push({
+      pos: posLabel || (w.pos ? (w.pos.replace(/\.$/,"")+".") : ""),
+      zh: zh || "",
+      en: w.word,
+      _forcePhrase: phraseFlag
+    });
+  });
+  const configTotal = (data && data.config && typeof data.config.choice_total === "number") ? data.config.choice_total : null;
+  return {items, configTotal};
+}
+
+/* 從一段可能包含「多個相鄰 JSON 物件」的文字裡，逐一切出每個完整的 { ... } 區塊 */
+function splitConcatenatedJSON(raw){
+  const blobs = [];
+  let depth = 0, start = -1, inString = false, escapeNext = false;
+  for(let i=0;i<raw.length;i++){
+    const ch = raw[i];
+    if(inString){
+      if(escapeNext){ escapeNext = false; }
+      else if(ch === "\\"){ escapeNext = true; }
+      else if(ch === '"'){ inString = false; }
+      continue;
+    }
+    if(ch === '"'){ inString = true; continue; }
+    if(ch === "{"){ if(depth===0) start = i; depth++; }
+    else if(ch === "}"){
+      depth--;
+      if(depth===0 && start!==-1){ blobs.push(raw.slice(start, i+1)); start = -1; }
+    }
+  }
+  return blobs.length ? blobs : [raw];
+}
+
+/* 雜誌格式：支援單一物件、陣列、或多份物件接連貼在一起 */
+function parseMagazineJSON(raw, errors){
+  const trimmed = raw.trim();
+  let items = [];
+  let configTotals = [];
+  const blobs = splitConcatenatedJSON(trimmed);
+  blobs.forEach((blob, i)=>{
+    try{
+      const data = JSON.parse(blob);
+      const label = blobs.length>1 ? `第 ${i+1} 份貼上內容` : "貼上內容";
+      const r = parseOneMagazineObject(data, errors, label);
+      items = items.concat(r.items);
+      if(r.configTotal) configTotals.push(r.configTotal);
+    }catch(e){
+      errors.push(`第 ${i+1} 份 JSON 格式錯誤：${e.message}`);
+    }
+  });
+  return {items, configTotals};
+}
+
+document.getElementById("btn-parse").addEventListener("click", ()=>{
+  const mode = document.querySelector(".mode-btn.active").dataset.mode;
+  const statusEl = document.getElementById("step1-status");
+  const errors = [];
+  let items = [];
+  let configTotals = [];
+
+  if(mode==="text"){
+    const raw = document.getElementById("ta-text").value;
+    if(!raw.trim()){
+      statusEl.className = "status-line err";
+      statusEl.textContent = "請先貼上單字庫內容。";
+      return;
+    }
+    const r = parsePlainText(raw);
+    items = r.items;
+    errors.push(...r.errors);
+
+  } else if(mode==="magazine"){
+    const raw = document.getElementById("ta-magazine").value;
+    if(!raw.trim()){
+      statusEl.className = "status-line err";
+      statusEl.textContent = "請先貼上 JSON 內容。";
+      return;
+    }
+    const r = parseMagazineJSON(raw, errors);
+    items = r.items;
+    configTotals = r.configTotals;
+
+  } else { // upload
+    if(uploadedFiles.length===0){
+      statusEl.className = "status-line err";
+      statusEl.textContent = "請先上傳至少一個 JSON 檔案。";
+      return;
+    }
+    uploadedFiles.forEach(f=>{
+      if(f.error){ errors.push(`${f.name}：讀取失敗`); return; }
+      try{
+        const data = JSON.parse(f.raw);
+        const r = parseOneMagazineObject(data, errors, f.name);
+        items = items.concat(r.items);
+        if(r.configTotal) configTotals.push(r.configTotal);
+      }catch(e){
+        errors.push(`${f.name}：JSON 格式錯誤 — ${e.message}`);
+      }
+    });
+  }
+
+  if(items.length===0){
+    statusEl.className = "status-line err";
+    statusEl.textContent = "沒有解析出任何有效項目。" + (errors[0]||"");
+    return;
+  }
+
+  originalPool = items;
+  usedIds = new Set();
+  // 供 Step 2 分數建議使用：取所有檔案 config.choice_total 的總和（若有）
+  suggestedTotalFromConfig = configTotals.length ? configTotals.reduce((a,b)=>a+b,0) : null;
+
+  statusEl.className = "status-line ok";
+  let msg = `成功解析 ${items.length} 個項目（單字 ${items.filter(w=>!isPhrase(w)).length} 個、片語 ${items.filter(isPhrase).length} 個）。`;
+  if(errors.length) msg += ` 有 ${errors.length} 項略過：${errors.slice(0,2).join("；")}`;
+  statusEl.textContent = msg;
+
+  setupStep2();
+  goToStep(2);
+});
+
+/* ══════════════════════════════════════════════════════════
+   STEP 2: COUNT SETTINGS
+   ══════════════════════════════════════════════════════════ */
+function setupStep2(){
+  const wordPool = originalPool.filter(w=>!isPhrase(w));
+  const phrPool = originalPool.filter(isPhrase);
+  document.getElementById("word-pool-size").textContent = `共 ${wordPool.length} 個可用`;
+  document.getElementById("phr-pool-size").textContent = `共 ${phrPool.length} 個可用`;
+  document.getElementById("word-count-input").max = wordPool.length;
+  document.getElementById("phr-count-input").max = phrPool.length;
+  document.getElementById("word-count-input").value = "";
+  document.getElementById("phr-count-input").value = "";
+  document.getElementById("word-rand").checked = true;
+  document.getElementById("phr-rand").checked = true;
+  document.getElementById("score-per-item").value = "";
+  document.getElementById("score-total").value = "";
+  document.getElementById("quiz-scope-input").value = "";
+  updateTotalBadge();
+}
+
+/* 依「一題幾分」與「總分」互相推算，未填的一方用另一方＋題數換算，兩者都沒填則套預設 3分/120 */
+function resolveScores(perItemStr, totalStr, questionCount){
+  const perItemFilled = perItemStr !== "" && !isNaN(parseFloat(perItemStr));
+  const totalFilled = totalStr !== "" && !isNaN(parseFloat(totalStr));
+  let perItem = perItemFilled ? parseFloat(perItemStr) : null;
+  let total = totalFilled ? parseFloat(totalStr) : null;
+
+  if(perItem!==null && total===null){
+    total = questionCount>0 ? +(perItem*questionCount).toFixed(1) : 120;
+  } else if(perItem===null && total!==null){
+    perItem = questionCount>0 ? +(total/questionCount).toFixed(2) : 3;
+  } else if(perItem===null && total===null){
+    perItem = 3; total = 120;
+  }
+  return {perItem, total};
+}
+
+function updateTotalBadge(){
+  const wordPool = originalPool.filter(w=>!isPhrase(w)).length;
+  const phrPool = originalPool.filter(isPhrase).length;
+  const wordRand = document.getElementById("word-rand").checked;
+  const phrRand = document.getElementById("phr-rand").checked;
+  const wordVal = parseInt(document.getElementById("word-count-input").value)||0;
+  const phrVal = parseInt(document.getElementById("phr-count-input").value)||0;
+
+  let estWord = wordRand ? Math.min(wordPool, Math.max(0, Math.min(30, wordPool))) : wordVal;
+  let estPhr = phrRand ? phrPool : phrVal;
+  if(wordRand) estWord = wordPool; // 隨機時顯示「最多可到」的概念改成 pool 上限，實際抽字時再限制40題
+  const total = estWord + estPhr;
+
+  const badge = document.getElementById("total-badge");
+  const statusEl = document.getElementById("step2-status");
+  statusEl.textContent = "";
+
+  if(!wordRand && wordVal > wordPool){
+    statusEl.textContent = `單字數量不能超過可用的 ${wordPool} 個。`;
+  }
+  if(!phrRand && phrVal > phrPool){
+    statusEl.textContent += (statusEl.textContent?" ":"") + `片語數量不能超過可用的 ${phrPool} 個。`;
+  }
+
+  badge.textContent = wordRand
+    ? `單字將隨機決定數量（最多 ${wordPool} 個，且不超過 40 題上限）　＋　片語 ${phrRand? '隨機':(phrVal||0)} 個`
+    : `預計抽出：單字 ${wordVal||0} 題　＋　片語 ${phrRand? '隨機':(phrVal||0)} 題`;
+  badge.classList.toggle("warn", !!statusEl.textContent);
+
+  // 分數建議提示
+  const approxCount = wordRand ? Math.max(1, Math.min(40, wordPool)) + estPhr : (wordVal + (phrRand?phrPool:phrVal));
+  const perStr = document.getElementById("score-per-item").value;
+  const totStr = document.getElementById("score-total").value;
+  const {perItem, total: totalScore} = resolveScores(perStr, totStr, approxCount || 1);
+  const hintEl = document.getElementById("score-hint");
+  if(perStr==="" && totStr===""){
+    let suggestMsg = `未填寫時預設「一題 3 分、總分 120」`;
+    if(suggestedTotalFromConfig){
+      suggestMsg += `；偵測到題庫建議總題數約 ${suggestedTotalFromConfig} 題`;
+    }
+    hintEl.textContent = suggestMsg + `；依目前預計題數（約 ${approxCount} 題），一題 ${perItem} 分可湊到總分 ${totalScore}。`;
+  } else {
+    hintEl.textContent = `依目前設定換算：一題 ${perItem} 分 × 約 ${approxCount} 題 ≈ 總分 ${totalScore}。`;
+  }
+}
+["word-rand","phr-rand","word-count-input","phr-count-input","score-per-item","score-total"].forEach(id=>{
+  document.getElementById(id).addEventListener("input", updateTotalBadge);
+  document.getElementById(id).addEventListener("change", updateTotalBadge);
+});
+
+document.getElementById("btn-back-1").addEventListener("click", ()=>goToStep(1));
+
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+document.getElementById("btn-draw").addEventListener("click", ()=>{
+  const wordPoolIdx = originalPool.map((w,i)=>({w,i})).filter(o=>!isPhrase(o.w));
+  const phrPoolIdx = originalPool.map((w,i)=>({w,i})).filter(o=>isPhrase(o.w));
+
+  const wordRand = document.getElementById("word-rand").checked;
+  const phrRand = document.getElementById("phr-rand").checked;
+  const wordVal = parseInt(document.getElementById("word-count-input").value)||0;
+  const phrVal = parseInt(document.getElementById("phr-count-input").value)||0;
+
+  const statusEl = document.getElementById("step2-status");
+  if(!wordRand && wordVal > wordPoolIdx.length){
+    statusEl.textContent = `單字數量不能超過可用的 ${wordPoolIdx.length} 個。`;
+    return;
+  }
+  if(!phrRand && phrVal > phrPoolIdx.length){
+    statusEl.textContent = `片語數量不能超過可用的 ${phrPoolIdx.length} 個。`;
+    return;
+  }
+
+  let wordTarget;
+  if(wordRand){
+    // 隨機決定：在合理範圍內隨機（例如 pool 大小與 40 上限間取隨機數，至少含一點意義）
+    const maxPossible = Math.min(wordPoolIdx.length, 40);
+    const minReasonable = Math.min(wordPoolIdx.length, Math.max(10, Math.floor(maxPossible*0.6)));
+    wordTarget = wordPoolIdx.length===0 ? 0 : Math.floor(Math.random()*(maxPossible-minReasonable+1))+minReasonable;
+  } else {
+    wordTarget = wordVal;
+  }
+
+  let phrTarget;
+  if(phrRand){
+    phrTarget = phrPoolIdx.length===0 ? 0 : Math.floor(Math.random()*(phrPoolIdx.length+1));
+  } else {
+    phrTarget = phrVal;
+  }
+
+  // 若總數超過 40，優先壓縮到 40（單字優先被壓縮，片語盡量保留使用者指定值）
+  if(wordTarget + phrTarget > 40){
+    wordTarget = Math.max(0, 40 - phrTarget);
+  }
+
+  const chosenWords = shuffle(wordPoolIdx).slice(0, wordTarget);
+  const chosenPhr = shuffle(phrPoolIdx).slice(0, phrTarget);
+
+  usedIds = new Set([...chosenWords, ...chosenPhr].map(o=>o.i));
+
+  drawnWords = shuffle(chosenWords).map(o=>makeItem(o.w))
+    .concat(chosenPhr.map(o=>makeItem(o.w))); // 片語固定放最後，內部順序打亂
+
+  drawnWords = [
+    ...shuffle(chosenWords.map(o=>makeItem(o.w))),
+    ...shuffle(chosenPhr.map(o=>makeItem(o.w)))
+  ];
+
+  statusEl.textContent = "";
+
+  // 依實際抽到的題數計算最終配分
+  const perStr = document.getElementById("score-per-item").value;
+  const totStr = document.getElementById("score-total").value;
+  finalScores = resolveScores(perStr, totStr, drawnWords.length || 1);
+  quizScopeText = document.getElementById("quiz-scope-input").value.trim();
+  addRowFormOpen = false;
+
+  renderReview();
+  goToStep(3);
+});
+
+function makeItem(w){
+  idCounter++;
+  return {pos:w.pos, zh:w.zh, en:w.en, mode:"c2e", isPhrase:isPhrase(w), _forcePhrase:w._forcePhrase, _id:idCounter};
+}
+
+/* ══════════════════════════════════════════════════════════
+   STEP 3: REVIEW LIST
+   ══════════════════════════════════════════════════════════ */
+function renderReview(){
+  const listEl = document.getElementById("word-list");
+  listEl.innerHTML = "";
+
+  const words = drawnWords.filter(w=>!w.isPhrase);
+  const phrases = drawnWords.filter(w=>w.isPhrase);
+
+  document.getElementById("review-total").textContent = drawnWords.length;
+  document.getElementById("review-word-n").textContent = words.length;
+  document.getElementById("review-phr-n").textContent = phrases.length;
+
+  if(drawnWords.length===0){
+    const emptyNote = document.createElement("div");
+    emptyNote.className = "empty-note";
+    emptyNote.textContent = "目前沒有題目了，可以回上一步重新抽字，或在下方手動新增。";
+    listEl.appendChild(emptyNote);
+    listEl.appendChild(buildAddRowUI());
+    return;
+  }
+
+  let num = 1;
+  words.forEach(w=>{
+    listEl.appendChild(buildRow(w, num++));
+  });
+  if(phrases.length){
+    const div = document.createElement("div");
+    div.className = "phr-divider";
+    div.textContent = "片語（固定列於最後）";
+    listEl.appendChild(div);
+    phrases.forEach(w=>{
+      listEl.appendChild(buildRow(w, num++));
+    });
+  }
+  listEl.appendChild(buildAddRowUI());
+}
+
+function buildRow(w, num){
+  const row = document.createElement("div");
+  row.className = "word-row" + (w.isPhrase ? " phr-row" : "");
+  row.dataset.id = w._id;
+
+  const rn = document.createElement("div");
+  rn.className = "rn";
+  rn.textContent = num;
+
+  const tag = document.createElement("div");
+  tag.className = "tag";
+  tag.textContent = w.isPhrase ? "phr." : "單字";
+
+  const body = document.createElement("div");
+  body.className = "body";
+
+  if(w.mode==="e2c"){
+    const enInput = document.createElement("input");
+    enInput.type = "text";
+    enInput.className = "edit-input en-input";
+    enInput.value = w.en;
+    enInput.addEventListener("input", ()=>{ w.en = enInput.value; });
+
+    const note = document.createElement("span");
+    note.className = "zh";
+    note.style.color = "#aaa";
+    note.style.fontSize = "12px";
+    note.textContent = "（英翻中：考卷不顯示中文與詞性）";
+
+    body.appendChild(enInput);
+    body.appendChild(note);
+  } else {
+    const posInput = document.createElement("input");
+    posInput.type = "text";
+    posInput.className = "edit-input pos-input";
+    posInput.value = w.pos || "";
+    posInput.placeholder = "詞性";
+    posInput.addEventListener("input", ()=>{ w.pos = posInput.value; });
+
+    const zhInput = document.createElement("input");
+    zhInput.type = "text";
+    zhInput.className = "edit-input zh-input";
+    zhInput.value = w.zh;
+    zhInput.placeholder = "中文";
+    zhInput.addEventListener("input", ()=>{ w.zh = zhInput.value; });
+
+    const sep = document.createElement("span");
+    sep.className = "sep";
+    sep.textContent = "—";
+
+    const enInput = document.createElement("input");
+    enInput.type = "text";
+    enInput.className = "edit-input en-input";
+    enInput.value = w.en;
+    enInput.placeholder = "英文";
+    enInput.addEventListener("input", ()=>{ w.en = enInput.value; });
+
+    body.appendChild(posInput);
+    body.appendChild(zhInput);
+    body.appendChild(sep);
+    body.appendChild(enInput);
+  }
+
+  const toggle = document.createElement("div");
+  toggle.className = "e2c-toggle" + (w.mode==="e2c" ? " on" : "");
+  toggle.textContent = w.mode==="e2c" ? "英翻中" : "設為英翻中";
+  toggle.addEventListener("click", ()=>{
+    w.mode = w.mode==="e2c" ? "c2e" : "e2c";
+    renderReview();
+  });
+
+  const delBtn = document.createElement("div");
+  delBtn.className = "row-btn";
+  delBtn.textContent = "×";
+  delBtn.title = "刪除並補一個";
+  delBtn.addEventListener("click", ()=>{
+    deleteAndRefill(w);
+  });
+
+  row.appendChild(rn);
+  row.appendChild(tag);
+  row.appendChild(body);
+  row.appendChild(toggle);
+  row.appendChild(delBtn);
+  return row;
+}
+
+/* ── 手動新增一題 ── */
+let addRowFormOpen = false; // 是否展開「手動新增一題」表單，跨重新渲染保留狀態
+
+function buildAddRowUI(){
+  const wrap = document.createElement("div");
+  wrap.className = "add-row-wrap";
+
+  const toggleBtn = document.createElement("div");
+  toggleBtn.className = "add-row-toggle";
+  toggleBtn.textContent = "＋ 手動新增一題";
+
+  const form = document.createElement("div");
+  form.className = "add-row-form" + (addRowFormOpen ? " open" : "");
+
+  form.innerHTML = `
+    <div class="add-field pos-field"><label>詞性</label><input type="text" id="add-pos" placeholder="adj. / n. / phr."></div>
+    <div class="add-field zh-field"><label>中文</label><input type="text" id="add-zh" placeholder="中文意思"></div>
+    <div class="add-field en-field"><label>英文</label><input type="text" id="add-en" placeholder="英文單字／片語"></div>
+    <label class="add-phrase-check"><input type="checkbox" id="add-is-phrase"> 這是片語（會排到最後）</label>
+    <button type="button" class="primary add-row-submit" id="add-row-submit">新增</button>
+  `;
+
+  toggleBtn.addEventListener("click", ()=>{
+    addRowFormOpen = !addRowFormOpen;
+    form.classList.toggle("open", addRowFormOpen);
+    if(addRowFormOpen) document.getElementById("add-en").focus();
+  });
+
+  wrap.appendChild(toggleBtn);
+  wrap.appendChild(form);
+
+  // 用 setTimeout 讓 innerHTML 內的元素先掛載到 DOM 後再綁事件
+  setTimeout(()=>{
+    const submitBtn = form.querySelector("#add-row-submit");
+    const posInput = form.querySelector("#add-pos");
+    const zhInput = form.querySelector("#add-zh");
+    const enInput = form.querySelector("#add-en");
+    const phraseCheck = form.querySelector("#add-is-phrase");
+
+    function submitNewItem(){
+      const en = enInput.value.trim();
+      const zh = zhInput.value.trim();
+      const pos = posInput.value.trim();
+      const isPhr = phraseCheck.checked;
+      const statusEl = document.getElementById("step3-status");
+
+      if(!en){
+        statusEl.className = "status-line err";
+        statusEl.textContent = "請至少填寫英文欄位再新增。";
+        enInput.focus();
+        return;
+      }
+
+      idCounter++;
+      const newItem = {
+        pos: pos || (isPhr ? "phr." : ""),
+        zh, en,
+        mode:"c2e",
+        isPhrase: isPhr,
+        _forcePhrase: isPhr,
+        _id: idCounter,
+        _manual: true // 標記為手動新增，不影響原始清單使用記錄
+      };
+      drawnWords.push(newItem);
+
+      statusEl.className = "status-line ok";
+      statusEl.textContent = `已手動新增「${en}」。`;
+      renderReview();
+      // 新增後保持表單展開並清空欄位，方便連續新增多題
+      addRowFormOpen = true;
+    }
+
+    submitBtn.addEventListener("click", submitNewItem);
+    [posInput, zhInput, enInput].forEach(inp=>{
+      inp.addEventListener("keydown", (e)=>{
+        if(e.key === "Enter"){ e.preventDefault(); submitNewItem(); }
+      });
+    });
+  }, 0);
+
+  return wrap;
+}
+
+function escapeHTML(s){
+  return (s||"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function deleteAndRefill(item){
+  const wantPhrase = item.isPhrase;
+  drawnWords = drawnWords.filter(w=>w._id!==item._id);
+
+  // 從原始清單中找還沒被用過、同類型（單字/片語）的候選
+  const candidates = originalPool
+    .map((w,i)=>({w,i}))
+    .filter(o=>!usedIds.has(o.i) && isPhrase(o.w)===wantPhrase);
+
+  const statusEl = document.getElementById("step3-status");
+  if(candidates.length===0){
+    statusEl.className = "status-line err";
+    statusEl.textContent = wantPhrase
+      ? "原始清單裡已經沒有其他片語可以補了。"
+      : "原始清單裡已經沒有其他單字可以補了。";
+    renderReview();
+    return;
+  }
+
+  const pick = candidates[Math.floor(Math.random()*candidates.length)];
+  usedIds.add(pick.i);
+  const newItem = makeItem(pick.w);
+  drawnWords.push(newItem);
+
+  statusEl.className = "status-line ok";
+  statusEl.textContent = `已刪除，並補上「${pick.w.en}」。`;
+
+  renderReview();
+}
+
+document.getElementById("btn-back-2").addEventListener("click", ()=>goToStep(2));
+document.getElementById("btn-to-export").addEventListener("click", ()=>{
+  if(drawnWords.length===0){
+    document.getElementById("step3-status").className = "status-line err";
+    document.getElementById("step3-status").textContent = "目前沒有任何題目，無法匯出。";
+    return;
+  }
+  renderExport();
+  goToStep(4);
+});
+
+/* ══════════════════════════════════════════════════════════
+   STEP 4: EXPORT — reuse master template logic
+   ══════════════════════════════════════════════════════════ */
+function firstLetterHint(en){
+  const main = en.replace(/\s*\(.*?\)\s*/g, " ").trim();
+  const tokens = main.split(/\s+/).filter(Boolean);
+  return tokens.map(function(tok){
+    const letters = tok.replace(/[^A-Za-z]/g, "");
+    if(letters.length===0) return tok;
+    const first = tok.match(/[A-Za-z]/)[0];
+    const blankCount = letters.length-1;
+    return first + "_".repeat(Math.max(blankCount,1));
+  }).join("  ");
+}
+
+function buildQuizItemHTML(num, w){
+  let text;
+  if(w.mode==="e2c"){
+    text = `${escapeHTML(w.en)} <span class="ans-blank">＿＿＿＿＿＿＿＿</span>`;
+  } else {
+    text = `<span class="item-pos">${escapeHTML(w.pos)}</span>${escapeHTML(w.zh)} <span class="hint-blank">${firstLetterHint(w.en)}</span>`;
+  }
+  return `<div class="item-row"><div class="item-num">${num}</div><div class="item-text">${text}</div></div>`;
+}
+function buildAnswerItemHTML(num, w){
+  const text = `<span class="item-pos">${escapeHTML(w.pos)}</span>${escapeHTML(w.zh)} <b>${escapeHTML(w.en)}</b>`;
+  return `<div class="item-row"><div class="item-num">${num}</div><div class="item-text">${text}</div></div>`;
+}
+function buildColumnsHTML(itemsHTML){
+  const n = itemsHTML.length;
+  const mid = Math.ceil(n/2) > 20 ? 20 : Math.ceil(n/2);
+  const left = itemsHTML.slice(0,mid).join("");
+  const right = itemsHTML.slice(mid).join("");
+  return `<table class="quiz-table"><tr><td class="col">${left}</td><td class="col">${right}</td></tr></table>`;
+}
+function buildHeadHTML(isAnswer){
+  const titleRow = isAnswer ? `<div class="quiz-head-row answer-title"><div>解　答　卷</div></div>` : "";
+  return `<div class="quiz-head">${titleRow}
+    <div class="quiz-head-row">
+      <div class="qh-class">班級：___________</div>
+      <div class="qh-blank">座號：___________</div>
+      <div class="qh-blank">姓名：______________________</div>
+    </div>
+    <div class="quiz-head-row">
+      <div class="qh-class">一題　${finalScores.perItem}　分</div>
+      <div class="qh-blank">總分：　${finalScores.total}　</div>
+      <div class="qh-blank">範圍：${quizScopeText ? escapeHTML(quizScopeText) : "______________________"}</div>
+    </div></div>`;
+}
+
+function buildFinalHTML(){
+  const orderedList = drawnWords; // words then phrases (already in this order from render logic build)
+  const quizItems = orderedList.map((w,i)=>buildQuizItemHTML(i+1,w));
+  const answerItems = orderedList.map((w,i)=>buildAnswerItemHTML(i+1,w));
+  const quizBlock = `<div class="copy-block">${buildHeadHTML(false)}${buildColumnsHTML(quizItems)}</div>`;
+  const answerBlock = `<div class="copy-block">${buildHeadHTML(true)}${buildColumnsHTML(answerItems)}</div>`;
+
+  return `<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>單字小考</title>
+<style>
+:root{--font-body:10pt;--font-small:9.3pt;--font-title:14pt;--page-pad:8mm 11mm;--item-pad-v:1.5px;}
+@page{size:A4 portrait;margin:0;}
+*,*::before,*::after{box-sizing:border-box;}
+html,body{margin:0;padding:0;font-family:"Microsoft JhengHei","微軟正黑體","Noto Sans TC","PingFang TC","Heiti TC",sans-serif;font-size:var(--font-body);line-height:1.4;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+.sheet{position:relative;width:210mm;height:296mm;padding:var(--page-pad);background:#fff;overflow:visible;}
+.sheet-body{height:100%;}
+@media screen{body{background:#e8ecef;padding:20px 0;}.sheet{margin:0 auto 20px;box-shadow:0 2px 12px rgba(0,0,0,.25);}}
+@media print{body{background:#fff;padding:0;}.sheet{margin:0;box-shadow:none;page-break-after:always;break-after:page;}.sheet:last-of-type{page-break-after:auto;break-after:auto;}}
+.quiz-head{border:1px solid #000;border-bottom:none;--qh-col1-width:135px;}
+.quiz-head-row{display:flex;font-size:var(--font-small);font-weight:bold;}
+.quiz-head-row>div{padding:2px 8px;border-bottom:1px solid #000;}
+.quiz-head-row .qh-class{flex:0 0 var(--qh-col1-width, 100px);width:var(--qh-col1-width, 100px);min-width:0;max-width:var(--qh-col1-width, 100px);white-space:nowrap;overflow:hidden;text-overflow:clip;}
+.quiz-head-row .qh-blank{flex:1;border-left:1px solid #000;white-space:nowrap;}
+.quiz-head-row.answer-title{background:#000;color:#fff;font-size:11pt;letter-spacing:2px;}
+.quiz-head-row.answer-title>div{border-bottom:none;padding:3px 8px;}
+.quiz-table{width:100%;border-collapse:collapse;font-size:var(--font-small);}
+.quiz-table td.col{border:1px solid #000;border-top:none;vertical-align:top;width:50%;padding:0;}
+.quiz-table td.col+td.col{border-left:none;}
+.item-row{display:flex;align-items:baseline;padding:var(--item-pad-v) 6px;border-bottom:1px dotted #999;}
+.item-row:last-child{border-bottom:none;}
+.item-num{flex:0 0 22px;font-weight:bold;text-align:right;margin-right:6px;}
+.item-text{flex:1;}
+.item-pos{color:#333;}
+.hint-blank{font-family:"Consolas","Courier New",monospace;letter-spacing:1px;}
+.ans-blank{font-family:"Consolas","Courier New",monospace;}
+.copy-block+.copy-block{margin-top:10mm;}
+</style>
+</head>
+<body>
+<div class="sheet" id="sheet-quiz"><div class="sheet-body">${quizBlock}${quizBlock}</div></div>
+<div class="sheet" id="sheet-answer"><div class="sheet-body">${answerBlock}</div></div>
+</body>
+</html>`;
+}
+
+function renderExport(){
+  const words = drawnWords.filter(w=>!w.isPhrase).length;
+  const phrases = drawnWords.filter(w=>w.isPhrase).length;
+  const e2c = drawnWords.filter(w=>w.mode==="e2c").length;
+
+  document.getElementById("sum-total").textContent = drawnWords.length;
+  document.getElementById("sum-word").textContent = words;
+  document.getElementById("sum-phr").textContent = phrases;
+  document.getElementById("sum-e2c").textContent = e2c;
+
+  const html = buildFinalHTML();
+  const iframe = document.getElementById("preview-frame");
+  iframe.srcdoc = html;
+}
+
+document.getElementById("btn-back-3").addEventListener("click", ()=>goToStep(3));
+
+document.getElementById("btn-download").addEventListener("click", ()=>{
+  const html = buildFinalHTML();
+  const blob = new Blob([html], {type:"text/html;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "單字小考.html";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>
