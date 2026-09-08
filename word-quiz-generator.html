@@ -145,10 +145,9 @@ button.small{padding:5px 10px;font-size:12px;}
 .count-box .pool-size{font-size:11.5px;color:var(--muted);margin-bottom:10px;}
 .count-input-row{display:flex;align-items:center;gap:10px;}
 .count-input-row input[type=number]{
-  width:70px;padding:7px 8px;border:1px solid var(--line);border-radius:4px;font-size:13px;
+  width:100px;padding:7px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px;
   font-family:var(--mono);
 }
-.rand-check{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);margin-top:8px;}
 .total-badge{
   display:inline-block;margin-top:14px;font-size:12.5px;padding:6px 12px;border-radius:4px;
   background:var(--accent-soft);color:var(--accent);font-weight:600;
@@ -343,23 +342,21 @@ phr. / 引起（某人的）共鳴 / strike a chord (with sb.)"></textarea>
   <div class="panel" id="panel-2">
     <div class="card">
       <h2>設定抽題數量</h2>
-      <p class="hint">單字與片語可分別指定數量；不指定就隨機抽（片語固定會排在考卷最後）。</p>
+      <p class="hint">單字與片語可分別指定數量；單字沒填預設抽滿 40 題（若題庫不足 40 個則抽全部），片語沒填預設全部抽出（片語固定會排在考卷最後）。</p>
 
       <div class="count-grid">
         <div class="count-box">
           <h3>一般單字</h3>
           <div class="pool-size" id="word-pool-size">共 0 個可用</div>
           <div class="count-input-row">
-            <input type="number" id="word-count-input" min="0" placeholder="數量">
-            <label class="rand-check"><input type="checkbox" id="word-rand" checked> 隨機決定</label>
+            <input type="number" id="word-count-input" min="0" placeholder="預設 40">
           </div>
         </div>
         <div class="count-box">
           <h3>片語（phr.）</h3>
           <div class="pool-size" id="phr-pool-size">共 0 個可用</div>
           <div class="count-input-row">
-            <input type="number" id="phr-count-input" min="0" placeholder="數量">
-            <label class="rand-check"><input type="checkbox" id="phr-rand" checked> 隨機決定</label>
+            <input type="number" id="phr-count-input" min="0" placeholder="預設全部">
           </div>
         </div>
       </div>
@@ -413,7 +410,7 @@ phr. / 引起（某人的）共鳴 / strike a chord (with sb.)"></textarea>
   <div class="panel" id="panel-4">
     <div class="card">
       <h2>匯出</h2>
-      <p class="hint">下方是最終考卷預覽（含解答卷）。下載 HTML 後用瀏覽器開啟，Ctrl+P 選擇「另存為 PDF」即可得到 PDF（邊界＝無／縮放＝100%／勾選背景圖形）。</p>
+      <p class="hint">下方是最終考卷預覽（含解答卷）。點「一鍵下載 PDF」會直接開啟列印視窗，選擇「另存為 PDF」即可（邊界＝無／縮放＝100%／勾選背景圖形）；也可以下載 HTML 檔案自行保存或之後編輯。</p>
 
       <div class="export-summary">
         <div class="export-stat"><div class="n" id="sum-total">0</div><div class="l">總題數</div></div>
@@ -428,7 +425,8 @@ phr. / 引起（某人的）共鳴 / strike a chord (with sb.)"></textarea>
 
       <div class="footer-actions">
         <button class="ghost" id="btn-back-3">上一步再調整</button>
-        <button class="primary" id="btn-download">下載 HTML（可用瀏覽器另存 PDF）</button>
+        <button class="primary" id="btn-download">下載 HTML</button>
+        <button class="primary" id="btn-print-pdf">🖨️ 一鍵下載 PDF</button>
       </div>
     </div>
   </div>
@@ -446,6 +444,8 @@ let idCounter = 0;
 let suggestedTotalFromConfig = null; // 從 JSON config.choice_total 讀到的建議總分（如有）
 let finalScores = {perItem:3, total:120}; // 最終配分（Step2 確認抽字時算出）
 let quizScopeText = ""; // 考卷右上角「範圍」文字，選填
+let wordCountManuallySet = false; // 使用者是否手動改過單字題數（沒改過就顯示自動預設值，並跟著題庫變動更新）
+let phrCountManuallySet = false; // 使用者是否手動改過片語題數
 
 function isPhrase(w){
   return w._forcePhrase===true || /phr/i.test(w.pos || "");
@@ -779,10 +779,10 @@ function setupStep2(){
   document.getElementById("phr-pool-size").textContent = `共 ${phrPool.length} 個可用`;
   document.getElementById("word-count-input").max = wordPool.length;
   document.getElementById("phr-count-input").max = phrPool.length;
-  document.getElementById("word-count-input").value = "";
-  document.getElementById("phr-count-input").value = "";
-  document.getElementById("word-rand").checked = true;
-  document.getElementById("phr-rand").checked = true;
+  wordCountManuallySet = false;
+  phrCountManuallySet = false;
+  document.getElementById("word-count-input").value = Math.min(40, wordPool.length);
+  document.getElementById("phr-count-input").value = phrPool.length;
   document.getElementById("score-per-item").value = "";
   document.getElementById("score-total").value = "";
   document.getElementById("quiz-scope-input").value = "";
@@ -806,37 +806,42 @@ function resolveScores(perItemStr, totalStr, questionCount){
   return {perItem, total};
 }
 
+/* 單字沒填數量（或還沒被手動改過）→ 預設抽滿 40 題（題庫不足 40 則抽全部）；片語同理 → 預設全部抽出 */
+function resolveDrawCounts(wordValStr, phrValStr, wordPoolSize, phrPoolSize){
+  const wordTarget = wordCountManuallySet && wordValStr !== "" && !isNaN(parseInt(wordValStr))
+    ? parseInt(wordValStr) : Math.min(40, wordPoolSize);
+  const phrTarget = phrCountManuallySet && phrValStr !== "" && !isNaN(parseInt(phrValStr))
+    ? parseInt(phrValStr) : phrPoolSize;
+  return {wordTarget, phrTarget};
+}
+
 function updateTotalBadge(){
   const wordPool = originalPool.filter(w=>!isPhrase(w)).length;
   const phrPool = originalPool.filter(isPhrase).length;
-  const wordRand = document.getElementById("word-rand").checked;
-  const phrRand = document.getElementById("phr-rand").checked;
-  const wordVal = parseInt(document.getElementById("word-count-input").value)||0;
-  const phrVal = parseInt(document.getElementById("phr-count-input").value)||0;
+  const wordValStr = document.getElementById("word-count-input").value;
+  const phrValStr = document.getElementById("phr-count-input").value;
+  const wordVal = parseInt(wordValStr)||0;
+  const phrVal = parseInt(phrValStr)||0;
 
-  let estWord = wordRand ? Math.min(wordPool, Math.max(0, Math.min(30, wordPool))) : wordVal;
-  let estPhr = phrRand ? phrPool : phrVal;
-  if(wordRand) estWord = wordPool; // 隨機時顯示「最多可到」的概念改成 pool 上限，實際抽字時再限制40題
-  const total = estWord + estPhr;
-
-  const badge = document.getElementById("total-badge");
   const statusEl = document.getElementById("step2-status");
   statusEl.textContent = "";
 
-  if(!wordRand && wordVal > wordPool){
+  if(wordCountManuallySet && wordVal > wordPool){
     statusEl.textContent = `單字數量不能超過可用的 ${wordPool} 個。`;
   }
-  if(!phrRand && phrVal > phrPool){
+  if(phrCountManuallySet && phrVal > phrPool){
     statusEl.textContent += (statusEl.textContent?" ":"") + `片語數量不能超過可用的 ${phrPool} 個。`;
   }
 
-  badge.textContent = wordRand
-    ? `單字將隨機決定數量（最多 ${wordPool} 個，且不超過 40 題上限）　＋　片語 ${phrRand? '隨機':(phrVal||0)} 個`
-    : `預計抽出：單字 ${wordVal||0} 題　＋　片語 ${phrRand? '隨機':(phrVal||0)} 題`;
+  const {wordTarget, phrTarget} = resolveDrawCounts(wordValStr, phrValStr, wordPool, phrPool);
+  const badge = document.getElementById("total-badge");
+  badge.textContent = !wordCountManuallySet
+    ? `單字將抽出 ${wordTarget} 題（預設值）　＋　片語 ${!phrCountManuallySet? `${phrTarget}（預設全部）`:phrTarget} 題`
+    : `預計抽出：單字 ${wordTarget} 題　＋　片語 ${!phrCountManuallySet? `${phrTarget}（預設全部）`:phrTarget} 題`;
   badge.classList.toggle("warn", !!statusEl.textContent);
 
   // 分數建議提示
-  const approxCount = wordRand ? Math.max(1, Math.min(40, wordPool)) + estPhr : (wordVal + (phrRand?phrPool:phrVal));
+  const approxCount = wordTarget + phrTarget;
   const perStr = document.getElementById("score-per-item").value;
   const totStr = document.getElementById("score-total").value;
   const {perItem, total: totalScore} = resolveScores(perStr, totStr, approxCount || 1);
@@ -851,7 +856,15 @@ function updateTotalBadge(){
     hintEl.textContent = `依目前設定換算：一題 ${perItem} 分 × 約 ${approxCount} 題 ≈ 總分 ${totalScore}。`;
   }
 }
-["word-rand","phr-rand","word-count-input","phr-count-input","score-per-item","score-total"].forEach(id=>{
+document.getElementById("word-count-input").addEventListener("input", ()=>{
+  wordCountManuallySet = true;
+  updateTotalBadge();
+});
+document.getElementById("phr-count-input").addEventListener("input", ()=>{
+  phrCountManuallySet = true;
+  updateTotalBadge();
+});
+["score-per-item","score-total"].forEach(id=>{
   document.getElementById(id).addEventListener("input", updateTotalBadge);
   document.getElementById(id).addEventListener("change", updateTotalBadge);
 });
@@ -871,50 +884,25 @@ document.getElementById("btn-draw").addEventListener("click", ()=>{
   const wordPoolIdx = originalPool.map((w,i)=>({w,i})).filter(o=>!isPhrase(o.w));
   const phrPoolIdx = originalPool.map((w,i)=>({w,i})).filter(o=>isPhrase(o.w));
 
-  const wordRand = document.getElementById("word-rand").checked;
-  const phrRand = document.getElementById("phr-rand").checked;
-  const wordVal = parseInt(document.getElementById("word-count-input").value)||0;
-  const phrVal = parseInt(document.getElementById("phr-count-input").value)||0;
+  const wordValStr = document.getElementById("word-count-input").value;
+  const phrValStr = document.getElementById("phr-count-input").value;
 
   const statusEl = document.getElementById("step2-status");
-  if(!wordRand && wordVal > wordPoolIdx.length){
+  if(wordCountManuallySet && parseInt(wordValStr) > wordPoolIdx.length){
     statusEl.textContent = `單字數量不能超過可用的 ${wordPoolIdx.length} 個。`;
     return;
   }
-  if(!phrRand && phrVal > phrPoolIdx.length){
+  if(phrCountManuallySet && parseInt(phrValStr) > phrPoolIdx.length){
     statusEl.textContent = `片語數量不能超過可用的 ${phrPoolIdx.length} 個。`;
     return;
   }
 
-  let wordTarget;
-  if(wordRand){
-    // 隨機決定：在合理範圍內隨機（例如 pool 大小與 40 上限間取隨機數，至少含一點意義）
-    const maxPossible = Math.min(wordPoolIdx.length, 40);
-    const minReasonable = Math.min(wordPoolIdx.length, Math.max(10, Math.floor(maxPossible*0.6)));
-    wordTarget = wordPoolIdx.length===0 ? 0 : Math.floor(Math.random()*(maxPossible-minReasonable+1))+minReasonable;
-  } else {
-    wordTarget = wordVal;
-  }
-
-  let phrTarget;
-  if(phrRand){
-    phrTarget = phrPoolIdx.length===0 ? 0 : Math.floor(Math.random()*(phrPoolIdx.length+1));
-  } else {
-    phrTarget = phrVal;
-  }
-
-  // 若總數超過 40，優先壓縮到 40（單字優先被壓縮，片語盡量保留使用者指定值）
-  if(wordTarget + phrTarget > 40){
-    wordTarget = Math.max(0, 40 - phrTarget);
-  }
+  const {wordTarget, phrTarget} = resolveDrawCounts(wordValStr, phrValStr, wordPoolIdx.length, phrPoolIdx.length);
 
   const chosenWords = shuffle(wordPoolIdx).slice(0, wordTarget);
   const chosenPhr = shuffle(phrPoolIdx).slice(0, phrTarget);
 
   usedIds = new Set([...chosenWords, ...chosenPhr].map(o=>o.i));
-
-  drawnWords = shuffle(chosenWords).map(o=>makeItem(o.w))
-    .concat(chosenPhr.map(o=>makeItem(o.w))); // 片語固定放最後，內部順序打亂
 
   drawnWords = [
     ...shuffle(chosenWords.map(o=>makeItem(o.w))),
@@ -1232,14 +1220,12 @@ function buildHeadHTML(isAnswer){
   const titleRow = isAnswer ? `<div class="quiz-head-row answer-title"><div>解　答　卷</div></div>` : "";
   return `<div class="quiz-head">${titleRow}
     <div class="quiz-head-row">
-      <div class="qh-class">班級：___________</div>
-      <div class="qh-blank">座號：___________</div>
-      <div class="qh-blank">姓名：______________________</div>
+      <div class="qh-left-group"><div class="qh-class">班級：___________</div><div class="qh-blank">座號：___________</div></div>
+      <div class="qh-blank qh-right">姓名：______________________</div>
     </div>
     <div class="quiz-head-row">
-      <div class="qh-class">一題　${finalScores.perItem}　分</div>
-      <div class="qh-blank">總分：　${finalScores.total}　</div>
-      <div class="qh-blank">範圍：${quizScopeText ? escapeHTML(quizScopeText) : "______________________"}</div>
+      <div class="qh-left-group"><div class="qh-class">一題　${finalScores.perItem}　分</div><div class="qh-blank">總分：　${finalScores.total}　</div></div>
+      <div class="qh-blank qh-right">範圍：${quizScopeText ? escapeHTML(quizScopeText) : "______________________"}</div>
     </div></div>`;
 }
 
@@ -1267,8 +1253,12 @@ html,body{margin:0;padding:0;font-family:"Microsoft JhengHei","微軟正黑體",
 .quiz-head{border:1px solid #000;border-bottom:none;--qh-col1-width:135px;}
 .quiz-head-row{display:flex;font-size:var(--font-small);font-weight:bold;}
 .quiz-head-row>div{padding:2px 8px;border-bottom:1px solid #000;}
+.quiz-head-row .qh-left-group{display:flex;width:50%;flex:0 0 50%;min-width:0;padding:0;border-bottom:none;overflow:hidden;}
+.quiz-head-row .qh-left-group>.qh-class{border-bottom:1px solid #000;}
+.quiz-head-row .qh-left-group>.qh-blank{border-bottom:1px solid #000;}
 .quiz-head-row .qh-class{flex:0 0 var(--qh-col1-width, 100px);width:var(--qh-col1-width, 100px);min-width:0;max-width:var(--qh-col1-width, 100px);white-space:nowrap;overflow:hidden;text-overflow:clip;}
-.quiz-head-row .qh-blank{flex:1;border-left:1px solid #000;white-space:nowrap;}
+.quiz-head-row .qh-blank{flex:1;border-left:1px solid #000;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:clip;}
+.quiz-head-row .qh-right{width:50%;flex:0 0 50%;}
 .quiz-head-row.answer-title{background:#000;color:#fff;font-size:11pt;letter-spacing:2px;}
 .quiz-head-row.answer-title>div{border-bottom:none;padding:3px 8px;}
 .quiz-table{width:100%;border-collapse:collapse;font-size:var(--font-small);}
@@ -1319,6 +1309,29 @@ document.getElementById("btn-download").addEventListener("click", ()=>{
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+});
+
+document.getElementById("btn-print-pdf").addEventListener("click", ()=>{
+  const html = buildFinalHTML();
+  // 在新分頁開啟考卷，並在內容載入完成後自動跳出列印視窗（使用者選「另存為 PDF」）
+  const printWin = window.open("", "_blank");
+  if(!printWin){
+    alert("瀏覽器擋下了彈出視窗，請允許彈出視窗後再試一次，或改用「下載 HTML」再自行開啟列印。");
+    return;
+  }
+  printWin.document.open();
+  printWin.document.write(html);
+  printWin.document.close();
+  printWin.document.title = "單字小考";
+  const triggerPrint = ()=>{
+    printWin.focus();
+    printWin.print();
+  };
+  if(printWin.document.readyState === "complete"){
+    setTimeout(triggerPrint, 200);
+  } else {
+    printWin.addEventListener("load", ()=>setTimeout(triggerPrint, 200));
+  }
 });
 </script>
 </body>
