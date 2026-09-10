@@ -119,12 +119,17 @@ input[type=file]{
 .file-chip .fremove:hover{color:var(--warn);border-color:var(--warn);}
 .file-chip.err{border-color:var(--warn);background:var(--warn-soft);}
 
-.copy-example-row{display:flex;align-items:center;gap:10px;margin-top:10px;}
+.copy-example-row{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap;}
 .copy-example-btn{
   font-size:12px;padding:6px 12px;border:1px solid var(--line);border-radius:5px;
   background:#fff;color:var(--ink);cursor:pointer;
 }
 .copy-example-btn:hover{background:#f4f2ee;border-color:#b8a89a;}
+.copy-prompt-btn{
+  font-size:12px;padding:6px 12px;border:1px solid var(--accent);border-radius:5px;
+  background:var(--accent-soft);color:var(--accent);cursor:pointer;font-weight:600;
+}
+.copy-prompt-btn:hover{background:#e8d5cc;}
 .copy-example-status{font-size:11.5px;color:var(--ok);}
 
 .btn-row{display:flex;gap:10px;margin-top:18px;justify-content:flex-end;}
@@ -141,6 +146,8 @@ button.small{padding:5px 10px;font-size:12px;}
 .status-line{font-size:12.5px;color:var(--muted);margin-top:10px;}
 .status-line.err{color:var(--warn);}
 .status-line.ok{color:var(--ok);}
+.status-line.overlimit-warn{color:#a67c1e;font-weight:600;}
+.status-line.overlimit-block{color:var(--warn);font-weight:600;background:var(--warn-soft);padding:8px 12px;border-radius:5px;margin-top:8px;}
 
 /* ── step 2: count settings ─────────────────────────── */
 .count-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:6px;}
@@ -162,6 +169,8 @@ button.small{padding:5px 10px;font-size:12px;}
 .review-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px;}
 .review-count{font-size:12.5px;color:var(--muted);}
 .review-count b{color:var(--ink);}
+.review-count.over-limit b{color:var(--warn);}
+.review-count.over-limit{color:var(--warn);}
 .legend{display:flex;gap:14px;font-size:11.5px;color:var(--muted);}
 .legend span{display:inline-flex;align-items:center;gap:4px;}
 .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
@@ -200,6 +209,7 @@ button.small{padding:5px 10px;font-size:12px;}
   padding:6px 12px;font-size:11px;color:#9c7d3f;background:#fdf6e8;border-top:1px solid var(--line);
   border-bottom:1px solid var(--line);font-weight:600;letter-spacing:.5px;
 }
+.phr-divider.blank-divider{color:#5a6b8c;background:#eef1f7;}
 
 /* inline-editable fields inside review rows */
 .edit-input{
@@ -221,18 +231,26 @@ button.small{padding:5px 10px;font-size:12px;}
   font-weight:600;background:#fff;
 }
 .add-row-toggle:hover{background:#faf8f4;}
-.add-row-form{padding:12px;display:none;gap:8px;flex-wrap:wrap;align-items:flex-end;}
+.add-row-form{padding:12px;display:none;gap:10px;flex-wrap:wrap;align-items:flex-start;}
 .add-row-form.open{display:flex;}
 .add-field{display:flex;flex-direction:column;gap:4px;}
 .add-field label{font-size:11px;color:var(--muted);}
 .add-field input[type=text]{
   padding:7px 9px;border:1px solid var(--line);border-radius:4px;font-size:12.5px;font-family:inherit;
 }
+.add-field.pos-field{order:1;}
 .add-field.pos-field input{width:80px;}
+.add-field.zh-field{order:2;}
 .add-field.zh-field input{width:160px;}
-.add-field.en-field input{width:160px;}
-.add-phrase-check{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding-bottom:8px;}
-.add-row-submit{padding:8px 16px;}
+.add-field.en-field{flex:1 1 100%;order:10;}
+.add-field.en-field textarea{
+  width:100%;min-width:240px;padding:8px 10px;border:1px solid var(--line);border-radius:4px;
+  font-size:12.5px;font-family:inherit;resize:vertical;min-height:36px;max-height:160px;line-height:1.5;
+}
+.add-phrase-check{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);padding-bottom:8px;order:11;}
+.add-row-submit{padding:8px 16px;order:12;}
+.add-row-hint{flex-basis:100%;font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5;order:13;}
+.add-row-hint b{color:var(--accent);}
 
 .empty-note{padding:24px;text-align:center;color:var(--muted);font-size:13px;}
 
@@ -272,7 +290,7 @@ iframe{width:100%;height:520px;border:none;display:block;}
   <div class="panel active" id="panel-1">
     <div class="card">
       <h2>上傳單字庫</h2>
-      <p class="hint">上傳一個或多個雜誌格式 JSON 檔案，或直接貼上 JSON 內容（可貼多份）。也可以純文字貼上。</p>
+      <p class="hint">上傳一個或多個單字格式 JSON 檔案，或直接貼上 JSON 內容（可貼多份）。也可以純文字貼上。</p>
 
       <div class="mode-toggle">
         <div class="mode-btn active" data-mode="upload">上傳 JSON 檔案</div>
@@ -294,7 +312,7 @@ iframe{width:100%;height:520px;border:none;display:block;}
       </div>
 
       <div id="input-magazine-wrap" style="display:none;">
-        <label class="field-label">貼上雜誌格式 JSON 內容（可貼多份，直接接續貼在同一個框內即可，工具會自動抓出每一份的 words 陣列）</label>
+        <label class="field-label">貼上單字格式 JSON 內容（可貼多份，直接接續貼在同一個框內即可，工具會自動抓出每一份的 words 陣列）</label>
         <textarea id="ta-magazine" placeholder='{
   "unit": 1,
   "words": [
@@ -316,6 +334,7 @@ iframe{width:100%;height:520px;border:none;display:block;}
         <p class="hint" style="margin-top:10px;">會自動讀取每份的 <code>words</code> 陣列；<code>pos</code> 含 phr 或 <code>meaning</code> 開頭是 phr. 都視為片語。</p>
         <div class="copy-example-row">
           <button type="button" class="copy-example-btn" data-target="magazine">📋 複製 JSON 範例</button>
+          <button type="button" class="copy-prompt-btn" data-target="magazine">🤖 複製給 AI 的提示詞</button>
           <span class="copy-example-status" id="copy-status-magazine"></span>
         </div>
       </div>
@@ -331,6 +350,7 @@ phr. / 引起（某人的）共鳴 / strike a chord (with sb.)"></textarea>
         <p class="hint" style="margin-top:10px;">👆 貼上時請照這個格式；點下面按鈕可以直接複製一段範例貼去修改。詞性欄要含片語請打 <code>phr.</code>（複合詞性如 <code>v/n.</code> 也支援，前後多打空格或格式不整齊也沒關係）。</p>
         <div class="copy-example-row">
           <button type="button" class="copy-example-btn" data-target="text">📋 複製純文字範例</button>
+          <button type="button" class="copy-prompt-btn" data-target="text">🤖 複製給 AI 的提示詞</button>
           <span class="copy-example-status" id="copy-status-text"></span>
         </div>
       </div>
@@ -367,6 +387,7 @@ phr. / 引起（某人的）共鳴 / strike a chord (with sb.)"></textarea>
 
       <div id="total-badge" class="total-badge">預計抽出 0 題</div>
       <div class="status-line err" id="step2-status"></div>
+      <div class="status-line overlimit-block" id="step2-overlimit" style="display:none;"></div>
 
       <div class="count-box" style="margin-top:16px;">
         <h3>考卷資訊</h3>
@@ -374,7 +395,7 @@ phr. / 引起（某人的）共鳴 / strike a chord (with sb.)"></textarea>
           <label class="field-label" style="margin:0;white-space:nowrap;">一題　<input type="number" id="score-per-item" min="0" step="0.5" placeholder="3" style="width:60px;padding:7px 8px;border:1px solid var(--line);border-radius:4px;font-family:var(--mono);"> 分</label>
           <label class="field-label" style="margin:0;white-space:nowrap;">總分　<input type="number" id="score-total" min="0" placeholder="120" style="width:70px;padding:7px 8px;border:1px solid var(--line);border-radius:4px;font-family:var(--mono);"></label>
         </div>
-        <p class="hint" id="score-hint" style="margin:10px 0 8px;">未填寫時預設「一題 3 分、總分 120」；抽出題目後也會顯示自動建議值可參考。</p>
+        <p class="hint" id="score-hint" style="margin:10px 0 8px;">未填寫時預設「一題 3 分」，總分會依實際題數自動換算；抽出題目後也會顯示自動建議值可參考。</p>
         <label class="field-label" style="margin-top:6px;">範圍（選填，會顯示在考卷右上角，沒填就空著）</label>
         <input type="text" id="quiz-scope-input" placeholder="例如：Unit 1 ~ Unit 2" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:4px;font-size:13px;">
       </div>
@@ -390,15 +411,16 @@ phr. / 引起（某人的）共鳴 / strike a chord (with sb.)"></textarea>
   <div class="panel" id="panel-3">
     <div class="card">
       <h2>確認清單</h2>
-      <p class="hint">刪掉不要的字（會自動從原始清單補一個進來）。點右側鈕可切換該題為「英翻中」。片語固定列在最後。</p>
+      <p class="hint">刪掉不要的字（會自動從原始清單補一個進來）。點右側鈕可切換該題為「英翻中」。片語固定列在最後，手動新增的加分題／空白欄固定列在最最後。</p>
 
       <div class="review-toolbar">
-        <div class="review-count">共 <b id="review-total">0</b> 題（單字 <span id="review-word-n">0</span>／片語 <span id="review-phr-n">0</span>）</div>
+        <div class="review-count">共 <b id="review-total">0</b> 題（單字 <span id="review-word-n">0</span>／片語 <span id="review-phr-n">0</span><span id="review-manual-wrap">／加分題 <span id="review-manual-n">0</span></span>）</div>
         <div class="legend">
           <span><span class="dot c2e"></span>中翻英（預設）</span>
           <span><span class="dot e2c"></span>英翻中</span>
         </div>
       </div>
+      <div class="status-line overlimit-block" id="review-overlimit-note" style="display:none;"></div>
 
       <div class="word-list" id="word-list"></div>
       <div class="status-line" id="step3-status"></div>
@@ -422,6 +444,8 @@ phr. / 引起（某人的）共鳴 / strike a chord (with sb.)"></textarea>
         <div class="export-stat"><div class="n" id="sum-phr">0</div><div class="l">片語</div></div>
         <div class="export-stat"><div class="n" id="sum-e2c">0</div><div class="l">英翻中題數</div></div>
       </div>
+
+      <div class="status-line overlimit-warn" id="step4-overlimit"></div>
 
       <div class="preview-frame-wrap">
         <iframe id="preview-frame"></iframe>
@@ -533,6 +557,69 @@ document.querySelectorAll(".copy-example-btn").forEach(btn=>{
       statusEl.textContent = "已直接填入下方欄位（瀏覽器不支援複製到剪貼簿）。";
     }
     setTimeout(()=>{ statusEl.textContent = ""; }, 3500);
+  });
+});
+
+/* ── 給 AI 的提示詞：老師把自己的單字清單貼在提示詞後面，丟給 LLM，
+      請 LLM 幫忙整理成這個工具吃得下的格式 ── */
+const PROMPT_TEXT = `請幫我把下面的英文單字／片語清單，整理成這個格式，每行一個，用「/」分隔三個欄位：
+
+詞性 / 中文意思 / 英文
+
+規則：
+1. 詞性請用縮寫並加句點，例如 adj. n. v. adv. phr.（片語一律用 phr.）
+2. 如果同一個字有兩種詞性（例如同時是動詞和名詞），詞性欄請寫成 v/n. 這種形式
+3. 中文意思可以包含逗號、頓號，不影響格式
+4. 只要輸出整理好的清單，不要加其他說明文字或編號
+
+範例格式：
+adj. / 顯而易見的 / apparent
+n. / 週年紀念日 / anniversary
+v/n. / 幫助，援助 / aid
+phr. / 由於 / by virtue of
+
+我的單字清單如下，請照上面規則整理：
+（請在這裡貼上你的單字清單，可以是任何格式，例如中英對照表、課本單字表、或雜亂的筆記都可以）
+`;
+
+const PROMPT_MAGAZINE = `請幫我把下面的英文單字／片語清單，整理成這個 JSON 格式：
+
+{
+  "words": [
+    { "word": "英文單字或片語", "pos": "詞性縮寫（不加句點，例如 n、v、adj、adv、phr）", "meaning": "詞性縮寫加句點＋中文意思，例如：n. 崩潰、瓦解；倒塌" }
+  ]
+}
+
+規則：
+1. "pos" 欄位不要加句點，片語請寫 "phr"
+2. "meaning" 欄位開頭要重複一次詞性（這次要加句點），後面接中文意思，例如 "n. 崩潰、瓦解；倒塌"
+3. 如果同一個字有兩種詞性，"pos" 可以寫成 "v/n"，"meaning" 對應寫成 "v/n. 中文意思"
+4. 只要輸出完整合法的 JSON，不要加其他說明文字，也不要用 markdown 的程式碼區塊符號包起來
+
+範例格式：
+{
+  "words": [
+    { "word": "collapse", "pos": "n", "meaning": "n. 崩潰、瓦解；倒塌" },
+    { "word": "strike a chord (with sb.)", "pos": "phr", "meaning": "phr. 引起（某人的）共鳴" }
+  ]
+}
+
+我的單字清單如下，請照上面規則整理：
+（請在這裡貼上你的單字清單，可以是任何格式，例如中英對照表、課本單字表、或雜亂的筆記都可以）
+`;
+
+document.querySelectorAll(".copy-prompt-btn").forEach(btn=>{
+  btn.addEventListener("click", async ()=>{
+    const target = btn.dataset.target;
+    const text = target==="magazine" ? PROMPT_MAGAZINE : PROMPT_TEXT;
+    const statusEl = document.getElementById("copy-status-"+target);
+    try{
+      await navigator.clipboard.writeText(text);
+      statusEl.textContent = "✅ 提示詞已複製！貼到 ChatGPT／Claude 等 AI 對話框，接著貼上你的單字清單即可。";
+    }catch(err){
+      statusEl.textContent = "瀏覽器不支援自動複製，請手動選取文字複製。";
+    }
+    setTimeout(()=>{ statusEl.textContent = ""; }, 5000);
   });
 });
 
@@ -687,7 +774,7 @@ function splitConcatenatedJSON(raw){
   return blobs.length ? blobs : [raw];
 }
 
-/* 雜誌格式：支援單一物件、陣列、或多份物件接連貼在一起 */
+/* 單字格式：支援單一物件、陣列、或多份物件接連貼在一起 */
 function parseMagazineJSON(raw, errors){
   const trimmed = raw.trim();
   let items = [];
@@ -807,7 +894,10 @@ function resolveScores(perItemStr, totalStr, questionCount){
   } else if(perItem===null && total!==null){
     perItem = questionCount>0 ? +(total/questionCount).toFixed(2) : 3;
   } else if(perItem===null && total===null){
-    perItem = 3; total = 120;
+    // 兩者都沒填：以「一題 3 分」為預設基準，依實際題數換算總分
+    // （題數剛好 40 題時，3×40=120，符合舊有慣例；題數不同時會正確跟著變動，不會再寫死 120）
+    perItem = 3;
+    total = questionCount>0 ? +(3*questionCount).toFixed(1) : 120;
   }
   return {perItem, total};
 }
@@ -846,6 +936,19 @@ function updateTotalBadge(){
     : `預計抽出：單字 ${wordTarget} 題　＋　片語 ${!phrCountManuallySet? `${phrTarget}（預設全部）`:phrTarget} 題`;
   badge.classList.toggle("warn", !!statusEl.textContent);
 
+  // 超過 40 題會擋下（不能進下一步）：因為 Step 3 的「刪除」機制會自動補字，
+  // 題數在那裡是守恆的，只有在這裡（Step 2）調整才真正有效
+  const overLimitEl = document.getElementById("step2-overlimit");
+  const approxTotal = wordTarget + phrTarget;
+  const overAmount = approxTotal - 40;
+  if(approxTotal > 40){
+    overLimitEl.textContent = `⚠️ 單字＋片語共 ${approxTotal} 題，超過 40 題上限，請減少 ${overAmount} 題才能繼續（下一步的「刪除」不會減少總題數，因為會自動補字）。`;
+    overLimitEl.style.display = "";
+  } else {
+    overLimitEl.textContent = "";
+    overLimitEl.style.display = "none";
+  }
+
   // 分數建議提示
   const approxCount = wordTarget + phrTarget;
   const perStr = document.getElementById("score-per-item").value;
@@ -853,7 +956,7 @@ function updateTotalBadge(){
   const {perItem, total: totalScore} = resolveScores(perStr, totStr, approxCount || 1);
   const hintEl = document.getElementById("score-hint");
   if(perStr==="" && totStr===""){
-    let suggestMsg = `未填寫時預設「一題 3 分、總分 120」`;
+    let suggestMsg = `未填寫時預設「一題 3 分」，總分依實際題數自動換算`;
     if(suggestedTotalFromConfig){
       suggestMsg += `；偵測到題庫建議總題數約 ${suggestedTotalFromConfig} 題`;
     }
@@ -903,6 +1006,12 @@ document.getElementById("btn-draw").addEventListener("click", ()=>{
     return;
   }
 
+  const {wordTarget: checkWordTarget, phrTarget: checkPhrTarget} = resolveDrawCounts(wordValStr, phrValStr, wordPoolIdx.length, phrPoolIdx.length);
+  if(checkWordTarget + checkPhrTarget > 40){
+    statusEl.textContent = `單字＋片語共 ${checkWordTarget + checkPhrTarget} 題，超過 40 題上限，請先減少數量再抽字。`;
+    return;
+  }
+
   const {wordTarget, phrTarget} = resolveDrawCounts(wordValStr, phrValStr, wordPoolIdx.length, phrPoolIdx.length);
 
   const chosenWords = shuffle(wordPoolIdx).slice(0, wordTarget);
@@ -936,16 +1045,44 @@ function makeItem(w){
 /* ══════════════════════════════════════════════════════════
    STEP 3: REVIEW LIST
    ══════════════════════════════════════════════════════════ */
+function isBlankBonusItem(w){
+  // 白欄／加分題判斷：詞性與中文都留空，只有英文（通常是一句完整英文句子挖空）
+  return (!w.pos || w.pos.trim()==="") && (!w.zh || w.zh.trim()==="");
+}
+
 function renderReview(){
   const listEl = document.getElementById("word-list");
   listEl.innerHTML = "";
 
-  const words = drawnWords.filter(w=>!w.isPhrase);
-  const phrases = drawnWords.filter(w=>w.isPhrase);
+  const words = drawnWords.filter(w=>!w.isPhrase && !isBlankBonusItem(w));
+  const phrases = drawnWords.filter(w=>w.isPhrase && !isBlankBonusItem(w));
+  const blanks = drawnWords.filter(w=>isBlankBonusItem(w));
 
-  document.getElementById("review-total").textContent = drawnWords.length;
+  const totalCount = drawnWords.length;
+  document.getElementById("review-total").textContent = totalCount;
   document.getElementById("review-word-n").textContent = words.length;
   document.getElementById("review-phr-n").textContent = phrases.length;
+  document.getElementById("review-manual-n").textContent = blanks.length;
+  document.getElementById("review-manual-wrap").style.display = blanks.length ? "" : "none";
+
+  const countEl = document.querySelector(".review-count");
+  countEl.classList.toggle("over-limit", totalCount > 40);
+
+  const overNoteEl = document.getElementById("review-overlimit-note");
+  if(totalCount > 40){
+    const wordsPhrasesCount = words.length + phrases.length;
+    if(blanks.length > 0 && wordsPhrasesCount <= 40){
+      // 超標完全是手動新增的加分題／白欄造成的：這裡刪除有用，提示可以刪加分題
+      overNoteEl.textContent = `⚠️ 共 ${totalCount} 題，超過 40 題上限（超出 ${totalCount-40} 題）。超出的部分來自手動新增的加分題／空白欄，可以點下方加分題旁的「×」刪除來減少題數。`;
+    } else {
+      // 超標包含單字/片語（理論上 Step 2 已擋下，這裡是防禦性文案）：刪除在這裡沒用，要回 Step 2
+      overNoteEl.textContent = `⚠️ 共 ${totalCount} 題，超過 40 題上限（超出 ${totalCount-40} 題）。這裡刪除單字或片語會自動補字、題數不會減少，請回上一步（設定題數）調整單字／片語數量。`;
+    }
+    overNoteEl.style.display = "";
+  } else {
+    overNoteEl.textContent = "";
+    overNoteEl.style.display = "none";
+  }
 
   if(drawnWords.length===0){
     const emptyNote = document.createElement("div");
@@ -969,12 +1106,23 @@ function renderReview(){
       listEl.appendChild(buildRow(w, num++));
     });
   }
+  if(blanks.length){
+    const div2 = document.createElement("div");
+    div2.className = "phr-divider blank-divider";
+    div2.textContent = "手動新增的加分題／空白欄（固定列於最後）";
+    listEl.appendChild(div2);
+    blanks.forEach(w=>{
+      listEl.appendChild(buildRow(w, num++));
+    });
+  }
   listEl.appendChild(buildAddRowUI());
 }
 
+
 function buildRow(w, num){
   const row = document.createElement("div");
-  row.className = "word-row" + (w.isPhrase ? " phr-row" : "");
+  const isBlank = isBlankBonusItem(w);
+  row.className = "word-row" + (w.isPhrase ? " phr-row" : "") + (isBlank ? " blank-row" : "");
   row.dataset.id = w._id;
 
   const rn = document.createElement("div");
@@ -983,7 +1131,7 @@ function buildRow(w, num){
 
   const tag = document.createElement("div");
   tag.className = "tag";
-  tag.textContent = w.isPhrase ? "phr." : "單字";
+  tag.textContent = isBlank ? "加分題" : (w.isPhrase ? "phr." : "單字");
 
   const body = document.createElement("div");
   body.className = "body";
@@ -1069,16 +1217,18 @@ function buildAddRowUI(){
   const toggleBtn = document.createElement("div");
   toggleBtn.className = "add-row-toggle";
   toggleBtn.textContent = "＋ 手動新增一題";
+  toggleBtn.title = "詞性、中文都可以留空，適合加分題或自訂空白欄";
 
   const form = document.createElement("div");
   form.className = "add-row-form" + (addRowFormOpen ? " open" : "");
 
   form.innerHTML = `
-    <div class="add-field pos-field"><label>詞性</label><input type="text" id="add-pos" placeholder="adj. / n. / phr."></div>
-    <div class="add-field zh-field"><label>中文</label><input type="text" id="add-zh" placeholder="中文意思"></div>
-    <div class="add-field en-field"><label>英文</label><input type="text" id="add-en" placeholder="英文單字／片語"></div>
+    <div class="add-field pos-field"><label>詞性（選填）</label><input type="text" id="add-pos" placeholder="adj. / n. / phr."></div>
+    <div class="add-field zh-field"><label>中文（選填）</label><input type="text" id="add-zh" placeholder="中文意思"></div>
+    <div class="add-field en-field"><label>英文＊</label><textarea id="add-en" placeholder="英文單字／片語／完整句子" rows="1"></textarea></div>
     <label class="add-phrase-check"><input type="checkbox" id="add-is-phrase"> 這是片語（會排到最後）</label>
-    <button type="button" class="primary add-row-submit" id="add-row-submit">新增</button>
+    <button type="button" class="primary add-row-submit" id="add-row-submit">＋ 新增這一題</button>
+    <div class="add-row-hint">詞性、中文都可以留空 → 適合出加分題或自訂空白欄（只填英文，考卷上不會印詞性和中文），固定排在考卷最後。填完文字後<b>務必按「新增這一題」</b>才會真正加進清單，光是打字還不會生效。</div>
   `;
 
   toggleBtn.addEventListener("click", ()=>{
@@ -1098,6 +1248,13 @@ function buildAddRowUI(){
     const enInput = form.querySelector("#add-en");
     const phraseCheck = form.querySelector("#add-is-phrase");
 
+    // textarea 自動長高，避免長句子被裁切看不到
+    function autoGrow(){
+      enInput.style.height = "auto";
+      enInput.style.height = (enInput.scrollHeight) + "px";
+    }
+    enInput.addEventListener("input", autoGrow);
+
     function submitNewItem(){
       const en = enInput.value.trim();
       const zh = zhInput.value.trim();
@@ -1107,7 +1264,7 @@ function buildAddRowUI(){
 
       if(!en){
         statusEl.className = "status-line err";
-        statusEl.textContent = "請至少填寫英文欄位再新增。";
+        statusEl.textContent = "請至少填寫英文欄位，再按「新增這一題」。";
         enInput.focus();
         return;
       }
@@ -1124,18 +1281,29 @@ function buildAddRowUI(){
       };
       drawnWords.push(newItem);
 
+      const isBlank = !pos && !zh && !isPhr;
       statusEl.className = "status-line ok";
-      statusEl.textContent = `已手動新增「${en}」。`;
+      statusEl.textContent = isBlank
+        ? `✅ 已加入清單：加分題／空白欄「${en}」，固定列在考卷最後。`
+        : `✅ 已加入清單：「${en}」。`;
       renderReview();
-      // 新增後保持表單展開並清空欄位，方便連續新增多題
+      // 新增後保持表單展開，並清空欄位方便連續新增多題
       addRowFormOpen = true;
     }
 
     submitBtn.addEventListener("click", submitNewItem);
-    [posInput, zhInput, enInput].forEach(inp=>{
+    [posInput, zhInput].forEach(inp=>{
       inp.addEventListener("keydown", (e)=>{
         if(e.key === "Enter"){ e.preventDefault(); submitNewItem(); }
       });
+    });
+    // 英文欄位是多行 textarea，Enter 用來換行（例如長句子），不會誤觸發送出
+    // 改用 Ctrl+Enter / Cmd+Enter 作為快速送出捷徑
+    enInput.addEventListener("keydown", (e)=>{
+      if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){
+        e.preventDefault();
+        submitNewItem();
+      }
     });
   }, 0);
 
@@ -1147,15 +1315,23 @@ function escapeHTML(s){
 }
 
 function deleteAndRefill(item){
-  const wantPhrase = item.isPhrase;
   drawnWords = drawnWords.filter(w=>w._id!==item._id);
+  const statusEl = document.getElementById("step3-status");
 
+  // 手動新增的加分題／空白欄：直接刪除，不從字庫補字
+  if(isBlankBonusItem(item)){
+    statusEl.className = "status-line ok";
+    statusEl.textContent = `已刪除加分題／空白欄「${item.en}」。`;
+    renderReview();
+    return;
+  }
+
+  const wantPhrase = item.isPhrase;
   // 從原始清單中找還沒被用過、同類型（單字/片語）的候選
   const candidates = originalPool
     .map((w,i)=>({w,i}))
     .filter(o=>!usedIds.has(o.i) && isPhrase(o.w)===wantPhrase);
 
-  const statusEl = document.getElementById("step3-status");
   if(candidates.length===0){
     statusEl.className = "status-line err";
     statusEl.textContent = wantPhrase
@@ -1204,7 +1380,11 @@ function firstLetterHint(en){
 
 function buildQuizItemHTML(num, w){
   let text;
-  if(w.mode==="e2c"){
+  const isBlank = isBlankBonusItem(w);
+  if(isBlank){
+    // 白欄／加分題：直接顯示英文原文（例如完整句子），不做字母提示，也不印詞性/中文
+    text = escapeHTML(w.en);
+  } else if(w.mode==="e2c"){
     text = `${escapeHTML(w.en)} <span class="ans-blank">＿＿＿＿＿＿＿＿</span>`;
   } else {
     text = `<span class="item-pos">${escapeHTML(w.pos)}</span>${escapeHTML(w.zh)} <span class="hint-blank">${firstLetterHint(w.en)}</span>`;
@@ -1212,7 +1392,10 @@ function buildQuizItemHTML(num, w){
   return `<div class="item-row"><div class="item-num">${num}</div><div class="item-text">${text}</div></div>`;
 }
 function buildAnswerItemHTML(num, w){
-  const text = `<span class="item-pos">${escapeHTML(w.pos)}</span>${escapeHTML(w.zh)} <b>${escapeHTML(w.en)}</b>`;
+  const isBlank = isBlankBonusItem(w);
+  const text = isBlank
+    ? `<b>${escapeHTML(w.en)}</b>`
+    : `<span class="item-pos">${escapeHTML(w.pos)}</span>${escapeHTML(w.zh)} <b>${escapeHTML(w.en)}</b>`;
   return `<div class="item-row"><div class="item-num">${num}</div><div class="item-text">${text}</div></div>`;
 }
 function buildColumnsHTML(itemsHTML){
@@ -1236,7 +1419,13 @@ function buildHeadHTML(isAnswer){
 }
 
 function buildFinalHTML(){
-  const orderedList = drawnWords; // words then phrases (already in this order from render logic build)
+  // 匯出時重新依「單字 → 片語 → 手動加分題／空白欄」排序，不依賴陣列本身的推入順序
+  // （刪除補字、手動新增都用 push，可能打亂原始順序，這裡統一重新整理）
+  const orderedList = [
+    ...drawnWords.filter(w=>!w.isPhrase && !isBlankBonusItem(w)),
+    ...drawnWords.filter(w=>w.isPhrase && !isBlankBonusItem(w)),
+    ...drawnWords.filter(w=>isBlankBonusItem(w))
+  ];
   const quizItems = orderedList.map((w,i)=>buildQuizItemHTML(i+1,w));
   const answerItems = orderedList.map((w,i)=>buildAnswerItemHTML(i+1,w));
   const quizBlock = `<div class="copy-block">${buildHeadHTML(false)}${buildColumnsHTML(quizItems)}</div>`;
@@ -1296,6 +1485,11 @@ function renderExport(){
   document.getElementById("sum-word").textContent = words;
   document.getElementById("sum-phr").textContent = phrases;
   document.getElementById("sum-e2c").textContent = e2c;
+
+  const overlimitEl = document.getElementById("step4-overlimit");
+  overlimitEl.textContent = drawnWords.length > 40
+    ? `⚠️ 目前共 ${drawnWords.length} 題，超過建議的 40 題上限，考卷版面可能會擠壓或跑版，請往下捲動預覽確認排版是否還可以接受。若要調整，回上一步可刪除手動新增的加分題；若是單字／片語造成超題，需回「設定題數」調整數量（上一步的刪除鈕會自動補字，無法用來減少單字／片語題數）。`
+    : "";
 
   const html = buildFinalHTML();
   const iframe = document.getElementById("preview-frame");
