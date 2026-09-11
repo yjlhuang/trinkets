@@ -1,0 +1,1845 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>池</title>
+<style>
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#8fb3a8;
+    -webkit-tap-highlight-color:transparent;touch-action:none;}
+  canvas{display:block;}
+  #veil{position:fixed;inset:0;background:#e8efe6;z-index:20;pointer-events:none;
+    transition:opacity 2.6s ease;}
+  #veil.gone{opacity:0;}
+  #hint{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:10;
+    font:300 13px/1.9 "Songti TC","Noto Serif TC",Georgia,serif;
+    color:rgba(255,255,255,.78);text-shadow:0 1px 6px rgba(0,40,30,.45);
+    letter-spacing:.22em;white-space:nowrap;pointer-events:none;
+    opacity:0;transition:opacity 1.8s ease;}
+  #hint.show{opacity:1;}
+  #hint.fade{opacity:0;}
+  @media (prefers-reduced-motion: reduce){ #veil{transition:none;} }
+</style>
+</head>
+<body>
+<div id="veil"></div>
+<div id="hint">拖曳環顧　滾輪遠近　輕點水面</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+'use strict';
+
+/* ============================================================
+   莫內之池  ——  常數與小工具
+   ============================================================ */
+
+var WATER_Y      = 0.0;      // 水面高度
+var POND_R       = 9.0;      // 水域半徑（岸線）
+var POND_DEEP    = 1.72;     // 池心深度
+var KOI_COUNT    = 24;
+
+var TAU = Math.PI * 2;
+var clamp = function(v,a,b){ return v<a?a:(v>b?b:v); };
+var lerp  = function(a,b,t){ return a+(b-a)*t; };
+var smoothstep = function(e0,e1,x){ var t=clamp((x-e0)/(e1-e0),0,1); return t*t*(3-2*t); };
+
+/* 固定種子亂數：讓每次打開的池子構圖一致 */
+var _seed = 0x9e3779b9;
+function rnd(){
+  _seed ^= _seed << 13; _seed >>>= 0;
+  _seed ^= _seed >> 17;
+  _seed ^= _seed << 5;  _seed >>>= 0;
+  return _seed / 4294967296;
+}
+function rr(a,b){ return a + (b-a)*rnd(); }
+function pick(arr){ return arr[Math.floor(rnd()*arr.length)%arr.length]; }
+
+/* 值雜訊 / fbm */
+function hash2(x,y){ var s=Math.sin(x*127.1+y*311.7)*43758.5453123; return s-Math.floor(s); }
+function vnoise(x,y){
+  var xi=Math.floor(x), yi=Math.floor(y), xf=x-xi, yf=y-yi;
+  var u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf);
+  var a=hash2(xi,yi), b=hash2(xi+1,yi), c=hash2(xi,yi+1), d=hash2(xi+1,yi+1);
+  return a*(1-u)*(1-v)+b*u*(1-v)+c*(1-u)*v+d*u*v;
+}
+function fbm(x,y,oct){
+  oct = oct||4; var s=0,a=0.5,f=1;
+  for(var i=0;i<oct;i++){ s+=a*vnoise(x*f,y*f); f*=2; a*=0.5; }
+  return s;
+}
+
+/* ---------- 水面波形：JS 與 GLSL 必須完全一致 ---------- */
+function waveAt(x,z,t){
+  var h = 0.0;
+  h += Math.sin(x*0.42 + t*0.55)*0.030;
+  h += Math.sin(z*0.33 - t*0.43)*0.026;
+  h += Math.sin((x*0.81 + z*0.62) + t*0.95)*0.013;
+  h += Math.sin((x*1.45 - z*1.18) - t*1.25)*0.008;
+  h += Math.sin((x*2.30 + z*1.90) + t*1.90)*0.004;
+  return h;
+}
+
+/* 漣漪池（最多 8 顆，共用給水面 shader 與蓮葉浮沉） */
+var RIPPLE_N = 8;
+var ripples = [];
+for (var i=0;i<RIPPLE_N;i++) ripples.push(new THREE.Vector4(0,0,-999,0));
+var rippleCursor = 0;
+function addRipple(x,z,amp){
+  var r = ripples[rippleCursor % RIPPLE_N];
+  r.set(x, z, now, amp);
+  rippleCursor++;
+}
+function rippleAt(x,z,t){
+  var h = 0.0;
+  for (var i=0;i<RIPPLE_N;i++){
+    var r = ripples[i];
+    if (r.w <= 0.0) continue;
+    var age = t - r.z;
+    if (age < 0.0 || age > 7.0) continue;
+    var dx=x-r.x, dz=z-r.y, d=Math.sqrt(dx*dx+dz*dz);
+    var front = age*1.35;
+    var env = Math.exp(-Math.abs(d-front)*1.9)*Math.exp(-age*0.42)*Math.exp(-d*0.06);
+    h += Math.sin((d-front)*8.0)*env*r.w*0.045;
+  }
+  return h;
+}
+
+var now = 0;   // 全域時間（秒）
+
+/* ---------- 岸線：不要是個完美的圓 ---------- */
+function pondRAt(ang){
+  return POND_R * (1.0
+    + 0.150*Math.sin(ang*2.0 + 1.10)
+    + 0.092*Math.sin(ang*3.0 - 0.42)
+    + 0.052*Math.sin(ang*5.0 + 2.20));
+}
+function pondRXZ(x,z){ return pondRAt(Math.atan2(z,x)); }
+
+/* ---------- 池底高度場 ---------- */
+function groundAt(x,z){
+  var r = Math.sqrt(x*x+z*z);
+  var PR = pondRXZ(x,z);
+  var y;
+  if (r <= PR){
+    var t = r/PR;
+    y = 0.22 - (0.22+POND_DEEP)*(1.0 - smoothstep(0,1,t));
+    y += (fbm(x*0.42+11, z*0.42+7, 4)-0.5)*0.30;
+    y += (fbm(x*1.35+3,  z*1.35+19,3)-0.5)*0.075;
+    /* 邊緣淺灘稍微抬起，長水草 */
+    y += smoothstep(0.62,1.0,t)*0.30;
+  } else {
+    var d = r - PR;
+    y = 0.22 + Math.min(d,5.5)*0.40 + Math.max(0,d-5.5)*0.10;
+    y += (fbm(x*0.30+11, z*0.30+7, 4)-0.5)*0.95;
+    y += (fbm(x*1.1+31,  z*1.1+5, 3)-0.5)*0.26;
+  }
+  return y;
+}
+
+/* ============================================================
+   渲染器 / 場景 / 光
+   ============================================================ */
+
+var renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1.75));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.30;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+var scene = new THREE.Scene();
+var SKY_COL = new THREE.Color(0xbdd3c9).convertSRGBToLinear();
+scene.background = SKY_COL;
+scene.fog = new THREE.Fog(0xafc7ba, 13, 46);
+scene.fog.color.convertSRGBToLinear();
+
+var camera = new THREE.PerspectiveCamera(46, window.innerWidth/window.innerHeight, 0.1, 120);
+
+/* 正午偏高的太陽，略斜以便在池底打出方向性 */
+var SUN_DIR = new THREE.Vector3(0.30, 0.90, 0.32).normalize();
+
+var sun = new THREE.DirectionalLight(0xfff2d6, 1.55);
+sun.position.copy(SUN_DIR).multiplyScalar(34);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 6;
+sun.shadow.camera.far  = 62;
+sun.shadow.camera.left = -12; sun.shadow.camera.right = 12;
+sun.shadow.camera.top  =  12; sun.shadow.camera.bottom = -12;
+sun.shadow.bias = -0.0009;
+sun.shadow.normalBias = 0.03;
+sun.shadow.radius = 2.2;
+scene.add(sun);
+scene.add(sun.target);
+
+var hemi = new THREE.HemisphereLight(0xbcdcf2, 0x2c4426, 0.46);
+scene.add(hemi);
+
+var fill = new THREE.DirectionalLight(0xa8cfe8, 0.22);
+fill.position.set(-14, 8, -12);
+scene.add(fill);
+
+/* ============================================================
+   鏡頭控制（自己寫，為了那種慢慢漂的阻尼感）
+   ============================================================ */
+
+var cam = {
+  theta: 2.42, phi: 0.62, dist: 12.4,
+  tTheta: 2.42, tPhi: 0.62, tDist: 12.4,
+  target: new THREE.Vector3(0, -0.25, 0),
+  idle: 0, drifting: true
+};
+var PHI_MIN = 0.20, PHI_MAX = 1.19;
+var DIST_MIN = 4.2, DIST_MAX = 18.0;
+var MAX_GROUND_RADIUS = 12.6;   // 不讓鏡頭飛到灌木叢外面去
+
+function applyCamera(){
+  var sp = Math.sin(cam.phi), cp = Math.cos(cam.phi);
+  /* 壓低視角時自動把鏡頭收回來，免得穿過岸邊的樹叢 */
+  var d = Math.min(cam.dist, MAX_GROUND_RADIUS / Math.max(sp, 0.05));
+  camera.position.set(
+    cam.target.x + d*sp*Math.sin(cam.theta),
+    cam.target.y + d*cp,
+    cam.target.z + d*sp*Math.cos(cam.theta)
+  );
+  camera.lookAt(cam.target);
+}
+
+var ptr = { down:false, x:0, y:0, moved:0, id:null };
+var pinch = { active:false, d0:0, dist0:0 };
+var el = renderer.domElement;
+
+function wake(){ cam.idle = 0; cam.drifting = false; hideHint(); }
+
+el.addEventListener('pointerdown', function(e){
+  if (e.pointerType === 'touch' && ptr.down) return;
+  ptr.down = true; ptr.x = e.clientX; ptr.y = e.clientY; ptr.moved = 0; ptr.id = e.pointerId;
+  el.setPointerCapture && el.setPointerCapture(e.pointerId);
+  wake();
+});
+el.addEventListener('pointermove', function(e){
+  if (!ptr.down || e.pointerId !== ptr.id) return;
+  var dx = e.clientX - ptr.x, dy = e.clientY - ptr.y;
+  ptr.x = e.clientX; ptr.y = e.clientY;
+  ptr.moved += Math.abs(dx) + Math.abs(dy);
+  cam.tTheta -= dx * 0.0042;
+  cam.tPhi   = clamp(cam.tPhi - dy*0.0035, PHI_MIN, PHI_MAX);
+  wake();
+});
+function endPtr(e){
+  if (!ptr.down) return;
+  ptr.down = false;
+  if (ptr.moved < 7) tapWater(e.clientX, e.clientY);
+}
+el.addEventListener('pointerup', endPtr);
+el.addEventListener('pointercancel', function(){ ptr.down = false; });
+
+el.addEventListener('wheel', function(e){
+  e.preventDefault();
+  cam.tDist = clamp(cam.tDist * (1 + Math.sign(e.deltaY)*0.075), DIST_MIN, DIST_MAX);
+  wake();
+}, {passive:false});
+
+/* 雙指縮放 */
+var touches = {};
+el.addEventListener('touchstart', function(e){
+  if (e.touches.length === 2){
+    ptr.down = false;
+    var a=e.touches[0], b=e.touches[1];
+    pinch.active = true;
+    pinch.d0 = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+    pinch.dist0 = cam.tDist;
+  }
+}, {passive:true});
+el.addEventListener('touchmove', function(e){
+  if (pinch.active && e.touches.length === 2){
+    var a=e.touches[0], b=e.touches[1];
+    var d = Math.hypot(a.clientX-b.clientX, a.clientY-b.clientY);
+    if (d > 4) cam.tDist = clamp(pinch.dist0 * (pinch.d0/d), DIST_MIN, DIST_MAX);
+    wake();
+  }
+}, {passive:true});
+el.addEventListener('touchend', function(e){
+  if (e.touches.length < 2) pinch.active = false;
+}, {passive:true});
+
+/* 點水面 → 漣漪 + 魚好奇 */
+var _ndc = new THREE.Vector2();
+var _ray = new THREE.Raycaster();
+var _plane = new THREE.Plane(new THREE.Vector3(0,1,0), -WATER_Y);
+var _hit = new THREE.Vector3();
+var curiosity = { x:0, z:0, t:-999 };
+
+function tapWater(cx, cy){
+  _ndc.x = (cx/window.innerWidth)*2 - 1;
+  _ndc.y = -(cy/window.innerHeight)*2 + 1;
+  _ray.setFromCamera(_ndc, camera);
+  if (!_ray.ray.intersectPlane(_plane, _hit)) return;
+  var r = Math.hypot(_hit.x, _hit.z);
+  if (r > POND_R - 0.3) return;
+  addRipple(_hit.x, _hit.z, 1.0);
+  curiosity.x = _hit.x; curiosity.z = _hit.z; curiosity.t = now;
+}
+
+/* 提示文字 */
+var hintEl = document.getElementById('hint');
+var hintHidden = false;
+setTimeout(function(){ if(!hintHidden) hintEl.classList.add('show'); }, 2600);
+function hideHint(){
+  if (hintHidden) return;
+  hintHidden = true;
+  hintEl.classList.remove('show'); hintEl.classList.add('fade');
+}
+setTimeout(hideHint, 13000);
+
+/* ============================================================
+   共用 shader 片段
+   ============================================================ */
+
+var U_TIME = { value: 0 };
+var U_RIPPLES = { value: ripples };
+
+var WATER_TINT   = new THREE.Color(0x15664f).convertSRGBToLinear();   // 散射進眼睛的綠
+var WATER_ABSORB = new THREE.Vector3(0.300, 0.098, 0.140);            // 每單位光程的吸收  // 水體吸收色（祖母綠）
+var CAUSTIC_COL  = new THREE.Color(0xdaffe8).convertSRGBToLinear();
+
+var GLSL_WAVE = [
+'float wavesAt(vec2 p, float t){',
+'  float h = 0.0;',
+'  h += sin(p.x*0.42 + t*0.55)*0.030;',
+'  h += sin(p.y*0.33 - t*0.43)*0.026;',
+'  h += sin((p.x*0.81 + p.y*0.62) + t*0.95)*0.013;',
+'  h += sin((p.x*1.45 - p.y*1.18) - t*1.25)*0.008;',
+'  h += sin((p.x*2.30 + p.y*1.90) + t*1.90)*0.004;',
+'  return h;',
+'}',
+'float ripplesAt(vec2 p, float t){',
+'  float h = 0.0;',
+'  for(int i=0;i<8;i++){',
+'    vec4 r = uRipples[i];',
+'    if(r.w <= 0.0) continue;',
+'    float age = t - r.z;',
+'    if(age < 0.0 || age > 7.0) continue;',
+'    float d = length(p - r.xy);',
+'    float front = age*1.35;',
+'    float env = exp(-abs(d-front)*1.9) * exp(-age*0.42) * exp(-d*0.06);',
+'    h += sin((d - front)*8.0) * env * r.w * 0.045;',
+'  }',
+'  return h;',
+'}'
+].join('\n');
+
+/* 池底焦散：經典 shadertoy 作法，壓低了強度 */
+var GLSL_CAUSTIC = [
+'float caustic(vec2 q, float t){',
+'  vec2 p = mod(q*6.2831853, 6.2831853) - 250.0;',
+'  vec2 i = p;',
+'  float c = 1.0;',
+'  const float inten = 0.005;',
+'  for(int n=0; n<4; n++){',
+'    float ti = t * (1.0 - (3.0/float(n+1)));',
+'    i = p + vec2(cos(ti - i.x) + sin(ti + i.y), sin(ti - i.y) + cos(ti + i.x));',
+'    c += 1.0/length(vec2(p.x/(sin(i.x+ti)/inten), p.y/(cos(i.y+ti)/inten)));',
+'  }',
+'  c /= 4.0;',
+'  c = 1.17 - pow(c, 1.4);',
+'  return clamp(pow(abs(c), 8.0), 0.0, 1.0);',
+'}'
+].join('\n');
+
+/* ------------------------------------------------------------
+   把「水下」的表現（焦散 + 水體吸收）注入任何標準材質
+   opt.caustic  焦散強度
+   opt.fogK     水體吸收速率
+   opt.fish     是否加上脊椎擺動的頂點動畫
+   ------------------------------------------------------------ */
+function underwater(mat, opt){
+  opt = opt || {};
+  var caus  = opt.caustic !== undefined ? opt.caustic : 1.0;
+  var fogK  = opt.fogK    !== undefined ? opt.fogK    : 0.100;
+  var isFish = !!opt.fish;
+  var sway  = opt.sway || 0;
+  var swaySpd = opt.swaySpeed !== undefined ? opt.swaySpeed : 1.0;
+  var key = 'uw|' + caus.toFixed(2) + '|' + fogK.toFixed(3) + '|' + (isFish?'f':'-') + '|' + sway.toFixed(3);
+
+  var extra = null;
+  if (isFish){
+    extra = {
+      uFreq:  { value: 3.0 },
+      uBend:  { value: 0.09 },
+      uPhase: { value: 0.0 },
+      uTurn:  { value: 0.0 },
+      uLen:   { value: 1.0 }
+    };
+    mat.userData.fu = extra;
+  }
+
+  mat.onBeforeCompile = function(sh){
+    sh.uniforms.uTime      = U_TIME;
+    sh.uniforms.uWaterCol  = { value: WATER_TINT };
+    sh.uniforms.uAbsorb    = { value: WATER_ABSORB };
+    sh.uniforms.uCausCol   = { value: CAUSTIC_COL };
+    sh.uniforms.uCausAmt   = { value: caus };
+    sh.uniforms.uFogK      = { value: fogK };
+    if (extra){ for (var k in extra) sh.uniforms[k] = extra[k]; }
+
+    /* ---- vertex ---- */
+    var vHead = [
+      'varying vec3 vWPos;',
+      'varying vec3 vWNrm;'
+    ];
+    if (isFish){
+      vHead.push(
+        'uniform float uTime; uniform float uFreq; uniform float uBend;',
+        'uniform float uPhase; uniform float uTurn; uniform float uLen;',
+        'attribute float aSpine;',
+        'float fishOff(float s){',
+        '  float amp = uBend * s*s*(0.35 + 0.65*s);',
+        '  return sin(uTime*uFreq - s*4.2 + uPhase)*amp + uTurn*s*s*0.5;',
+        '}'
+      );
+    }
+    if (sway > 0){
+      sh.uniforms.uSwayAmt = { value: sway };
+      sh.uniforms.uSwaySpd = { value: swaySpd };
+      vHead.push(
+        'uniform float uTime; uniform float uSwayAmt; uniform float uSwaySpd;',
+        'attribute float aPhase;'
+      );
+    }
+    sh.vertexShader = sh.vertexShader.replace(
+      '#include <common>', '#include <common>\n' + vHead.join('\n')
+    );
+
+    if (sway > 0){
+      sh.vertexShader = sh.vertexShader.replace(
+        '#include <begin_vertex>',
+        [ '#include <begin_vertex>',
+          '{',
+          '  float _h = max(transformed.y, 0.0);',
+          '  float _b = _h * _h * uSwayAmt;',
+          '  transformed.x += sin(uTime*uSwaySpd + aPhase) * _b;',
+          '  transformed.z += cos(uTime*uSwaySpd*0.79 + aPhase*1.7) * _b * 0.65;',
+          '}'
+        ].join('\n')
+      );
+    }
+
+    if (isFish){
+      /* 法線先轉，再位移頂點 —— three 的順序就是 normal 在前 */
+      sh.vertexShader = sh.vertexShader.replace(
+        '#include <beginnormal_vertex>',
+        [ '#include <beginnormal_vertex>',
+          '{',
+          '  float _s  = aSpine;',
+          '  float _o0 = fishOff(_s);',
+          '  float _o1 = fishOff(_s + 0.03);',
+          '  float _sl = (_o1 - _o0) / (-0.03 * uLen);',
+          '  float _a  = atan(_sl);',
+          '  float _c = cos(_a), _n = sin(_a);',
+          '  objectNormal = vec3(_c*objectNormal.x + _n*objectNormal.z,',
+          '                      objectNormal.y,',
+          '                     -_n*objectNormal.x + _c*objectNormal.z);',
+          '}'
+        ].join('\n')
+      ).replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\ntransformed.x += fishOff(aSpine);'
+      );
+    }
+
+    sh.vertexShader = sh.vertexShader.replace(
+      '#include <project_vertex>',
+      [ '#ifdef USE_INSTANCING',
+        '  vec4 _wp = modelMatrix * instanceMatrix * vec4(transformed, 1.0);',
+        '  vWNrm = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);',
+        '#else',
+        '  vec4 _wp = modelMatrix * vec4(transformed, 1.0);',
+        '  vWNrm = normalize(mat3(modelMatrix) * objectNormal);',
+        '#endif',
+        'vWPos = _wp.xyz;',
+        '#include <project_vertex>'
+      ].join('\n')
+    );
+
+    /* ---- fragment ---- */
+    sh.fragmentShader = sh.fragmentShader.replace(
+      '#include <common>',
+      [ '#include <common>',
+        'varying vec3 vWPos;',
+        'varying vec3 vWNrm;',
+        'uniform float uTime;',
+        'uniform vec3  uWaterCol;',
+        'uniform vec3  uAbsorb;',
+        'uniform vec3  uCausCol;',
+        'uniform float uCausAmt;',
+        'uniform float uFogK;',
+        GLSL_CAUSTIC
+      ].join('\n')
+    ).replace(
+      '#include <dithering_fragment>',
+      [ '{',
+        '  float under = 1.0 - smoothstep(-0.05, 0.03, vWPos.y);',
+        '  if (under > 0.001) {',
+        '    float dep = clamp(-vWPos.y, 0.0, 8.0);',
+        '    float up  = max(vWNrm.y, 0.0)*0.75 + 0.25;',
+        '    float caus = caustic(vWPos.xz*0.62, uTime*0.60);',
+        '    float shallow = exp(-dep*0.60);',
+        '    float shelf = smoothstep(0.0, 0.30, dep);',
+        '    gl_FragColor.rgb += uCausCol * caus * uCausAmt * 0.68 * up * (0.28 + 0.72*shallow) * under * shelf;',
+        '    float travel = dep*3.00 + length(vWPos - cameraPosition)*0.10;',
+        '    vec3  absorb = exp(-uAbsorb * travel);',
+        '    gl_FragColor.rgb *= mix(vec3(1.0), absorb, under);',
+        '    float sc = (1.0 - exp(-travel*uFogK)) * under;',
+        '    gl_FragColor.rgb += uWaterCol * sc;',
+        '  }',
+        '}',
+        '#include <dithering_fragment>'
+      ].join('\n')
+    );
+  };
+  mat.customProgramCacheKey = function(){ return key; };
+  return mat;
+}
+
+/* ============================================================
+   池底地形 + 岸
+   ============================================================ */
+
+function makeGrainTexture(){
+  var S = 256, cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  var ctx = cv.getContext('2d');
+  var img = ctx.createImageData(S,S);
+  for (var y=0;y<S;y++) for (var x=0;x<S;x++){
+    var n = fbm(x*0.11, y*0.11, 4)*0.6 + fbm(x*0.46, y*0.46, 3)*0.4;
+    var g = 150 + (n-0.5)*150;
+    var i = (y*S+x)*4;
+    img.data[i]   = clamp(g*1.02,0,255);
+    img.data[i+1] = clamp(g,0,255);
+    img.data[i+2] = clamp(g*0.93,0,255);
+    img.data[i+3] = 255;
+  }
+  ctx.putImageData(img,0,0);
+  var t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(14,14);
+  t.encoding = THREE.sRGBEncoding;
+  return t;
+}
+
+var C_DEEP    = new THREE.Color(0x24301c);
+var C_MID     = new THREE.Color(0x55603a);
+var C_SHALLOW = new THREE.Color(0x5d6b3c);
+var C_BANK    = new THREE.Color(0x3d5726);
+var C_BANK2   = new THREE.Color(0x27401d);
+
+var terrainGeo = new THREE.PlaneGeometry(52, 52, 190, 190);
+terrainGeo.rotateX(-Math.PI/2);
+(function(){
+  var p = terrainGeo.attributes.position;
+  var colors = new Float32Array(p.count*3);
+  var c = new THREE.Color();
+  for (var i=0;i<p.count;i++){
+    var x = p.getX(i), z = p.getZ(i);
+    var y = groundAt(x,z);
+    p.setY(i, y);
+    var m = fbm(x*0.9+41, z*0.9+13, 3);
+    if (y < -0.05){
+      var t = clamp((y + 1.85)/1.9, 0, 1);          // 0 深 → 1 淺
+      c.copy(C_DEEP).lerp(C_MID, smoothstep(0,0.62,t));
+      c.lerp(C_SHALLOW, smoothstep(0.58,1.0,t));
+      c.offsetHSL(0, 0, (m-0.5)*0.13);
+    } else {
+      c.copy(C_BANK).lerp(C_BANK2, m);
+      c.offsetHSL((m-0.5)*0.04, 0, (m-0.5)*0.10);
+    }
+    c.convertSRGBToLinear();
+    colors[i*3]=c.r; colors[i*3+1]=c.g; colors[i*3+2]=c.b;
+  }
+  terrainGeo.setAttribute('color', new THREE.BufferAttribute(colors,3));
+  terrainGeo.computeVertexNormals();
+})();
+
+var terrainMat = underwater(new THREE.MeshStandardMaterial({
+  vertexColors:true, map: makeGrainTexture(), roughness:0.97, metalness:0.0
+}), { caustic:1.0, fogK:0.155 });
+
+var terrain = new THREE.Mesh(terrainGeo, terrainMat);
+terrain.receiveShadow = true;
+scene.add(terrain);
+
+/* ============================================================
+   草葉（岸上）與水草（水下）—— 同一個葉片幾何
+   ============================================================ */
+
+/* InstancedMesh 的 instanceColor 需要材質開 vertexColors，
+   所以幾何上補一組全白的頂點色當乘數底 */
+function addWhiteColors(g){
+  var n = g.attributes.position.count;
+  var arr = new Float32Array(n*3);
+  arr.fill(1.0);
+  g.setAttribute('color', new THREE.BufferAttribute(arr,3));
+  return g;
+}
+
+function bladeGeometry(segs, curve){
+  segs = segs||5; curve = curve===undefined?0.20:curve;
+  var pos=[], nrm=[], idx=[];
+  for (var i=0;i<=segs;i++){
+    var t = i/segs;
+    var w = 0.5*Math.pow(1-t, 1.45)*(1-t*0.30) + 0.010;
+    var z = t*t*curve;
+    pos.push(-w, t, z,  w, t, z);
+    var ny = curve*t*1.4;
+    nrm.push(0,ny,1, 0,ny,1);
+  }
+  for (var j=0;j<segs;j++){
+    var a=j*2;
+    idx.push(a,a+2,a+1, a+1,a+2,a+3);
+  }
+  var g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('normal',   new THREE.Float32BufferAttribute(nrm,3));
+  g.setIndex(idx);
+  g.normalizeNormals();
+  addWhiteColors(g);
+  return g;
+}
+
+function scatterBlades(opts){
+  var geo = bladeGeometry(opts.segs, opts.curve);
+  var mat = underwater(new THREE.MeshStandardMaterial({
+    color: 0xffffff, roughness:0.88, metalness:0.0, side:THREE.DoubleSide,
+    vertexColors:true
+  }), { caustic: opts.caustic, fogK: opts.fogK, sway: opts.sway, swaySpeed: opts.swaySpeed });
+
+  var mesh = new THREE.InstancedMesh(geo, mat, opts.count);
+  mesh.castShadow = !!opts.shadow;
+  mesh.receiveShadow = false;
+  mesh.frustumCulled = false;
+
+  var phases = new Float32Array(opts.count);
+  var m = new THREE.Matrix4(), q = new THREE.Quaternion();
+  var e = new THREE.Euler(), v = new THREE.Vector3(), s = new THREE.Vector3();
+  var col = new THREE.Color();
+  var placed = 0, guard = 0;
+
+  while (placed < opts.count && guard < opts.count*40){
+    guard++;
+    var ang = rnd()*TAU;
+    var rad = Math.sqrt(lerp(opts.r0*opts.r0, opts.r1*opts.r1, rnd()));
+    var x = Math.cos(ang)*rad, z = Math.sin(ang)*rad;
+    var gy = groundAt(x,z);
+    if (gy < opts.yMin || gy > opts.yMax) continue;
+    if (opts.density && fbm(x*opts.density+7, z*opts.density+23, 3) < opts.densityCut) continue;
+
+    var h = rr(opts.hMin, opts.hMax);
+    var w = rr(opts.wMin, opts.wMax);
+    e.set(rr(-0.22,0.22), rnd()*TAU, rr(-0.22,0.22));
+    q.setFromEuler(e);
+    v.set(x, gy - 0.03, z);
+    s.set(w, h, w);
+    m.compose(v,q,s);
+    mesh.setMatrixAt(placed, m);
+    col.setHSL(opts.hue + rr(-opts.hueVar, opts.hueVar),
+               opts.sat + rr(-0.08,0.08),
+               opts.lum + rr(-opts.lumVar, opts.lumVar));
+    col.convertSRGBToLinear();
+    mesh.setColorAt(placed, col);
+    phases[placed] = rnd()*TAU;
+    placed++;
+  }
+  mesh.count = placed;
+  geo.setAttribute('aPhase', new THREE.InstancedBufferAttribute(phases,1));
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  mesh.instanceMatrix.needsUpdate = true;
+  scene.add(mesh);
+  return mesh;
+}
+
+/* 岸邊的草 */
+scatterBlades({
+  count: 9000, r0: POND_R-1.8, r1: 17.5, yMin: 0.02, yMax: 6.0,
+  hMin: 0.15, hMax: 0.52, wMin: 0.016, wMax: 0.038,
+  hue: 0.250, hueVar: 0.030, sat: 0.46, lum: 0.34, lumVar: 0.09,
+  caustic: 0.0, fogK: 0.02, sway: 0.16, swaySpeed: 1.35,
+  segs: 5, curve: 0.28, shadow: false,
+  density: 0.35, densityCut: 0.18
+});
+
+/* 水邊的挺水草：讓岸線不要是一條乾淨的線 */
+scatterBlades({
+  count: 2000, r0: POND_R*0.74, r1: POND_R*1.22, yMin: -0.55, yMax: 0.34,
+  hMin: 0.30, hMax: 0.92, wMin: 0.012, wMax: 0.028,
+  hue: 0.235, hueVar: 0.030, sat: 0.44, lum: 0.32, lumVar: 0.09,
+  caustic: 0.30, fogK: 0.100, sway: 0.20, swaySpeed: 0.95,
+  segs: 6, curve: 0.26, shadow: false,
+  density: 0.55, densityCut: 0.28
+});
+
+/* 水下的水草：照片裡那些細細長長的 */
+scatterBlades({
+  count: 1600, r0: 2.6, r1: POND_R*1.12, yMin: -1.5, yMax: -0.16,
+  hMin: 0.38, hMax: 1.15, wMin: 0.018, wMax: 0.042,
+  hue: 0.272, hueVar: 0.045, sat: 0.48, lum: 0.33, lumVar: 0.08,
+  caustic: 0.30, fogK: 0.100, sway: 0.11, swaySpeed: 0.45,
+  segs: 6, curve: 0.22, shadow: false,
+  density: 0.5, densityCut: 0.42
+});
+
+/* ============================================================
+   遠景灌木叢（低多邊形團塊，靠霧氣化開）
+   ============================================================ */
+(function(){
+  var base = new THREE.IcosahedronGeometry(1, 1);
+  (function(){
+    var p = base.attributes.position;
+    for (var i=0;i<p.count;i++){
+      var x=p.getX(i), y=p.getY(i), z=p.getZ(i);
+      var n = fbm(x*2.1+5, z*2.1+9, 3)*0.5 + fbm(y*2.4+2, x*2.4+7, 2)*0.5;
+      var k = 0.72 + n*0.62;
+      p.setXYZ(i, x*k, y*k*0.9, z*k);
+    }
+    base.computeVertexNormals();
+  })();
+
+  addWhiteColors(base);
+  var mat = new THREE.MeshStandardMaterial({ roughness:0.94, metalness:0, flatShading:true, vertexColors:true });
+  var N = 420;
+  var mesh = new THREE.InstancedMesh(base, mat, N);
+  mesh.castShadow = false; mesh.receiveShadow = false; mesh.frustumCulled = false;
+  var m=new THREE.Matrix4(), q=new THREE.Quaternion(), e=new THREE.Euler();
+  var v=new THREE.Vector3(), s=new THREE.Vector3(), c=new THREE.Color();
+  for (var i=0;i<N;i++){
+    var ang = rnd()*TAU;
+    var rad = rr(13.6, 26.0);
+    var x=Math.cos(ang)*rad, z=Math.sin(ang)*rad;
+    var sc = rr(0.45, 1.9) * (1 + (rad-13)*0.085);
+    var gy = groundAt(x,z);
+    e.set(rr(-0.3,0.3), rnd()*TAU, rr(-0.3,0.3));
+    q.setFromEuler(e);
+    v.set(x, gy + sc*0.52, z);
+    s.set(sc*rr(0.85,1.3), sc*rr(0.8,1.5), sc*rr(0.85,1.3));
+    m.compose(v,q,s);
+    mesh.setMatrixAt(i,m);
+    c.setHSL(0.262 + rr(-0.03,0.03), 0.40 + rr(-0.07,0.07), 0.215 + rr(-0.06,0.09));
+    c.convertSRGBToLinear();
+    mesh.setColorAt(i,c);
+  }
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  scene.add(mesh);
+})();
+
+/* ============================================================
+   錦鯉：幾何
+   身體沿 +Z 前進，鼻尖 z=+0.5，尾鰭往 -Z 拖出
+   aSpine 0(鼻) → 1(尾柄) → 1.3(尾鰭末端)
+   ============================================================ */
+
+var KOI_PROFILE = [
+  /* s,    半寬,   半高,   中心Y */
+  [0.00, 0.010, 0.016,  0.000],
+  [0.04, 0.042, 0.050,  0.003],
+  [0.10, 0.068, 0.086,  0.006],
+  [0.18, 0.083, 0.110,  0.007],
+  [0.28, 0.088, 0.122,  0.006],
+  [0.40, 0.082, 0.118,  0.002],
+  [0.52, 0.070, 0.104, -0.003],
+  [0.64, 0.055, 0.086, -0.007],
+  [0.75, 0.038, 0.064, -0.008],
+  [0.85, 0.022, 0.042, -0.006],
+  [0.93, 0.013, 0.026, -0.003],
+  [1.00, 0.007, 0.015,  0.000]
+];
+function profileAt(s){
+  s = clamp(s,0,1);
+  for (var i=0;i<KOI_PROFILE.length-1;i++){
+    var a = KOI_PROFILE[i], b = KOI_PROFILE[i+1];
+    if (s <= b[0]){
+      var t = (s-a[0])/(b[0]-a[0]+1e-9);
+      t = t*t*(3-2*t);
+      return { hw: lerp(a[1],b[1],t), hh: lerp(a[2],b[2],t), cy: lerp(a[3],b[3],t) };
+    }
+  }
+  var L = KOI_PROFILE[KOI_PROFILE.length-1];
+  return { hw:L[1], hh:L[2], cy:L[3] };
+}
+
+var V_BODY_TOP = 0.80;   // 貼圖上身體佔的 v 範圍
+var V_FIN_0    = 0.845;  // 鰭條佔的 v 範圍
+
+function buildKoiGeometry(){
+  var pos=[], uv=[], spine=[], idx=[];
+  function vert(x,y,z,u,v,s){ pos.push(x,y,z); uv.push(u,v); spine.push(s); return pos.length/3-1; }
+
+  /* ---------- 身體 ---------- */
+  var RINGS = 32, SIDES = 14;
+  var ringStart = [];
+  for (var i=0;i<RINGS;i++){
+    var s = Math.pow(i/(RINGS-1), 0.92);
+    var p = profileAt(s);
+    var z = 0.5 - s;
+    ringStart.push(pos.length/3);
+    for (var j=0;j<=SIDES;j++){
+      var a = (j/SIDES)*TAU;
+      vert(p.hw*Math.sin(a), p.cy + p.hh*Math.cos(a), z, j/SIDES, s*V_BODY_TOP, s);
+    }
+  }
+  for (var i=0;i<RINGS-1;i++){
+    for (var j=0;j<SIDES;j++){
+      var a = ringStart[i]+j,   b = a+1;
+      var c = ringStart[i+1]+j, d = c+1;
+      idx.push(a,c,b, b,c,d);
+    }
+  }
+  /* 鼻尖封口 */
+  var nose = vert(0, profileAt(0).cy, 0.5+0.012, 0.5, 0.0, 0.0);
+  for (var j=0;j<SIDES;j++) idx.push(nose, ringStart[0]+j+1, ringStart[0]+j);
+
+  /* ---------- 尾鰭（分叉） ---------- */
+  (function(){
+    var NU=7, NV=10, start=pos.length/3;
+    for (var iu=0; iu<=NU; iu++){
+      var u = iu/NU;
+      for (var iv=0; iv<=NV; iv++){
+        var v = -1 + 2*iv/NV;
+        var reach = 0.355*(0.40 + 0.60*Math.abs(v));
+        var z = -0.50 - u*reach;
+        var hgt = lerp(0.019, 0.150, Math.pow(u,0.82));
+        var y = v*hgt*(1 + 0.055*Math.sin(v*9.0)) - 0.002;
+        var x = 0.006*Math.sin(v*4.0)*u;
+        vert(x, y, z, v*0.5+0.5, V_FIN_0 + (1-V_FIN_0)*u, 1.0 + u*0.30);
+      }
+    }
+    for (var iu=0; iu<NU; iu++) for (var iv=0; iv<NV; iv++){
+      var a = start + iu*(NV+1) + iv;
+      var b = a+1, c = a+(NV+1), d = c+1;
+      idx.push(a,b,c, b,d,c);
+    }
+  })();
+
+  /* ---------- 通用鰭片 ---------- */
+  function fin(o){
+    var NU=5, NV=4, start=pos.length/3;
+    var root = o.root, dir = o.dir.clone().normalize(), side = o.side.clone().normalize();
+    for (var iu=0; iu<=NU; iu++){
+      var u = iu/NU;
+      for (var iv=0; iv<=NV; iv++){
+        var v = -1 + 2*iv/NV;
+        var w = o.w0*(1-u) + o.w1*u;
+        var px = root.x + dir.x*o.len*u + side.x*v*w;
+        var py = root.y + dir.y*o.len*u + side.y*v*w - o.droop*u*u;
+        var pz = root.z + dir.z*o.len*u + side.z*v*w;
+        vert(px, py, pz, v*0.5+0.5, V_FIN_0 + (1-V_FIN_0)*(0.25+0.75*u), o.spine);
+      }
+    }
+    for (var iu=0; iu<NU; iu++) for (var iv=0; iv<NV; iv++){
+      var a = start + iu*(NV+1) + iv;
+      var b = a+1, c = a+(NV+1), d = c+1;
+      idx.push(a,b,c, b,d,c);
+    }
+  }
+
+  /* 胸鰭 */
+  [1,-1].forEach(function(sgn){
+    var s = 0.19, p = profileAt(s);
+    fin({
+      root: new THREE.Vector3(sgn*p.hw*0.88, p.cy-0.018, 0.5-s),
+      dir:  new THREE.Vector3(sgn*0.52, -0.30, -0.80),
+      side: new THREE.Vector3(sgn*0.55, 0.72, 0.0),
+      len: 0.175, w0: 0.028, w1: 0.052, droop: 0.020, spine: s
+    });
+  });
+  /* 腹鰭 */
+  [1,-1].forEach(function(sgn){
+    var s = 0.56, p = profileAt(s);
+    fin({
+      root: new THREE.Vector3(sgn*p.hw*0.72, p.cy-p.hh*0.82, 0.5-s),
+      dir:  new THREE.Vector3(sgn*0.40, -0.46, -0.79),
+      side: new THREE.Vector3(sgn*0.62, 0.60, 0.0),
+      len: 0.105, w0: 0.020, w1: 0.034, droop: 0.012, spine: s
+    });
+  });
+  /* 臀鰭 */
+  (function(){
+    var s = 0.80, p = profileAt(s);
+    fin({
+      root: new THREE.Vector3(0, p.cy-p.hh*0.90, 0.5-s),
+      dir:  new THREE.Vector3(0, -0.62, -0.78),
+      side: new THREE.Vector3(1, 0, 0),
+      len: 0.085, w0: 0.012, w1: 0.020, droop: 0.0, spine: s
+    });
+  })();
+  /* 背鰭：沿背脊的一道低矮薄片 */
+  (function(){
+    var NU=10, start=pos.length/3;
+    for (var i=0;i<=NU;i++){
+      var u=i/NU;
+      var s = lerp(0.34, 0.80, u);
+      var p = profileAt(s);
+      var z = 0.5 - s;
+      var base = p.cy + p.hh*0.92;
+      var h = Math.sin(Math.pow(u,0.8)*Math.PI)*0.052 + 0.004;
+      vert(0, base, z, 0.5, V_FIN_0+0.02, s);
+      vert(0, base+h, z - 0.018, 0.5, 0.995, s);
+    }
+    for (var i=0;i<NU;i++){
+      var a = start+i*2, b=a+1, c=a+2, d=a+3;
+      idx.push(a,b,c, b,d,c);
+    }
+  })();
+
+  var g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('uv',       new THREE.Float32BufferAttribute(uv,2));
+  g.setAttribute('aSpine',   new THREE.Float32BufferAttribute(spine,1));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+var KOI_GEO = buildKoiGeometry();
+
+/* ============================================================
+   錦鯉：花紋貼圖（每隻現畫，所以不會有兩隻一樣）
+   u 橫軸：0=背脊 0.25=左側 0.5=腹 0.75=右側
+   v 縱軸：0=鼻 → 0.80=尾柄，0.845~1=鰭
+   ============================================================ */
+
+var TW = 512, TH = 256;
+var BODY_PX = TH * V_BODY_TOP;
+
+function blob(ctx, cx, cy, rx, ry, color, sd){
+  for (var rep=-1; rep<=1; rep++){
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    var N = 30;
+    for (var i=0;i<=N;i++){
+      var a = i/N*TAU;
+      var k = 0.66 + 0.62*vnoise(Math.cos(a)*2.1+sd, Math.sin(a)*2.1+sd);
+      var x = cx + rep*TW + Math.cos(a)*rx*k;
+      var y = cy + Math.sin(a)*ry*k;
+      if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.closePath(); ctx.fill();
+  }
+}
+
+function netPattern(ctx, alpha, color){
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.1;
+  var rows = 22, cols = 30;
+  for (var r=0;r<rows;r++){
+    var y = (r+0.5)/rows*BODY_PX;
+    var sc = 1 - r/rows*0.35;
+    for (var c=0;c<cols;c++){
+      var x = ((c + (r%2)*0.5)/cols)*TW;
+      ctx.beginPath();
+      ctx.arc(x, y, (TW/cols)*0.62*sc, Math.PI*0.12, Math.PI*0.88);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
+var KOI_PATTERNS = ['kohaku','kohaku','kohaku','sanke','sanke','showa','ogon',
+                    'platinum','asagi','chagoi','bekko','kohaku','ogon','showa'];
+
+function makeKoiTexture(kind){
+  var cv = document.createElement('canvas');
+  cv.width = TW; cv.height = TH;
+  var ctx = cv.getContext('2d');
+
+  var RED='#cc2a0c', DRED='#ab1f07', BLK='#191a1d', WHT='#e9e5d8';
+  var base = WHT, redN=0, blkN=0, net=0, netCol='#000', finCol=WHT;
+
+  if (kind==='kohaku'){ base=WHT; redN=5; net=0.05; netCol='#b9b3a4'; }
+  else if (kind==='sanke'){ base=WHT; redN=5; blkN=4; net=0.05; netCol='#b9b3a4'; }
+  else if (kind==='showa'){ base=BLK; redN=4; net=0.05; netCol='#3a3a3f'; finCol='#e9e5da'; }
+  else if (kind==='ogon'){ base='#d8a23c'; net=0.16; netCol='#8d6415'; finCol='#e3b558'; }
+  else if (kind==='platinum'){ base='#eeebe2'; net=0.12; netCol='#b8b4a8'; }
+  else if (kind==='asagi'){ base='#8ea5b6'; net=0.30; netCol='#3f5a70'; finCol='#c9803c'; }
+  else if (kind==='chagoi'){ base='#8b7144'; net=0.22; netCol='#5d4a26'; finCol='#a08b5c'; }
+  else if (kind==='bekko'){ base=WHT; blkN=5; net=0.05; netCol='#b9b3a4'; }
+
+  ctx.fillStyle = base; ctx.fillRect(0,0,TW,TH);
+
+  /* showa 先鋪大片白 */
+  if (kind==='showa'){
+    for (var i=0;i<3;i++)
+      blob(ctx, rr(-90,600), rr(15,BODY_PX-15), rr(75,130), rr(28,50), WHT, rnd()*40);
+  }
+  /* asagi 下腹的橘 */
+  if (kind==='asagi'){
+    var grd = ctx.createLinearGradient(0,0,TW,0);
+    grd.addColorStop(0.0,'rgba(201,128,60,0)');
+    grd.addColorStop(0.30,'rgba(201,128,60,0.85)');
+    grd.addColorStop(0.50,'rgba(214,150,80,0.35)');
+    grd.addColorStop(0.70,'rgba(201,128,60,0.85)');
+    grd.addColorStop(1.0,'rgba(201,128,60,0)');
+    ctx.fillStyle = grd; ctx.fillRect(0,0,TW,BODY_PX);
+  }
+
+  /* 紅斑：貼著背脊（u≈0 與 u≈1 的接縫兩側） */
+  for (var i=0;i<redN;i++){
+    var cy = rr(6, BODY_PX-14);
+    var cx = rr(-58, 58) + (rnd()<0.30 ? rr(-55,55) : 0);
+    blob(ctx, cx, cy, rr(78,140), rr(26,54), (rnd()<0.3?DRED:RED), rnd()*50);
+  }
+  /* 黑斑 */
+  for (var i=0;i<blkN;i++){
+    blob(ctx, rr(-120,140), rr(10,BODY_PX-20), rr(26,62), rr(12,28), BLK, rnd()*50);
+  }
+
+  if (net>0) netPattern(ctx, net, netCol);
+
+  /* 腹部提亮 */
+  var bg = ctx.createLinearGradient(0,0,TW,0);
+  var bellyA = (kind==='showa'||kind==='asagi') ? 0.45 : 0.30;
+  bg.addColorStop(0.0,'rgba(255,255,250,0)');
+  bg.addColorStop(0.34,'rgba(255,255,250,0)');
+  bg.addColorStop(0.50,'rgba(255,255,250,'+bellyA+')');
+  bg.addColorStop(0.66,'rgba(255,255,250,0)');
+  bg.addColorStop(1.0,'rgba(255,255,250,0)');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,TW,BODY_PX);
+
+  /* 背脊壓暗一點，讓俯視有立體感 */
+  var tg = ctx.createLinearGradient(0,0,TW,0);
+  tg.addColorStop(0.0,'rgba(0,20,15,0.09)');
+  tg.addColorStop(0.16,'rgba(0,20,15,0.0)');
+  tg.addColorStop(0.84,'rgba(0,20,15,0.0)');
+  tg.addColorStop(1.0,'rgba(0,20,15,0.09)');
+  ctx.fillStyle = tg; ctx.fillRect(0,0,TW,BODY_PX);
+
+  /* 鰭 */
+  ctx.fillStyle = finCol; ctx.fillRect(0, BODY_PX, TW, TH-BODY_PX);
+  ctx.save();
+  ctx.globalAlpha = 0.22; ctx.strokeStyle = '#6a6a5e'; ctx.lineWidth = 1;
+  for (var i=0;i<26;i++){
+    var x = i/26*TW;
+    ctx.beginPath(); ctx.moveTo(x, BODY_PX+2); ctx.lineTo(x+6, TH); ctx.stroke();
+  }
+  ctx.restore();
+
+  /* 眼睛 */
+  [0.175, 0.825].forEach(function(uu){
+    var ex = uu*TW, ey = 0.105*BODY_PX;
+    ctx.fillStyle = 'rgba(30,26,20,0.9)';
+    ctx.beginPath(); ctx.ellipse(ex, ey, 9, 7, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#0c0b0a';
+    ctx.beginPath(); ctx.ellipse(ex, ey, 5, 4, 0, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.beginPath(); ctx.ellipse(ex-2, ey-2, 1.8, 1.5, 0, 0, TAU); ctx.fill();
+  });
+
+  var tex = new THREE.CanvasTexture(cv);
+  tex.encoding = THREE.sRGBEncoding;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+/* ============================================================
+   錦鯉：行為
+   ============================================================ */
+
+function angWrap(a){ while(a>Math.PI) a-=TAU; while(a<-Math.PI) a+=TAU; return a; }
+
+function Koi(index){
+  var kind = KOI_PATTERNS[Math.floor(rnd()*KOI_PATTERNS.length) % KOI_PATTERNS.length];
+  this.kind = kind;
+  this.len  = (kind==='chagoi') ? rr(1.15,1.45) : rr(0.66,1.14);
+
+  var mat = underwater(new THREE.MeshStandardMaterial({
+    map: makeKoiTexture(kind),
+    roughness: (kind==='ogon'||kind==='platinum') ? 0.34 : 0.52,
+    metalness: (kind==='ogon'||kind==='platinum') ? 0.24 : 0.06,
+    side: THREE.DoubleSide
+  }), { fish:true, caustic:0.16, fogK:0.100 });
+
+  this.mat = mat;
+  this.fu  = mat.userData.fu;
+  this.fu.uPhase.value = rnd()*TAU;
+  this.fu.uLen.value   = this.len;
+
+  this.mesh = new THREE.Mesh(KOI_GEO, mat);
+  this.mesh.rotation.order = 'YXZ';
+  this.mesh.scale.setScalar(this.len);
+  this.mesh.castShadow = true;
+  this.mesh.receiveShadow = false;
+  scene.add(this.mesh);
+
+  var ang = rnd()*TAU, rad = rr(0.8, POND_R*0.66);
+  this.x = Math.cos(ang)*rad;
+  this.z = Math.sin(ang)*rad;
+  this.y = -0.55;
+  this.py = this.y;
+  this.yaw = rnd()*TAU;
+  this.yawRate = 0;
+  this.speed = rr(0.08,0.18);
+  this.tspeed = this.speed;
+  this.na = rnd()*90;
+  this.nb = rnd()*90;
+  this.ytarget = -0.6;
+  this.curious = rnd() < 0.6;
+  this.curiousDelay = rr(0.5, 4.5);
+  this.rippleCool = rr(2,9);
+}
+
+Koi.prototype.yCeil = function(){ return WATER_Y - 0.085 - 0.125*this.len; };
+
+Koi.prototype.update = function(dt, all){
+  var gy = groundAt(this.x, this.z);
+  var yFloor = gy + 0.17*this.len + 0.06;
+  var yCeil  = this.yCeil();
+
+  /* --- 轉向 --- */
+  var steer = (fbm(this.na + now*0.055, this.nb, 3) - 0.5) * 2.2 * dt;
+
+  var r = Math.hypot(this.x, this.z);
+  var PR = pondRXZ(this.x, this.z);
+  var edge = smoothstep(PR*0.66, PR*0.92, r);
+  var shallow = smoothstep(yCeil - 0.12, yCeil + 0.30, yFloor);
+  var avoid = Math.max(edge, shallow);
+  if (avoid > 0.002){
+    var toC = Math.atan2(-this.x, -this.z);
+    steer += angWrap(toC - this.yaw) * avoid * 2.6 * dt;
+  }
+
+  /* 分離：不讓魚疊在一起，但也不讓牠們成群 */
+  var sep = 0, near = 0;
+  for (var i=0;i<all.length;i++){
+    var o = all[i];
+    if (o === this) continue;
+    var dx = o.x-this.x, dz = o.z-this.z, dy = o.y-this.y;
+    var d2 = dx*dx + dz*dz + dy*dy*2.2;
+    var R = 0.55*(this.len+o.len);
+    if (d2 < R*R && d2 > 1e-5){
+      var d = Math.sqrt(d2);
+      var away = Math.atan2(-dx, -dz);
+      sep += angWrap(away - this.yaw) * (1 - d/R);
+      near++;
+    }
+  }
+  if (near) steer += clamp(sep/near, -1.2, 1.2) * 2.4 * dt;
+
+  /* 對水面觸碰的好奇：慢慢靠過去看一眼 */
+  var cAge = now - curiosity.t;
+  if (this.curious && cAge > this.curiousDelay && cAge < this.curiousDelay + 7.0){
+    var cw = Math.sin(clamp((cAge-this.curiousDelay)/7.0,0,1)*Math.PI) * 0.85;
+    var toCur = Math.atan2(curiosity.x-this.x, curiosity.z-this.z);
+    steer += angWrap(toCur - this.yaw) * cw * 1.5 * dt;
+    if (this.ytarget > yCeil - 0.25) this.ytarget = yCeil - 0.02;
+  }
+
+  var maxTurn = 2.0*dt;
+  var turn = clamp(steer, -maxTurn, maxTurn);
+  this.yaw += turn;
+  this.yawRate = lerp(this.yawRate, turn/Math.max(dt,1e-4), 0.18);
+
+  /* --- 速度 --- */
+  if (rnd() < dt*0.14) this.tspeed = rr(0.05, 0.26) * (0.75 + 0.45*this.len);
+  if (rnd() < dt*0.012) this.tspeed = rr(0.45, 0.72);
+  this.speed = lerp(this.speed, this.tspeed * (1 - Math.min(Math.abs(this.yawRate)*0.22, 0.45)), clamp(dt*1.1,0,1));
+
+  this.x += Math.sin(this.yaw) * this.speed * dt;
+  this.z += Math.cos(this.yaw) * this.speed * dt;
+
+  /* --- 深度 --- */
+  if (rnd() < dt*0.09){
+    var bias = Math.pow(rnd(), 0.55);            // 偏向靠近水面
+    this.ytarget = lerp(yFloor + 0.05, yCeil, bias);
+  }
+  this.ytarget = clamp(this.ytarget, Math.min(yFloor, yCeil), yCeil);
+  this.py = this.y;
+  this.y = lerp(this.y, this.ytarget, clamp(dt*0.45,0,1));
+  this.y = clamp(this.y, Math.min(yFloor, yCeil), yCeil);
+  var vy = (this.y - this.py)/Math.max(dt,1e-4);
+
+  /* --- 靠近水面時推出漣漪 --- */
+  this.rippleCool -= dt;
+  if (this.rippleCool < 0 && this.y > yCeil - 0.06 && this.speed > 0.10){
+    addRipple(this.x, this.z, 0.30 + this.len*0.22);
+    this.rippleCool = rr(5, 16);
+  }
+
+  /* --- 姿態 --- */
+  var m = this.mesh;
+  m.position.set(this.x, this.y, this.z);
+  m.rotation.y = this.yaw;
+  m.rotation.x = clamp(-vy*1.1, -0.30, 0.30);
+  m.rotation.z = clamp(-this.yawRate*0.50, -0.45, 0.45);
+
+  /* --- 擺尾 --- */
+  var f = this.fu;
+  f.uFreq.value = 1.9 + this.speed*9.5 + Math.abs(this.yawRate)*1.1;
+  f.uBend.value = 0.052 + this.speed*0.30 + Math.abs(this.yawRate)*0.045;
+  f.uTurn.value = clamp(-this.yawRate*0.30, -0.16, 0.16);
+};
+
+var school = [];
+for (var ki=0; ki<KOI_COUNT; ki++) school.push(new Koi(ki));
+
+/* ============================================================
+   蓮葉
+   ============================================================ */
+
+function lilyPadGeometry(){
+  var pos=[], uv=[], idx=[];
+  var notch = 0.26, NA = 44, NR = 6;
+  for (var ir=0; ir<=NR; ir++){
+    var rad = ir/NR;
+    for (var ia=0; ia<=NA; ia++){
+      var a = notch + (TAU-2*notch)*(ia/NA);
+      var x = Math.cos(a)*rad, z = Math.sin(a)*rad;
+      var y = 0.055*Math.pow(rad,3.4) + 0.016*Math.sin(a*5.0)*rad*rad - 0.012*rad*rad;
+      pos.push(x,y,z);
+      uv.push(x*0.5+0.5, z*0.5+0.5);
+    }
+  }
+  for (var ir=0; ir<NR; ir++) for (var ia=0; ia<NA; ia++){
+    var a = ir*(NA+1)+ia, b=a+1, c=a+(NA+1), d=c+1;
+    idx.push(a,c,b, b,c,d);
+  }
+  var g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+  g.setAttribute('uv',       new THREE.Float32BufferAttribute(uv,2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  addWhiteColors(g);
+  return g;
+}
+
+function lilyPadTexture(){
+  var S=256, cv=document.createElement('canvas'); cv.width=cv.height=S;
+  var ctx=cv.getContext('2d'), c=S/2;
+  var g = ctx.createRadialGradient(c,c,4, c,c,c);
+  g.addColorStop(0,'#46612a'); g.addColorStop(0.55,'#547030');
+  g.addColorStop(0.88,'#425c25'); g.addColorStop(1,'#2f4418');
+  ctx.fillStyle=g; ctx.fillRect(0,0,S,S);
+  /* 葉脈 */
+  ctx.strokeStyle='rgba(140,170,95,0.26)';
+  for (var i=0;i<17;i++){
+    var a = i/17*TAU;
+    ctx.lineWidth = 2.2;
+    ctx.beginPath(); ctx.moveTo(c,c);
+    ctx.lineTo(c+Math.cos(a)*c, c+Math.sin(a)*c); ctx.stroke();
+  }
+  ctx.strokeStyle='rgba(120,150,80,0.22)';
+  for (var i=0;i<4;i++){
+    ctx.lineWidth=1.2; ctx.beginPath();
+    ctx.arc(c,c, c*(0.32+i*0.2), 0, TAU); ctx.stroke();
+  }
+  /* 斑駁 */
+  ctx.globalAlpha=0.14;
+  for (var i=0;i<90;i++){
+    ctx.fillStyle = rnd()<0.5 ? '#9ab55c' : '#3d4f22';
+    ctx.beginPath();
+    ctx.arc(rr(0,S), rr(0,S), rr(3,16), 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  var t=new THREE.CanvasTexture(cv);
+  t.encoding = THREE.sRGBEncoding;
+  return t;
+}
+
+var PAD_N = 54;
+var pads = [];
+var padMesh;
+(function(){
+  var geo = lilyPadGeometry();
+  var mat = underwater(new THREE.MeshStandardMaterial({
+    map: lilyPadTexture(), roughness:0.62, metalness:0.0,
+    side: THREE.DoubleSide, vertexColors:true
+  }), { caustic:0.0, fogK:0.02 });
+
+  padMesh = new THREE.InstancedMesh(geo, mat, PAD_N);
+  padMesh.castShadow = true; padMesh.receiveShadow = false;
+  padMesh.frustumCulled = false;
+  scene.add(padMesh);
+
+  /* 沿著岸邊聚成幾叢，像照片裡那樣 */
+  var clusters = [];
+  for (var i=0;i<7;i++){
+    var a = rnd()*TAU, rad = rr(POND_R*0.45, pondRAt(a)*0.86);
+    clusters.push([Math.cos(a)*rad, Math.sin(a)*rad, rr(0.9,2.1)]);
+  }
+  var col = new THREE.Color();
+  for (var i=0;i<PAD_N;i++){
+    var x,z,guard=0;
+    do {
+      if (rnd() < 0.82){
+        var cl = clusters[Math.floor(rnd()*clusters.length)%clusters.length];
+        var a = rnd()*TAU, d = Math.sqrt(rnd())*cl[2];
+        x = cl[0]+Math.cos(a)*d; z = cl[1]+Math.sin(a)*d;
+      } else {
+        var a2 = rnd()*TAU, r2 = Math.sqrt(rr(0.05,1))*POND_R*0.88;
+        x = Math.cos(a2)*r2; z = Math.sin(a2)*r2;
+      }
+      guard++;
+    } while (Math.hypot(x,z) > pondRXZ(x,z)*0.93 && guard < 30);
+
+    col.setHSL(0.250 + rr(-0.045,0.045), 0.28 + rr(-0.10,0.12), 0.49 + rr(-0.12,0.13));
+    if (rnd() < 0.10) col.setHSL(0.075 + rr(-0.02,0.03), 0.36, 0.42);
+    col.convertSRGBToLinear();
+    padMesh.setColorAt(i, col);
+    pads.push({
+      x:x, z:z, s: rr(0.16,0.46),
+      rot: rnd()*TAU, spin: rr(-0.018,0.018),
+      dx: rr(-0.004,0.004), dz: rr(-0.004,0.004)
+    });
+  }
+  if (padMesh.instanceColor) padMesh.instanceColor.needsUpdate = true;
+})();
+
+var _pm = new THREE.Matrix4(), _pq = new THREE.Quaternion(), _pq2 = new THREE.Quaternion();
+var _pv = new THREE.Vector3(), _ps = new THREE.Vector3(), _pn = new THREE.Vector3();
+var _UP = new THREE.Vector3(0,1,0);
+
+function updatePads(dt){
+  var e = 0.26;
+  for (var i=0;i<pads.length;i++){
+    var p = pads[i];
+    p.rot += p.spin*dt;
+    p.x += p.dx*dt; p.z += p.dz*dt;
+    var h  = waveAt(p.x, p.z, now) + rippleAt(p.x, p.z, now);
+    var hx = (waveAt(p.x+e,p.z,now)+rippleAt(p.x+e,p.z,now)) - (waveAt(p.x-e,p.z,now)+rippleAt(p.x-e,p.z,now));
+    var hz = (waveAt(p.x,p.z+e,now)+rippleAt(p.x,p.z+e,now)) - (waveAt(p.x,p.z-e,now)+rippleAt(p.x,p.z-e,now));
+    _pn.set(-hx/(2*e), 1, -hz/(2*e)).normalize();
+    _pq.setFromUnitVectors(_UP, _pn);
+    _pq2.setFromAxisAngle(_UP, p.rot);
+    _pq.multiply(_pq2);
+    _pv.set(p.x, WATER_Y + h + 0.006, p.z);
+    _ps.set(p.s, p.s, p.s);
+    _pm.compose(_pv,_pq,_ps);
+    padMesh.setMatrixAt(i,_pm);
+  }
+  padMesh.instanceMatrix.needsUpdate = true;
+}
+
+/* ============================================================
+   睡蓮花
+   ============================================================ */
+(function(){
+  function bloomGeometry(){
+    var pos=[], nrm=[], idx=[], cols=[];
+    var C_IN = new THREE.Color(0xfff4f4).convertSRGBToLinear(), C_TIP = new THREE.Color(0xf3c3d2).convertSRGBToLinear();
+    function petalRing(n, len, wid, tilt, lift, phase, tipMix){
+      for (var k=0;k<n;k++){
+        var az = phase + k/n*TAU;
+        var ca=Math.cos(az), sa=Math.sin(az);
+        var start = pos.length/3;
+        var NU=5, NV=2;
+        for (var iu=0; iu<=NU; iu++){
+          var u=iu/NU;
+          var w = Math.pow(Math.sin(Math.max(u,0.02)*Math.PI), 0.62)*wid;
+          var d = u*len;
+          var hh = Math.sin(u*Math.PI*0.92)*lift - u*u*tilt;
+          for (var iv=0; iv<=NV; iv++){
+            var v=-1+2*iv/NV;
+            var lx = v*w, lz = d;
+            pos.push(lx*ca - lz*sa, hh + Math.abs(v)*w*0.35, lx*sa + lz*ca);
+            nrm.push(0,1,0);
+            var c = C_IN.clone().lerp(C_TIP, u*tipMix);
+            cols.push(c.r,c.g,c.b);
+          }
+        }
+        for (var iu=0; iu<NU; iu++) for (var iv=0; iv<NV; iv++){
+          var a=start+iu*(NV+1)+iv, b=a+1, cc=a+(NV+1), dd=cc+1;
+          idx.push(a,b,cc, b,dd,cc);
+        }
+      }
+    }
+    petalRing(9, 0.50, 0.115, 0.16, 0.055, 0.0,  0.85);
+    petalRing(7, 0.36, 0.095, 0.05, 0.115, 0.35, 0.60);
+    petalRing(5, 0.22, 0.070,-0.05, 0.150, 0.70, 0.30);
+    /* 花心 */
+    var st = pos.length/3;
+    var NA=10;
+    pos.push(0,0.175,0); nrm.push(0,1,0); cols.push(0.98,0.84,0.35);
+    for (var i=0;i<=NA;i++){
+      var a=i/NA*TAU;
+      pos.push(Math.cos(a)*0.075, 0.115, Math.sin(a)*0.075);
+      nrm.push(0,1,0); cols.push(0.90,0.72,0.22);
+    }
+    for (var i=0;i<NA;i++) idx.push(st, st+1+i, st+2+i);
+
+    var g=new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos,3));
+    g.setAttribute('color',    new THREE.Float32BufferAttribute(cols,3));
+    g.setIndex(idx);
+    g.computeVertexNormals();
+    return g;
+  }
+
+  var geo = bloomGeometry();
+  var mat = underwater(new THREE.MeshStandardMaterial({
+    vertexColors:true, roughness:0.66, metalness:0.0, side:THREE.DoubleSide
+  }), { caustic:0.0, fogK:0.02 });
+
+  var N=6;
+  var mesh = new THREE.InstancedMesh(geo, mat, N);
+  mesh.castShadow = true; mesh.frustumCulled = false;
+  scene.add(mesh);
+  window.__blooms = { mesh:mesh, items:[] };
+  for (var i=0;i<N;i++){
+    var src = pads[Math.floor(rnd()*pads.length)%pads.length];
+    window.__blooms.items.push({
+      x: src.x + rr(-0.35,0.35), z: src.z + rr(-0.35,0.35),
+      s: rr(0.42,0.62), rot: rnd()*TAU
+    });
+  }
+})();
+
+function updateBlooms(){
+  var B = window.__blooms;
+  for (var i=0;i<B.items.length;i++){
+    var b = B.items[i];
+    var h = waveAt(b.x,b.z,now) + rippleAt(b.x,b.z,now);
+    _pq.setFromAxisAngle(_UP, b.rot);
+    _pv.set(b.x, WATER_Y + h + 0.012, b.z);
+    _ps.set(b.s,b.s,b.s);
+    _pm.compose(_pv,_pq,_ps);
+    B.mesh.setMatrixAt(i,_pm);
+  }
+  B.mesh.instanceMatrix.needsUpdate = true;
+}
+
+/* ============================================================
+   空氣中的微塵
+   ============================================================ */
+var motes;
+(function(){
+  var N = 320;
+  var g = new THREE.BufferGeometry();
+  var p = new Float32Array(N*3), seed = new Float32Array(N);
+  for (var i=0;i<N;i++){
+    var a=rnd()*TAU, r=Math.sqrt(rnd())*13;
+    p[i*3]=Math.cos(a)*r; p[i*3+1]=rr(0.05,2.6); p[i*3+2]=Math.sin(a)*r;
+    seed[i]=rnd()*100;
+  }
+  g.setAttribute('position', new THREE.BufferAttribute(p,3));
+  g.setAttribute('aSeed', new THREE.BufferAttribute(seed,1));
+  var cv=document.createElement('canvas'); cv.width=cv.height=32;
+  var cx=cv.getContext('2d');
+  var rg=cx.createRadialGradient(16,16,0,16,16,16);
+  rg.addColorStop(0,'rgba(255,255,245,1)');
+  rg.addColorStop(0.35,'rgba(255,255,235,0.45)');
+  rg.addColorStop(1,'rgba(255,255,235,0)');
+  cx.fillStyle=rg; cx.fillRect(0,0,32,32);
+  var tex=new THREE.CanvasTexture(cv);
+
+  var mat = new THREE.ShaderMaterial({
+    uniforms:{ uTime:U_TIME, uTex:{value:tex}, uPx:{value: renderer.getPixelRatio()} },
+    transparent:true, depthWrite:false, blending:THREE.AdditiveBlending, fog:false,
+    vertexShader:[
+      'attribute float aSeed;','uniform float uTime;','uniform float uPx;','varying float vA;',
+      'void main(){',
+      '  vec3 p = position;',
+      '  p.x += sin(uTime*0.17 + aSeed)*0.55;',
+      '  p.y += sin(uTime*0.11 + aSeed*1.7)*0.32;',
+      '  p.z += cos(uTime*0.14 + aSeed*0.7)*0.55;',
+      '  vec4 mv = modelViewMatrix * vec4(p,1.0);',
+      '  vA = (0.35 + 0.65*abs(sin(uTime*0.35 + aSeed*3.1)));',
+      '  gl_PointSize = (7.0 * uPx) / max(-mv.z, 0.3);',
+      '  gl_Position = projectionMatrix * mv;',
+      '}'
+    ].join('\n'),
+    fragmentShader:[
+      'uniform sampler2D uTex;','varying float vA;',
+      'void main(){',
+      '  vec4 t = texture2D(uTex, gl_PointCoord);',
+      '  gl_FragColor = vec4(t.rgb, t.a * vA * 0.30);',
+      '}'
+    ].join('\n')
+  });
+  motes = new THREE.Points(g, mat);
+  motes.frustumCulled = false;
+  scene.add(motes);
+})();
+
+/* ============================================================
+   偶爾飄落的葉子
+   ============================================================ */
+var leaves = [];
+(function(){
+  var geo = new THREE.CircleGeometry(0.055, 10);
+  geo.scale(1, 1, 1);
+  geo.rotateX(-Math.PI/2);
+  var pv = geo.attributes.position;
+  for (var i=0;i<pv.count;i++) pv.setZ(i, pv.getZ(i)*1.9);
+  geo.computeVertexNormals();
+  var LEAF_COLS = [0x8a9a44, 0xa8863a, 0x6f8a3c, 0xb0743a, 0x93a04c];
+  for (var i=0;i<5;i++){
+    var mat = underwater(new THREE.MeshStandardMaterial({
+      color: LEAF_COLS[i], roughness:0.82, side:THREE.DoubleSide
+    }), { caustic:0.0, fogK:0.02 });
+    var m = new THREE.Mesh(geo, mat);
+    m.visible = false;
+    m.rotation.order = 'YXZ';
+    scene.add(m);
+    leaves.push({ mesh:m, state:'idle', t:rr(4, 60), x:0, z:0, y:0, vr:0, rot:0, age:0 });
+  }
+  leaves[0].t = 7;
+})();
+
+function updateLeaves(dt){
+  for (var i=0;i<leaves.length;i++){
+    var L = leaves[i];
+    if (L.state === 'idle'){
+      L.t -= dt;
+      if (L.t <= 0){
+        var a=rnd()*TAU, r=Math.sqrt(rnd())*POND_R*0.85;
+        L.x=Math.cos(a)*r; L.z=Math.sin(a)*r; L.y=rr(2.2,3.4);
+        L.rot=rnd()*TAU; L.vr=rr(-1.1,1.1); L.age=0;
+        L.state='fall'; L.mesh.visible=true;
+      }
+    } else if (L.state === 'fall'){
+      L.age += dt;
+      L.y -= dt*0.34;
+      L.x += Math.sin(L.age*1.7 + i)*dt*0.30;
+      L.z += Math.cos(L.age*1.35 + i*2)*dt*0.30;
+      L.rot += L.vr*dt;
+      L.mesh.position.set(L.x, L.y, L.z);
+      L.mesh.rotation.set(Math.sin(L.age*2.4)*0.8, L.rot, Math.cos(L.age*2.0)*0.7);
+      if (L.y <= WATER_Y + 0.01){
+        addRipple(L.x, L.z, 0.55);
+        L.state='float'; L.age=0;
+      }
+    } else {
+      L.age += dt;
+      L.x += Math.sin(L.age*0.13+i)*dt*0.020;
+      L.z += Math.cos(L.age*0.11+i)*dt*0.020;
+      L.rot += L.vr*0.10*dt;
+      var h = waveAt(L.x,L.z,now)+rippleAt(L.x,L.z,now);
+      L.mesh.position.set(L.x, WATER_Y + h + 0.004, L.z);
+      L.mesh.rotation.set(0, L.rot, 0);
+      if (L.age > 75){ L.state='idle'; L.t=rr(25,80); L.mesh.visible=false; }
+    }
+  }
+}
+
+/* ============================================================
+   水面：折射 / 反射 / 菲涅耳 / 碎光
+   ============================================================ */
+
+var clipPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 1e5); // 預設不裁切
+renderer.clippingPlanes = [clipPlane];
+function clipKeepAll(){ clipPlane.normal.set(0,1,0); clipPlane.constant = 1e5; }
+function clipAboveWater(){ clipPlane.normal.set(0,1,0); clipPlane.constant = 0.02 - WATER_Y; }
+
+var RT_REFR_SCALE = 1.0, RT_REFL_SCALE = 0.5;
+function makeRT(s){
+  var sz = new THREE.Vector2();
+  renderer.getDrawingBufferSize(sz);
+  var rt = new THREE.WebGLRenderTarget(
+    Math.max(2, Math.floor(sz.x*s)), Math.max(2, Math.floor(sz.y*s)),
+    { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+      format: THREE.RGBAFormat, stencilBuffer: false, depthBuffer: true }
+  );
+  return rt;
+}
+var refrRT = makeRT(RT_REFR_SCALE);
+var reflRT = makeRT(RT_REFL_SCALE);
+
+/* 注意：旋轉一定要放在 mesh 上，不能烘進 geometry。
+   鏡像相機是從 water.matrixWorld 取平面法線的，烘進去的話法線會變成 +Z。*/
+var waterGeo = new THREE.PlaneGeometry(52, 52, 150, 150);
+
+var _drawSize = new THREE.Vector2();
+renderer.getDrawingBufferSize(_drawSize);
+
+var waterUniforms = {
+  uTime:     U_TIME,
+  uRipples:  U_RIPPLES,
+  tRefr:     { value: refrRT.texture },
+  tRefl:     { value: reflRT.texture },
+  uTexMat:   { value: new THREE.Matrix4() },
+  uRes:      { value: new THREE.Vector2(_drawSize.x, _drawSize.y) },
+  uSunDir:   { value: SUN_DIR.clone() },
+  uCamPos:   { value: new THREE.Vector3() },
+  uDeep:     { value: new THREE.Color(0x137262).convertSRGBToLinear() },
+  uReflAmt:  { value: 1.0 }
+};
+
+var waterMat = new THREE.ShaderMaterial({
+  uniforms: waterUniforms,
+  transparent: false,
+  toneMapped: false,
+  vertexShader: [
+    'uniform float uTime;',
+    'uniform vec4 uRipples[8];',
+    'uniform mat4 uTexMat;',
+    'varying vec3 vWPos;',
+    'varying vec4 vReflUV;',
+    GLSL_WAVE,
+    'void main(){',
+    '  vec4 wp = modelMatrix * vec4(position, 1.0);',
+    '  wp.y += wavesAt(wp.xz, uTime) + ripplesAt(wp.xz, uTime);',
+    '  vWPos = wp.xyz;',
+    '  vReflUV = uTexMat * wp;',
+    '  gl_Position = projectionMatrix * viewMatrix * wp;',
+    '}'
+  ].join('\n'),
+  fragmentShader: [
+    'uniform float uTime;',
+    'uniform vec4 uRipples[8];',
+    'uniform sampler2D tRefr;',
+    'uniform sampler2D tRefl;',
+    'uniform vec2 uRes;',
+    'uniform vec3 uSunDir;',
+    'uniform vec3 uCamPos;',
+    'uniform vec3 uDeep;',
+    'uniform float uReflAmt;',
+    'varying vec3 vWPos;',
+    'varying vec4 vReflUV;',
+    GLSL_WAVE,
+    'float H(vec2 p){ return wavesAt(p, uTime) + ripplesAt(p, uTime); }',
+    'void main(){',
+    '  float e = 0.10;',
+    '  float hl = H(vWPos.xz - vec2(e,0.0));',
+    '  float hr = H(vWPos.xz + vec2(e,0.0));',
+    '  float hd = H(vWPos.xz - vec2(0.0,e));',
+    '  float hu = H(vWPos.xz + vec2(0.0,e));',
+    '  vec3 n = normalize(vec3(hl-hr, 2.0*e, hd-hu));',
+    /* 細碎微紋：陽光的閃點靠它 */
+    '  float d1 = sin(vWPos.x*9.3 + uTime*1.6) * cos(vWPos.z*8.1 - uTime*1.2);',
+    '  float d2 = sin((vWPos.x*13.7 - vWPos.z*11.3) + uTime*2.3);',
+    /* 折射用平滑的法線，不然魚會被撕碎 */
+    '  n = normalize(n + vec3(d1*0.024 + d2*0.015, 0.0, d2*0.024 - d1*0.015));',
+    /* 反光另外用一組細法線，讓日光碎成點狀而不是一大片奶白 */
+    '  float d3 = sin(vWPos.x*23.7 - uTime*3.1) * cos(vWPos.z*21.3 + uTime*2.7);',
+    '  float d4 = cos((vWPos.x*34.1 + vWPos.z*29.9) - uTime*4.2);',
+    '  vec3 nf = normalize(n + vec3(d3*0.020 + d4*0.013, 0.0, d4*0.020 - d3*0.013));',
+    '  vec2 suv = gl_FragCoord.xy / uRes;',
+    '  vec2 off = n.xz * 0.110;',
+    '  vec3 refr = texture2D(tRefr, clamp(suv + off, vec2(0.002), vec2(0.998))).rgb;',
+    '  vec2 ruv = vReflUV.xy / max(vReflUV.w, 1e-4);',
+    '  vec3 refl = texture2D(tRefl, clamp(ruv + n.xz*0.045, vec2(0.002), vec2(0.998))).rgb;',
+    '  vec3 V = normalize(uCamPos - vWPos);',
+    '  float fres = pow(1.0 - clamp(dot(n, V), 0.0, 1.0), 4.2);',
+    '  fres = clamp(0.022 + 0.978*fres, 0.0, 0.90) * uReflAmt;',
+    '  vec3 col = mix(refr, refl, fres);',
+    '  vec3 Hv = normalize(uSunDir + V);',
+    '  float ndh  = max(dot(nf, Hv), 0.0);',
+    '  float sheen = pow(ndh, 190.0);',
+    '  float glint = pow(ndh, 2600.0);',
+    '  col += vec3(1.0, 0.97, 0.90) * (clamp(sheen,0.0,1.0)*0.030 + clamp(glint,0.0,1.0)*0.55);',
+    '  col = mix(col, uDeep, 0.030);',
+    '  gl_FragColor = vec4(col, 1.0);',
+    '  #include <encodings_fragment>',
+    '}'
+  ].join('\n')
+});
+
+var water = new THREE.Mesh(waterGeo, waterMat);
+water.rotation.x = -Math.PI/2;
+water.updateMatrixWorld();
+water.renderOrder = 2;
+water.frustumCulled = false;
+scene.add(water);
+
+/* ---------- 鏡像相機 ---------- */
+var mirrorCam = new THREE.PerspectiveCamera();
+var _mNormal = new THREE.Vector3();
+var _mWorldPos = new THREE.Vector3();
+var _mCamPos = new THREE.Vector3();
+var _mRot = new THREE.Matrix4();
+var _mLookAt = new THREE.Vector3();
+var _mView = new THREE.Vector3();
+var _mTarget = new THREE.Vector3();
+
+function updateMirror(){
+  _mWorldPos.setFromMatrixPosition(water.matrixWorld);
+  _mCamPos.setFromMatrixPosition(camera.matrixWorld);
+  _mRot.extractRotation(water.matrixWorld);
+  _mNormal.set(0,0,1).applyMatrix4(_mRot);
+
+  _mView.subVectors(_mWorldPos, _mCamPos);
+  if (_mView.dot(_mNormal) > 0) return false;
+  _mView.reflect(_mNormal).negate().add(_mWorldPos);
+
+  _mRot.extractRotation(camera.matrixWorld);
+  _mLookAt.set(0,0,-1).applyMatrix4(_mRot).add(_mCamPos);
+  _mTarget.subVectors(_mWorldPos, _mLookAt);
+  _mTarget.reflect(_mNormal).negate().add(_mWorldPos);
+
+  mirrorCam.position.copy(_mView);
+  mirrorCam.up.set(0,1,0).applyMatrix4(_mRot).reflect(_mNormal);
+  mirrorCam.lookAt(_mTarget);
+  mirrorCam.near = camera.near;
+  mirrorCam.far  = camera.far;
+  mirrorCam.updateMatrixWorld();
+  mirrorCam.matrixWorldInverse.copy(mirrorCam.matrixWorld).invert();
+  mirrorCam.projectionMatrix.copy(camera.projectionMatrix);
+
+  var tm = waterUniforms.uTexMat.value;
+  tm.set(0.5,0.0,0.0,0.5,
+         0.0,0.5,0.0,0.5,
+         0.0,0.0,0.5,0.5,
+         0.0,0.0,0.0,1.0);
+  tm.multiply(mirrorCam.projectionMatrix);
+  tm.multiply(mirrorCam.matrixWorldInverse);
+  return true;
+}
+
+/* ============================================================
+   主迴圈
+   ============================================================ */
+
+var clock = new THREE.Clock();
+var frames = 0, slowRun = 0, quality = 2;
+
+function degrade(){
+  if (quality === 2){
+    /* 第一步：只降解析度，畫面內容一個都不拿掉 */
+    quality = 1;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 1.1));
+    RT_REFR_SCALE = 0.70; RT_REFL_SCALE = 0.34;
+    sun.shadow.mapSize.set(1024,1024);
+    if (sun.shadow.map){ sun.shadow.map.dispose(); sun.shadow.map = null; }
+    resize();
+  } else if (quality === 1){
+    /* 第二步：反射先放掉，陰影留著 —— 陰影對池底的可讀性比較重要 */
+    quality = 0;
+    waterUniforms.uReflAmt.value = 0.30;
+    RT_REFL_SCALE = 0.22;
+    resize();
+  }
+  slowRun = 0;
+}
+
+function resize(){
+  var w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w,h);
+  renderer.getDrawingBufferSize(_drawSize);
+  waterUniforms.uRes.value.set(_drawSize.x, _drawSize.y);
+  refrRT.setSize(Math.max(2,Math.floor(_drawSize.x*RT_REFR_SCALE)),
+                 Math.max(2,Math.floor(_drawSize.y*RT_REFR_SCALE)));
+  reflRT.setSize(Math.max(2,Math.floor(_drawSize.x*RT_REFL_SCALE)),
+                 Math.max(2,Math.floor(_drawSize.y*RT_REFL_SCALE)));
+}
+window.addEventListener('resize', resize);
+resize();
+
+var running = true;
+document.addEventListener('visibilitychange', function(){
+  running = !document.hidden;
+  if (running){ clock.getDelta(); }
+});
+
+var veil = document.getElementById('veil');
+var veilGone = false;
+
+function frame(){
+  requestAnimationFrame(frame);
+  if (!running) return;
+
+  var dt = clock.getDelta();
+  if (dt > 0.08) dt = 0.08;
+  now += dt;
+  U_TIME.value = now;
+
+  /* --- 鏡頭：沒人碰的時候自己慢慢繞 --- */
+  cam.idle += dt;
+  if (!ptr.down && !pinch.active && cam.idle > 7.0) cam.drifting = true;
+  if (cam.drifting) cam.tTheta += dt * 0.020;
+
+  cam.theta = lerp(cam.theta, cam.tTheta, clamp(dt*3.4,0,1));
+  cam.phi   = lerp(cam.phi,   cam.tPhi,   clamp(dt*3.4,0,1));
+  cam.dist  = lerp(cam.dist,  cam.tDist,  clamp(dt*2.6,0,1));
+  cam.target.y = -0.25 + Math.sin(now*0.07)*0.05;
+  applyCamera();
+  camera.updateMatrixWorld();
+  waterUniforms.uCamPos.value.copy(camera.position);
+
+  /* --- 內容 --- */
+  for (var i=0;i<school.length;i++) school[i].update(dt, school);
+  updatePads(dt);
+  updateBlooms();
+  updateLeaves(dt);
+
+  /* 陰影框跟著鏡頭中心，維持解析度 */
+  sun.target.position.set(0, -0.6, 0);
+  sun.target.updateMatrixWorld();
+
+  /* --- 三趟渲染 --- */
+  if (renderer.shadowMap.enabled) renderer.shadowMap.needsUpdate = true;
+
+  water.visible = false;
+
+  clipKeepAll();
+  renderer.setRenderTarget(refrRT);
+  renderer.render(scene, camera);
+
+  if (waterUniforms.uReflAmt.value > 0.02 && updateMirror()){
+    clipAboveWater();
+    renderer.setRenderTarget(reflRT);
+    renderer.render(scene, mirrorCam);
+    clipKeepAll();
+  }
+
+  water.visible = true;
+  renderer.setRenderTarget(null);
+  renderer.render(scene, camera);
+
+  /* --- 效能守門 --- */
+  frames++;
+  if (frames > 60){
+    if (dt > 0.042) slowRun++; else slowRun = Math.max(0, slowRun-2);
+    if (slowRun > 150 && quality > 0) degrade();
+  }
+  if (!veilGone && frames > 3){
+    veilGone = true;
+    veil.classList.add('gone');
+    setTimeout(function(){ veil.style.display='none'; }, 2800);
+  }
+}
+frame();
+
+/* ============================================================
+   對外的小接口：之後要換魚的模型時用
+   ============================================================ */
+window.POND = {
+  scene: scene,
+  school: school,
+  camera: cam,
+  water: water,
+  renderer: renderer,
+  /* 依照 z 座標自動產生 aSpine（0=鼻 1=尾），換模型時必備 */
+  autoSpine: function(geo, noseZ, tailZ){
+    var p = geo.attributes.position;
+    if (noseZ === undefined){
+      geo.computeBoundingBox();
+      noseZ = geo.boundingBox.max.z;
+      tailZ = geo.boundingBox.min.z;
+    }
+    var a = new Float32Array(p.count);
+    for (var i=0;i<p.count;i++){
+      a[i] = clamp((noseZ - p.getZ(i)) / (noseZ - tailZ), 0, 1.3);
+    }
+    geo.setAttribute('aSpine', new THREE.BufferAttribute(a,1));
+    return geo;
+  },
+  /* 傳入一個朝 +Z、長度約 1 的 BufferGeometry 就會整群換掉 */
+  replaceKoiGeometry: function(geo){
+    if (!geo.attributes.aSpine) window.POND.autoSpine(geo);
+    for (var i=0;i<school.length;i++) school[i].mesh.geometry = geo;
+  },
+  setCount: function(n){
+    for (var i=0;i<school.length;i++) school[i].mesh.visible = (i < n);
+  }
+};
+
+})();
+</script>
+</body>
+</html>
