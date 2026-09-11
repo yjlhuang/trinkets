@@ -264,6 +264,10 @@ iframe{width:100%;height:520px;border:none;display:block;}
 
 .footer-actions{display:flex;gap:10px;justify-content:center;margin-top:22px;}
 .footer-actions button{padding:12px 24px;font-size:14px;}
+.footer-actions-secondary{margin-top:12px;}
+.footer-actions-secondary button{padding:9px 18px;font-size:12.5px;}
+.copy-text-hint{text-align:center;margin-top:10px;}
+#copy-text-status{text-align:center;margin-top:6px;}
 
 @media (max-width:640px){
   .count-grid{grid-template-columns:1fr;}
@@ -456,6 +460,13 @@ phr. / 引起（某人的）共鳴 / strike a chord (with sb.)"></textarea>
         <button class="primary" id="btn-download">下載 HTML</button>
         <button class="primary" id="btn-print-pdf">🖨️ 一鍵下載 PDF</button>
       </div>
+
+      <div class="footer-actions footer-actions-secondary">
+        <button class="ghost" id="btn-copy-quiz-text">📋 複製題目純文字</button>
+        <button class="ghost" id="btn-copy-answer-text">📋 複製解答純文字</button>
+      </div>
+      <p class="hint copy-text-hint">複製後可直接貼到 Word／Excel／Google 試算表等表格，會自動依欄位對齊；貼到記事本或投影軟體則是一般文字，方便你自訂行距、字級。</p>
+      <div class="status-line ok" id="copy-text-status"></div>
     </div>
   </div>
 
@@ -1418,14 +1429,18 @@ function buildHeadHTML(isAnswer){
     </div></div>`;
 }
 
-function buildFinalHTML(){
+function getOrderedExportList(){
   // 匯出時重新依「單字 → 片語 → 手動加分題／空白欄」排序，不依賴陣列本身的推入順序
   // （刪除補字、手動新增都用 push，可能打亂原始順序，這裡統一重新整理）
-  const orderedList = [
+  return [
     ...drawnWords.filter(w=>!w.isPhrase && !isBlankBonusItem(w)),
     ...drawnWords.filter(w=>w.isPhrase && !isBlankBonusItem(w)),
     ...drawnWords.filter(w=>isBlankBonusItem(w))
   ];
+}
+
+function buildFinalHTML(){
+  const orderedList = getOrderedExportList();
   const quizItems = orderedList.map((w,i)=>buildQuizItemHTML(i+1,w));
   const answerItems = orderedList.map((w,i)=>buildAnswerItemHTML(i+1,w));
   const quizBlock = `<div class="copy-block">${buildHeadHTML(false)}${buildColumnsHTML(quizItems)}</div>`;
@@ -1475,6 +1490,68 @@ html,body{margin:0;padding:0;font-family:"Microsoft JhengHei","微軟正黑體",
 </body>
 </html>`;
 }
+
+/* ══════════════════════════════════════════════════════════
+   純文字（Tab 分欄）匯出：方便貼到 Word／Excel／試算表表格，
+   或貼到記事本、投影軟體自訂排版核對答案
+   ══════════════════════════════════════════════════════════ */
+function buildQuizPlainText(){
+  const orderedList = getOrderedExportList();
+  const header = ["編號","詞性","中文","題目提示","作答欄"].join("\t");
+  const rows = orderedList.map((w,i)=>{
+    const num = i+1;
+    const isBlank = isBlankBonusItem(w);
+    if(isBlank){
+      // 加分題／白欄：只有英文原文，其餘欄位留空
+      return [num, "", "", w.en, ""].join("\t");
+    }
+    if(w.mode==="e2c"){
+      // 英翻中：只顯示英文，詞性/中文留空給學生自己填
+      return [num, "", "", w.en, ""].join("\t");
+    }
+    // 中翻英：顯示詞性、中文、英文字母提示，作答欄留空
+    return [num, w.pos||"", w.zh||"", firstLetterHint(w.en), ""].join("\t");
+  });
+  return [header, ...rows].join("\n");
+}
+
+function buildAnswerPlainText(){
+  const orderedList = getOrderedExportList();
+  const header = ["編號","詞性","中文","英文答案"].join("\t");
+  const rows = orderedList.map((w,i)=>{
+    const num = i+1;
+    const isBlank = isBlankBonusItem(w);
+    if(isBlank){
+      return [num, "", "", w.en].join("\t");
+    }
+    return [num, w.pos||"", w.zh||"", w.en].join("\t");
+  });
+  return [header, ...rows].join("\n");
+}
+
+async function copyPlainTextToClipboard(text, statusEl, successMsg){
+  try{
+    await navigator.clipboard.writeText(text);
+    statusEl.className = "status-line ok";
+    statusEl.textContent = successMsg;
+  }catch(err){
+    statusEl.className = "status-line err";
+    statusEl.textContent = "瀏覽器不支援自動複製，請改用「下載 HTML」或手動選取文字複製。";
+  }
+  setTimeout(()=>{ statusEl.textContent = ""; }, 4000);
+}
+
+document.getElementById("btn-copy-quiz-text").addEventListener("click", ()=>{
+  const text = buildQuizPlainText();
+  const statusEl = document.getElementById("copy-text-status");
+  copyPlainTextToClipboard(text, statusEl, "✅ 題目純文字已複製！可貼到 Word／Excel 表格，或記事本、投影軟體自訂排版。");
+});
+
+document.getElementById("btn-copy-answer-text").addEventListener("click", ()=>{
+  const text = buildAnswerPlainText();
+  const statusEl = document.getElementById("copy-text-status");
+  copyPlainTextToClipboard(text, statusEl, "✅ 解答純文字已複製！可貼到 Word／Excel 表格，或記事本、投影軟體自訂排版。");
+});
 
 function renderExport(){
   const words = drawnWords.filter(w=>!w.isPhrase).length;
