@@ -68,7 +68,7 @@
   .icon-btn:disabled{ opacity:.32; cursor:default; }
   .icon-btn svg{ width:17px; height:17px; }
   .btn{
-    display:flex; align-items:center; gap:6px;
+    display:inline-flex; align-items:center; gap:6px;
     padding:0 12px; height:34px;
     background:var(--panel-2);
     border:1px solid var(--border);
@@ -126,6 +126,7 @@
   .type-item.active .type-label{ color:var(--text); }
 
   .slider-row{ margin-bottom:16px; }
+  .slider-row.disabled{ opacity:.38; pointer-events:none; }
   .slider-row:last-child{ margin-bottom:0; }
   .slider-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
   .slider-head label{ font-size:12.5px; color:var(--text); font-weight:500; }
@@ -266,9 +267,12 @@
           <div class="slider-head"><label>尺寸／筆刷粗細</label><span class="val" id="sizeVal">28</span></div>
           <input type="range" id="sizeSlider" min="4" max="90" value="28">
         </div>
-        <div class="slider-row">
+        <div class="slider-row" id="intensityRow">
           <div class="slider-head"><label>強度</label><span class="val" id="intensityVal">85</span></div>
           <input type="range" id="intensitySlider" min="5" max="100" value="85">
+          <div style="font-size:10.5px;color:var(--muted);margin-top:6px;line-height:1.5;" id="intensityCaption">
+            馬賽克／模糊／雜訊：控制效果力道，一律完全遮蓋原圖。<br>黑／白遮擋：固定 100% 不透明。
+          </div>
         </div>
       </div>
 
@@ -507,13 +511,18 @@
     const imgData = bctx.getImageData(x,y,w,h);
     const data = imgData.data;
     const original = new Uint8ClampedArray(data);
-    runEffect(state.type, data, w, h, state.size);
-    const strength = state.intensity/100;
+    const power = state.intensity/100;
+    const isCover = (state.type === 'black' || state.type === 'white');
+    // 非遮擋類效果：強度控制「效果力道」（方塊大小／模糊程度／雜訊量），
+    // 套用時一律完全覆蓋，不會讓原圖文字透出來。
+    // 遮擋類效果（黑／白）：固定 100% 不透明，強度滑桿對它們沒有作用。
+    const effSize = isCover ? state.size : Math.max(2, state.size * (0.4 + power*1.2));
+    runEffect(state.type, data, w, h, effSize);
     for(let j=0;j<h;j++){
       for(let i=0;i<w;i++){
         const idx=(j*w+i)*4;
         const m = maskFn ? maskFn(i,j) : 1;
-        const a = m*strength;
+        const a = m;
         if(a<=0.002){
           data[idx]=original[idx]; data[idx+1]=original[idx+1]; data[idx+2]=original[idx+2]; data[idx+3]=original[idx+3];
         } else if(a<0.998){
@@ -622,8 +631,15 @@
       typeGrid.querySelectorAll('.type-item').forEach(el=>el.classList.remove('active'));
       item.classList.add('active');
       state.type = t.id;
+      updateIntensityAvailability();
     });
   });
+
+  function updateIntensityAvailability(){
+    const isCover = (state.type === 'black' || state.type === 'white');
+    $('intensityRow').classList.toggle('disabled', isCover);
+  }
+  updateIntensityAvailability();
 
   toolList.querySelectorAll('.tool-item').forEach(item=>{
     item.addEventListener('click', ()=>{
