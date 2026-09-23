@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>一滴水・單字</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  --soil:#bba88b; --speck:#a08d70; --speck2:#cbbb9f;
+  --wet:#6f5a40;
+  --panel:#e8ebe1; --ink:#27301f; --muted:#66705a; --line:#c9cfbd;
+  --opt:#f4f6ef; --opt-hover:#fbfcf8;
+  --water:#3b7ea8; --right:#4c7a33; --wrong:#a4513b;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --soil:#5c4f3d; --speck:#4b4032; --speck2:#6a5c48; --wet:#2e251a;
+    --panel:#1c2119; --ink:#e2e6d8; --muted:#9aa38c; --line:#343c2e;
+    --opt:#252b21; --opt-hover:#2d3428;
+    --water:#6fb1d8; --right:#8fbf6c; --wrong:#e0886f;
+  }
+}
+:root[data-theme="dark"]{
+  --soil:#5c4f3d; --speck:#4b4032; --speck2:#6a5c48; --wet:#2e251a;
+  --panel:#1c2119; --ink:#e2e6d8; --muted:#9aa38c; --line:#343c2e;
+  --opt:#252b21; --opt-hover:#2d3428;
+  --water:#6fb1d8; --right:#8fbf6c; --wrong:#e0886f;
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{
+  background:var(--panel); color:var(--ink);
+  font-family:"LXGW WenKai TC","PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+  display:flex; overflow:hidden;
+}
+button{font:inherit}
+.land{position:relative;flex:1;min-width:0;min-height:0;background:var(--soil);overflow:hidden}
+canvas{display:block;width:100%;height:100%;touch-action:manipulation;cursor:default}
+.land.has-water canvas{cursor:pointer}
+.hint{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  font-size:1.35rem;color:var(--ink);opacity:.55;pointer-events:none;
+  text-align:center;line-height:1.6;transition:opacity .6s;white-space:nowrap;
+}
+.hint.gone{opacity:0}
+.toast{
+  position:absolute;left:50%;bottom:1.25rem;transform:translateX(-50%);
+  background:var(--panel);color:var(--ink);padding:.5rem 1rem;border-radius:999px;
+  font-size:1rem;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap;
+}
+.toast.show{opacity:.95}
+.snap{
+  position:absolute;right:.75rem;top:.75rem;font-size:.9rem;
+  color:var(--ink);background:var(--panel);border:0;border-radius:999px;
+  padding:.35rem .9rem;cursor:pointer;opacity:.85;
+}
+.snap:hover{opacity:1}
+.snap[hidden]{display:none}
+
+.panel{
+  width:min(440px,42vw);display:flex;flex-direction:column;
+  border-left:1px solid var(--line);min-height:0;
+}
+.water{
+  display:flex;align-items:center;gap:.6rem;padding:.9rem 1.25rem;
+  border-bottom:1px solid var(--line);min-height:3.75rem;
+}
+.water-label{font-size:1rem;color:var(--muted);white-space:nowrap}
+.drops{display:flex;flex-wrap:wrap;gap:.2rem;align-items:center;flex:1;min-width:0}
+.drops svg{width:18px;height:24px;display:block}
+.drops .more{font-size:1rem;color:var(--water);margin-left:.25rem}
+.drops .none{color:var(--muted);font-size:.95rem}
+.pop{animation:pop .5s cubic-bezier(.3,1.6,.5,1)}
+@keyframes pop{0%{transform:scale(0) translateY(-8px)}100%{transform:scale(1)}}
+.bar-btn{
+  flex:none;font-size:.9rem;color:var(--muted);background:none;
+  border:1px solid transparent;border-radius:999px;padding:.3rem .75rem;cursor:pointer;white-space:nowrap;
+}
+.bar-btn:hover{border-color:var(--line);color:var(--ink)}
+.bar-btn.armed{color:var(--wrong);border-color:var(--wrong)}
+#range{color:var(--ink);border-color:var(--line)}
+
+.view{flex:1;overflow-y:auto;padding:1.1rem 1.5rem 1.5rem;min-height:0}
+.view[hidden]{display:none}
+.where{display:flex;flex-wrap:wrap;gap:.35rem .75rem;align-items:center;font-size:.85rem;color:var(--muted);margin:0 0 .9rem}
+.kind{color:var(--ink);background:var(--opt);border:1px solid var(--line);border-radius:999px;padding:.05rem .6rem}
+.again{color:var(--wrong)}
+.again[hidden]{display:none}
+
+.prompt{margin:0 0 1rem;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.prompt .word{font-size:2rem;font-weight:700;line-height:1.25;word-break:break-word}
+.prompt .mean{font-size:1.2rem;line-height:1.7}
+.say{
+  flex:none;width:2.25rem;height:2.25rem;border-radius:50%;border:1px solid var(--line);
+  background:var(--opt);color:var(--water);cursor:pointer;display:inline-grid;place-items:center;padding:0;
+}
+.say:hover{background:var(--opt-hover)}
+.say svg{width:18px;height:18px}
+.say[hidden]{display:none}
+
+.opts{display:flex;flex-direction:column;gap:.5rem;margin:0;padding:0;list-style:none}
+.opt{
+  display:flex;gap:.6rem;width:100%;text-align:left;font-size:1rem;line-height:1.6;
+  color:var(--ink);background:var(--opt);border:1.5px solid var(--line);border-radius:10px;
+  padding:.6rem .8rem;cursor:pointer;
+}
+.opt.en{font-size:1.15rem}
+.opt:hover:not(:disabled){background:var(--opt-hover);border-color:var(--muted)}
+.opt .k{font-weight:700;color:var(--muted);flex:none}
+.opt:disabled{cursor:default}
+.opt.right{border-color:var(--right);background:color-mix(in srgb,var(--right) 14%,var(--opt))}
+.opt.right .k{color:var(--right)}
+.opt.wrong{border-color:var(--wrong);opacity:.8}
+.opt.wrong .k{color:var(--wrong)}
+.opt.dim{opacity:.5}
+
+.spell{display:flex;flex-direction:column;gap:.6rem}
+.spell[hidden]{display:none}
+.letters small{letter-spacing:0;font-size:.85rem;margin-left:.75rem}
+.letters{font-size:1.2rem;letter-spacing:.18em;color:var(--muted);margin:0;word-break:break-all}
+.spell input{
+  font:inherit;font-size:1.35rem;padding:.6rem .8rem;border-radius:10px;width:100%;
+  border:1.5px solid var(--line);background:var(--opt);color:var(--ink);
+}
+.spell input:focus{outline:none;border-color:var(--water)}
+.spell input.ok{border-color:var(--right)}
+.spell input.no{border-color:var(--wrong)}
+.spell-row{display:flex;gap:.5rem;flex-wrap:wrap}
+
+.after{margin-top:1rem;display:none;flex-direction:column;gap:.75rem}
+.after.on{display:flex}
+.msg{font-size:1rem;line-height:1.6;margin:0}
+.msg.good{color:var(--right)}
+.msg.bad{color:var(--wrong)}
+.card{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;padding:.6rem .8rem;border-radius:10px;background:var(--opt);border:1px solid var(--line)}
+.card b{font-size:1.15rem}
+.card span{color:var(--muted);line-height:1.6}
+.next{
+  align-self:flex-start;font-size:1rem;padding:.55rem 1.2rem;border-radius:999px;cursor:pointer;
+  background:var(--ink);color:var(--panel);border:0;
+}
+.next:disabled{opacity:.4;cursor:default}
+.ghost{
+  font-size:1rem;padding:.55rem 1.1rem;border-radius:999px;cursor:pointer;
+  background:none;color:var(--muted);border:1px solid var(--line);
+}
+.ghost:hover{color:var(--ink)}
+
+/* range picker */
+.pick h2{font-size:1.25rem;margin:0 0 .25rem}
+.pick h3{font-size:1rem;margin:1.1rem 0 .5rem;color:var(--muted);font-weight:400}
+.pick .sub{margin:0 0 .75rem;color:var(--muted);font-size:.9rem}
+.units{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.8rem,1fr));gap:.5rem}
+.unit,.chip{
+  text-align:left;color:var(--ink);background:var(--opt);border:1.5px solid var(--line);
+  border-radius:10px;padding:.55rem .7rem;cursor:pointer;
+}
+.unit{display:flex;flex-direction:column;gap:.25rem}
+.unit[aria-pressed="true"],.chip[aria-pressed="true"]{border-color:var(--water);background:color-mix(in srgb,var(--water) 13%,var(--opt))}
+.unit .pg{font-weight:700;font-size:1.05rem}
+.unit .meta{font-size:.8rem;color:var(--muted)}
+.unit .bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden}
+.unit .bar i{display:block;height:100%;background:var(--right)}
+.quick{display:flex;gap:.5rem;margin:.6rem 0 0}
+.quick button{font-size:.85rem;padding:.25rem .8rem;border-radius:999px;border:1px solid var(--line);background:none;color:var(--muted);cursor:pointer}
+.chips{display:flex;flex-wrap:wrap;gap:.5rem}
+.chip{border-radius:999px;padding:.4rem .9rem}
+.chip small{color:var(--muted);margin-left:.3rem}
+.go{margin-top:1.25rem}
+.fine{margin-top:1.5rem;display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
+
+button:focus-visible,.unit:focus-visible,.chip:focus-visible{outline:3px solid var(--water);outline-offset:2px}
+
+@media (max-width:760px){
+  body{flex-direction:column}
+  .land{flex:1 1 40%}
+  .panel{width:100%;flex:1 1 60%;border-left:0;border-top:1px solid var(--line)}
+  .water{padding:.5rem 1rem;min-height:3rem;gap:.4rem}
+  .view{padding:.9rem 1rem 1.2rem}
+  .prompt .word{font-size:1.7rem}
+  .prompt .mean{font-size:1.1rem}
+  .opt{font-size:.97rem}
+}
+@media (max-width:480px){ .water-label{display:none} }
+@media (prefers-reduced-motion:reduce){.pop{animation:none}}
+</style>
+</head>
+<body>
+<main class="land" id="land">
+  <canvas id="cv" aria-label="你的土地。手上有水時，點一下土地把水滴下去。"></canvas>
+  <div class="hint" id="hint">一片安靜的空地</div>
+  <div class="toast" id="toast" role="status"></div>
+  <button class="snap" id="snap" hidden>存成圖片</button>
+</main>
+<aside class="panel">
+  <div class="water">
+    <span class="water-label">手上的水</span>
+    <div class="drops" id="drops" aria-live="polite"></div>
+    <button class="bar-btn" id="range">範圍</button>
+    <button class="bar-btn" id="reset">清空土地</button>
+  </div>
+
+  <section class="view" id="quiz" hidden>
+    <p class="where"><span class="kind" id="kind"></span><span id="scope"></span><span class="again" id="again" hidden>上次答錯的字</span></p>
+    <div class="prompt" id="prompt"></div>
+    <ul class="opts" id="opts"></ul>
+    <form class="spell" id="spell" hidden autocomplete="off">
+      <p class="letters" id="letters"></p>
+      <input id="typed" type="text" inputmode="latin" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="輸入英文拼法">
+      <div class="spell-row">
+        <button class="next" type="submit" id="check">送出</button>
+        <button class="ghost" type="button" id="giveup">不會，看答案</button>
+      </div>
+    </form>
+    <div class="after" id="after">
+      <p class="msg" id="msg"></p>
+      <div class="card" id="card"></div>
+      <button class="next" id="next">下一題</button>
+    </div>
+  </section>
+
+  <section class="view pick" id="pick" hidden>
+    <h2>要練哪幾頁？</h2>
+    <p class="sub">可以選一個，也可以多選一起考。</p>
+    <div class="units" id="units"></div>
+    <div class="quick"><button id="all">全選</button><button id="none">全不選</button></div>
+    <h3>題型（可複選，會隨機出）</h3>
+    <div class="chips" id="modes">
+      <button class="chip" data-m="e2c">看英文選中文</button>
+      <button class="chip" data-m="c2e">看中文選英文</button>
+      <button class="chip" data-m="spell">看中文拼英文<small>答對兩滴水</small></button>
+    </div>
+    <h3>出題方式</h3>
+    <div class="chips">
+      <button class="chip" id="weak">只出還不熟的字</button>
+    </div>
+    <button class="next go" id="go">開始</button>
+    <div class="fine">
+      <span>連續答對兩次，就算這個字「熟了」。紀錄存在這台裝置上。</span>
+      <button class="bar-btn" id="wipe">清除單字紀錄</button>
+    </div>
+  </section>
+</aside>
+
+<script>
+/* ================= 單字資料 =================
+   一個單元一行，格式和單字 JSON 檔一樣：{"unit":…, "unit_label":"p.31-32", "words":[{"id","word","pos","meaning"}…]}
+   要加新單元：把整個 JSON 檔的內容貼成新的一行，前一行結尾記得加逗號。 */
+const UNITS = [
+{"unit":16,"unit_label":"p.31-32","words":[{"id":1990,"word":"offer","pos":"v/n","meaning":"v/n. 提供"},{"id":1991,"word":"on and on","pos":"phr","meaning":"phr. 不停地"},{"id":1992,"word":"on average","pos":"phr","meaning":"phr. 一般來說"},{"id":1993,"word":"on display","pos":"phr","meaning":"phr. 展示中"},{"id":1994,"word":"on hand","pos":"phr","meaning":"phr. 現有的，在手邊的"},{"id":1995,"word":"on the other hand","pos":"phr","meaning":"phr. 另一方面"},{"id":1996,"word":"on the way","pos":"phr","meaning":"phr. 在～途中"},{"id":1997,"word":"one day","pos":"phr","meaning":"phr. 某一天"},{"id":1998,"word":"one of a kind","pos":"phr","meaning":"phr. 獨一無二的"},{"id":1999,"word":"onto","pos":"prep","meaning":"prep. 到～上面"},{"id":2000,"word":"opera","pos":"n","meaning":"n. 歌劇"},{"id":2001,"word":"operate","pos":"v","meaning":"v. 操作"},{"id":2002,"word":"operation","pos":"n","meaning":"n. 手術；運作"},{"id":2003,"word":"operator","pos":"n","meaning":"n. 操作者；電話接線生"},{"id":2004,"word":"opportunity","pos":"n","meaning":"n. 機會"},{"id":2005,"word":"oppose","pos":"v","meaning":"v. 對抗；反對"},{"id":2006,"word":"opposed","pos":"adj","meaning":"adj. 反對的"},{"id":2007,"word":"opposing","pos":"adj","meaning":"adj. 相反的，（意見）對立的"},{"id":2008,"word":"opposite","pos":"adj","meaning":"adj. 對面的；相反的 (n) 相反的事物 (prep) 在對面"},{"id":2009,"word":"opposition","pos":"n","meaning":"n. 反對，反抗"},{"id":2010,"word":"oppress","pos":"v","meaning":"v. 壓迫； 壓制"},{"id":2011,"word":"oppression","pos":"n","meaning":"n. 壓迫，欺壓"},{"id":2012,"word":"oppressive","pos":"adj","meaning":"adj. 壓迫的，難以忍受的"},{"id":2013,"word":"optimism","pos":"n","meaning":"n. 樂觀，樂觀主義"},{"id":2014,"word":"optimist","pos":"n","meaning":"n. 樂觀的人"},{"id":2015,"word":"optimistic","pos":"adj","meaning":"adj. 樂觀的"},{"id":2016,"word":"option","pos":"n","meaning":"n. 選擇"},{"id":2017,"word":"optional","pos":"adj","meaning":"adj. 可選擇的，隨意的"},{"id":2018,"word":"orbit","pos":"n","meaning":"n. （天體運行的）軌道 (v) 繞軌道運行"},{"id":2019,"word":"orchestra","pos":"n","meaning":"n. 管絃樂團"},{"id":2020,"word":"ordinary","pos":"adj","meaning":"adj. 平凡的"},{"id":2021,"word":"organic","pos":"adj","meaning":"adj. 器官的；有機的"},{"id":2022,"word":"organization","pos":"n","meaning":"n. 組織，機構"},{"id":2023,"word":"organize","pos":"v","meaning":"v. 組織，籌備"},{"id":2024,"word":"orient","pos":"vt","meaning":"vt. 以～為目標，以～為重點"},{"id":2025,"word":"oriented","pos":"adj","meaning":"adj. 以～為導向的"},{"id":2026,"word":"origin","pos":"n","meaning":"n. 來源；出處；出身；血統"},{"id":2027,"word":"original","pos":"adj","meaning":"adj. 最初的；有創意的 (n) 原作"},{"id":2028,"word":"originality","pos":"n","meaning":"n. 原創性"},{"id":2029,"word":"originally","pos":"adv","meaning":"adv. 最初，起先"},{"id":2030,"word":"originate","pos":"v","meaning":"v. 起源於"},{"id":2031,"word":"ornament","pos":"n","meaning":"n. 裝飾品"},{"id":2032,"word":"orphan","pos":"n","meaning":"n. 孤兒"},{"id":2033,"word":"otherwise","pos":"adv","meaning":"adv. 否則；在其他方面"},{"id":2034,"word":"ought to","pos":"aux","meaning":"aux. 應當"},{"id":2035,"word":"outcome","pos":"n","meaning":"n. 結果"},{"id":2036,"word":"outdoor","pos":"adj","meaning":"adj. 戶外的"},{"id":2037,"word":"outdoors","pos":"adv","meaning":"adv. 戶外地"},{"id":2038,"word":"outer","pos":"adj","meaning":"adj. 外部的"},{"id":2039,"word":"outline","pos":"v","meaning":"v. 陳述要點；寫大綱；描繪輪廓 (n) 綱要；輪廓"},{"id":2040,"word":"outrage","pos":"n","meaning":"n. 憤怒，震怒 (v) 激起憤怒"},{"id":2041,"word":"outrageous","pos":"adj","meaning":"adj. 駭人的，無法忍受的"},{"id":2042,"word":"outskirts","pos":"n","meaning":"n. 郊區"},{"id":2043,"word":"outstanding","pos":"adj","meaning":"adj. 傑出的；顯著的；重要的"},{"id":2044,"word":"outward","pos":"adj","meaning":"adj. 表面上的，外表的"},{"id":2045,"word":"outwardly","pos":"adv","meaning":"adv. 表面上的，從外表看來"},{"id":2046,"word":"oval","pos":"adj","meaning":"adj. 橢圓形的；卵形的 (n) 橢圓形的物品；卵形的物品"},{"id":2047,"word":"over time","pos":"phr","meaning":"phr. 逐漸地"},{"id":2048,"word":"overcoat","pos":"n","meaning":"n. 外套；大衣"},{"id":2049,"word":"overcome","pos":"v","meaning":"v. 克服"},{"id":2050,"word":"overlook","pos":"v","meaning":"v. 忽略；疏忽；俯瞰"},{"id":2051,"word":"overnight","pos":"adv","meaning":"adv. 整夜地；一夜；突然地 (adj) 整夜的；一夜的；突然的"},{"id":2052,"word":"overseas","pos":"adv","meaning":"adv. 海外（留學，工作）(adj) 外國的"},{"id":2053,"word":"overtake","pos":"v","meaning":"v. 超越；追上；（災難等）突然侵襲"},{"id":2054,"word":"overthrow","pos":"v","meaning":"v. 推翻；顛覆 (n) 打倒；推翻"},{"id":2055,"word":"overwhelm","pos":"v","meaning":"v. 壓倒；征服；使受不了"},{"id":2056,"word":"owe","pos":"v","meaning":"v. 欠；把～歸功於"},{"id":2057,"word":"owing to","pos":"phr","meaning":"phr. 由於、因為"},{"id":2058,"word":"ownership","pos":"n","meaning":"n. 所有權"},{"id":2059,"word":"oxygen","pos":"n","meaning":"n. 氧氣"},{"id":2060,"word":"pace","pos":"n","meaning":"n. 一步；步調；速度 (v) 踱步"},{"id":2061,"word":"pad","pos":"n","meaning":"n. 墊；護墊；襯墊 (v) 填塞"},{"id":2062,"word":"pail","pos":"n","meaning":"n. 桶子；一桶"},{"id":2063,"word":"pal","pos":"n","meaning":"n. 朋友；好友；夥伴"},{"id":2064,"word":"palace","pos":"n","meaning":"n. 宮殿；富麗堂皇的大房屋"},{"id":2065,"word":"pale","pos":"adj","meaning":"adj. 蒼白的；微弱的"},{"id":2066,"word":"pancake","pos":"n","meaning":"n. 薄煎餅；鬆餅"},{"id":2067,"word":"panel","pos":"n","meaning":"n. 討論小組；調查小組"},{"id":2068,"word":"panic","pos":"n","meaning":"n. 恐慌 (adj) 恐慌的 (v) 恐慌；驚惶"},{"id":2069,"word":"parachute","pos":"n","meaning":"n. 降落傘 (v) 跳傘"},{"id":2070,"word":"parade","pos":"n","meaning":"n. 遊行；閱兵 (v) 遊行"},{"id":2071,"word":"paradise","pos":"n","meaning":"n. 天堂；樂園"},{"id":2072,"word":"paralyze","pos":"v","meaning":"v. 使癱瘓，使麻痺；使無法正常運作"},{"id":2073,"word":"paralyzed","pos":"adj","meaning":"adj. 無法思考的，呆若木雞的"},{"id":2074,"word":"parcel","pos":"n","meaning":"n. 包裹；一片（土地）"},{"id":2075,"word":"pardon","pos":"n/v","meaning":"n/v. 赦免，寬恕，原諒"},{"id":2076,"word":"partial","pos":"adj","meaning":"adj. 局部的；部份的；偏心的"},{"id":2077,"word":"participant","pos":"n","meaning":"n. 參與者"},{"id":2078,"word":"participate","pos":"v","meaning":"v. 參加；參與"},{"id":2079,"word":"participation","pos":"n","meaning":"n. 參加；參與"},{"id":2080,"word":"participle","pos":"n","meaning":"n. 分詞"},{"id":2081,"word":"particular","pos":"adj","meaning":"adj. 特別的，特定的"},{"id":2082,"word":"particularly (=especially)","pos":"adv","meaning":"adv. 特別；尤其"},{"id":2083,"word":"partnership","pos":"n","meaning":"n. 夥伴關係"},{"id":2084,"word":"pass (something) onto (someone)","pos":"phr","meaning":"phr. 傳遞給～"},{"id":2085,"word":"pass through","pos":"phr","meaning":"phr. 路過，途經"},{"id":2086,"word":"passage","pos":"n","meaning":"n. 通道；一節；一段；（時間的）推移"},{"id":2087,"word":"passion","pos":"n","meaning":"n. 激情；熱情"},{"id":2088,"word":"passive","pos":"adj","meaning":"adj. 被動的；消極的"},{"id":2089,"word":"passport","pos":"n","meaning":"n. 護照"},{"id":2090,"word":"password","pos":"n","meaning":"n. 暗語；密碼"},{"id":2091,"word":"pasta","pos":"n","meaning":"n. 義大利通心麵"},{"id":2092,"word":"pat","pos":"v/n","meaning":"v/n. 輕拍，誇獎"},{"id":2093,"word":"patience","pos":"n","meaning":"n. 耐心；耐性"},{"id":2094,"word":"patient","pos":"adj","meaning":"adj. 有耐心的(n) 病人"},{"id":2095,"word":"pause","pos":"v","meaning":"v. 停頓；暫停 (n) 停頓；暫停"},{"id":2096,"word":"pave","pos":"v","meaning":"v. 築；鋪（路等）"},{"id":2097,"word":"paw","pos":"n","meaning":"n. 爪"},{"id":2098,"word":"pay off","pos":"phr","meaning":"phr. 成功，奏效，有所回報"},{"id":2099,"word":"pea","pos":"n","meaning":"n. 豌豆"},{"id":2100,"word":"peace","pos":"n","meaning":"n. 和平，安靜"},{"id":2101,"word":"peaceful","pos":"adj","meaning":"adj. 和平的"},{"id":2102,"word":"peak","pos":"n","meaning":"n. 山峰；山頂"},{"id":2103,"word":"pearl","pos":"n","meaning":"n. 珍珠"},{"id":2104,"word":"pebble","pos":"n","meaning":"n. 鵝卵石；小圓石"},{"id":2105,"word":"peculiar","pos":"adj","meaning":"adj. 奇怪的；特有的"},{"id":2106,"word":"pedal","pos":"n","meaning":"n. 踏板 (v) 騎（腳踏車）；踩踏板"},{"id":2107,"word":"peel","pos":"v","meaning":"v. 剝皮；削皮；脫落 (n) （水果、蔬菜的）外皮"},{"id":2108,"word":"peep","pos":"v","meaning":"v. 偷看；窺視 (n) 偷看；一瞥"},{"id":2109,"word":"peer","pos":"n","meaning":"n. 同輩；同年齡的人 (v) 凝視"},{"id":2110,"word":"penalty","pos":"n","meaning":"n. 懲罰；刑罰；罰款"},{"id":2111,"word":"penny","pos":"n","meaning":"n. 便士；一分錢"},{"id":2112,"word":"perceive","pos":"vt","meaning":"vt. 察覺，感知；理解，領悟"},{"id":2113,"word":"percent","pos":"n","meaning":"n. 百分之一 (adj) 百分之～的"},{"id":2114,"word":"percentage","pos":"n","meaning":"n. 百分比；百分率"}]},
+{"unit":17,"unit_label":"p.33-34","words":[{"id":2115,"word":"perception","pos":"n","meaning":"n. 感知（能力），覺察；看法"},{"id":2116,"word":"perfect","pos":"adj","meaning":"adj. 十分合適的"},{"id":2117,"word":"perfection","pos":"n","meaning":"n. 完美"},{"id":2118,"word":"perform","pos":"v","meaning":"v. 執行；完成；表演"},{"id":2119,"word":"performance","pos":"n","meaning":"n. 演出；表演；表現"},{"id":2120,"word":"perfume","pos":"n","meaning":"n. 香水"},{"id":2121,"word":"peril","pos":"n","meaning":"n. 險惡"},{"id":2122,"word":"perilous","pos":"adj","meaning":"adj. 非常危險的，險惡的"},{"id":2123,"word":"permanent","pos":"adj","meaning":"adj. 永久的；長久的"},{"id":2124,"word":"permission","pos":"n","meaning":"n. 許可；批准"},{"id":2125,"word":"permit","pos":"v","meaning":"v. 認可；許可 (n) 許可證"},{"id":2126,"word":"personality","pos":"n","meaning":"n. 個性；人格"},{"id":2127,"word":"perspective","pos":"n","meaning":"n. 觀點，想法"},{"id":2128,"word":"persuade","pos":"v","meaning":"v. 說服；勸"},{"id":2129,"word":"persuasion","pos":"n","meaning":"n. 說服"},{"id":2130,"word":"persuasive","pos":"adj","meaning":"adj. 有說服力的；勸誘的"},{"id":2131,"word":"pessimistic","pos":"adj","meaning":"adj. 悲觀的"},{"id":2132,"word":"pest","pos":"n","meaning":"n. 有害的小動物；害蟲；討厭的人或物"},{"id":2133,"word":"petal","pos":"n","meaning":"n. 花瓣"},{"id":2134,"word":"phenomenon","pos":"n","meaning":"n. 現象"},{"id":2135,"word":"philosopher","pos":"n","meaning":"n. 哲學家"},{"id":2136,"word":"philosophical","pos":"adj","meaning":"adj. 哲學的；豁達的"},{"id":2137,"word":"philosophy","pos":"n","meaning":"n. 哲學；人生觀"},{"id":2138,"word":"photography","pos":"n","meaning":"n. 攝影（術）"},{"id":2139,"word":"physical","pos":"adj","meaning":"adj. 身體的；物理（學）的"},{"id":2140,"word":"physically","pos":"adv","meaning":"adv. 身體上地"},{"id":2141,"word":"physician","pos":"n","meaning":"n. 內科醫生"},{"id":2142,"word":"physicist","pos":"n","meaning":"n. 物理學家"},{"id":2143,"word":"physics","pos":"n","meaning":"n. 物理（學）"},{"id":2144,"word":"pianist","pos":"n","meaning":"n. 鋼琴家"},{"id":2145,"word":"pick up something","pos":"phr","meaning":"phr. 注意、察覺到某事"},{"id":2146,"word":"pickle","pos":"n","meaning":"n. 醃漬黃瓜；泡菜"},{"id":2147,"word":"pickpocket","pos":"n","meaning":"n. 扒手"},{"id":2148,"word":"pile","pos":"n/v","meaning":"n/v. 堆，堆疊"},{"id":2149,"word":"pilgrim","pos":"n","meaning":"n. 朝聖客；香客"},{"id":2150,"word":"pill","pos":"n","meaning":"n. 藥丸"},{"id":2151,"word":"pilot","pos":"n","meaning":"n. 飛行員；領航員 (v) 駕駛；帶領"},{"id":2152,"word":"pine","pos":"n","meaning":"n. 松樹；松木"},{"id":2153,"word":"pint","pos":"n","meaning":"n. 品脫"},{"id":2154,"word":"pioneer","pos":"n","meaning":"n. 拓荒者；先鋒；首創者 (v) 開拓；成為先驅"},{"id":2155,"word":"pirate","pos":"n","meaning":"n. 海盜；剽竊者；盜印者 (v) 剽竊；非法翻印"},{"id":2156,"word":"pit","pos":"n","meaning":"n. 坑洞；果核"},{"id":2157,"word":"pity","pos":"n","meaning":"n. 憐憫；同情 (v) 可憐；同情"},{"id":2158,"word":"plague","pos":"n","meaning":"n. 瘟疫，麻煩 (vt)折磨，使苦惱"},{"id":2159,"word":"plastic","pos":"n","meaning":"n. 塑膠（製品） (adj) 塑性的；塑膠做的"},{"id":2160,"word":"pleased","pos":"adj","meaning":"adj. 高興的，滿意的"},{"id":2161,"word":"pleasure","pos":"n","meaning":"n. 樂趣，喜悅"},{"id":2162,"word":"plentiful","pos":"adj","meaning":"adj. 豐富的；多的"},{"id":2163,"word":"plenty","pos":"n","meaning":"n. 大量；充足"},{"id":2164,"word":"plot","pos":"n","meaning":"n. 情節；陰謀 (v) 密謀；策劃"},{"id":2165,"word":"plug","pos":"n","meaning":"n. 插頭；塞子；栓 (v) 插上插頭；堵住；塞住"},{"id":2166,"word":"plum","pos":"n","meaning":"n. 李子；梅子"},{"id":2167,"word":"plumber","pos":"n","meaning":"n. 水電工；水管瓦斯工人"},{"id":2168,"word":"plural","pos":"adj","meaning":"adj. 複數的 (n) 複數（形）"},{"id":2169,"word":"pm","pos":"adv","meaning":"adv. 下午"},{"id":2170,"word":"point of view","pos":"n","meaning":"n. 看法，觀點，見解"},{"id":2171,"word":"poisonous","pos":"adj","meaning":"adj. 有毒的；有害的"},{"id":2172,"word":"pole","pos":"n","meaning":"n. 桿；柱；地極；極端"},{"id":2173,"word":"policy","pos":"n","meaning":"n. 政策"},{"id":2174,"word":"polish","pos":"v","meaning":"v. 擦亮（鞋） (n) 擦亮劑；鞋油"},{"id":2175,"word":"political","pos":"adj","meaning":"adj. 政治的"},{"id":2176,"word":"politician","pos":"n","meaning":"n. 政治人物；政客"},{"id":2177,"word":"politics","pos":"n","meaning":"n. 政治（學）"},{"id":2178,"word":"poll","pos":"n","meaning":"n. 民意調查 (v) 對～進行民調"},{"id":2179,"word":"pollutant","pos":"n","meaning":"n. 污染物質"},{"id":2180,"word":"pollute","pos":"v","meaning":"v. 汙染"},{"id":2181,"word":"pollution","pos":"n","meaning":"n. 汙染（物）"},{"id":2182,"word":"pony","pos":"n","meaning":"n. 小馬；矮種馬"},{"id":2183,"word":"pop","pos":"v","meaning":"v. （使）劈啪作響 (n) 啪的一聲 (adj) 流行的；通俗的"},{"id":2184,"word":"popularity","pos":"n","meaning":"n. 普及；流行；受歡迎"},{"id":2185,"word":"population","pos":"n","meaning":"n. 人口，人口數"},{"id":2186,"word":"portable","pos":"adj","meaning":"adj. 可攜式的；手提的"},{"id":2187,"word":"porter","pos":"n","meaning":"n. 搬行李工人；搬運工"},{"id":2188,"word":"portion","pos":"n","meaning":"n. 一部分"},{"id":2189,"word":"portrait","pos":"n","meaning":"n. 肖像畫"},{"id":2190,"word":"portray","pos":"v","meaning":"v. 描繪；描述；畫；為～畫肖像"},{"id":2191,"word":"pose","pos":"v","meaning":"v. (造成)問題，威脅；提問"},{"id":2192,"word":"positive","pos":"adj","meaning":"adj. 樂觀的，積極的；同意的"},{"id":2193,"word":"possess","pos":"v","meaning":"v. 擁有；佔有"},{"id":2194,"word":"possession","pos":"n","meaning":"n. 擁有；佔有；財產；所有物（常用複數形）"},{"id":2195,"word":"postage","pos":"n","meaning":"n. 郵資"},{"id":2196,"word":"poster","pos":"n","meaning":"n. 海報"},{"id":2197,"word":"postpone","pos":"v","meaning":"v. 延期"},{"id":2198,"word":"potential","pos":"n","meaning":"n. 潛力 (a)有潛力的，可能的"},{"id":2199,"word":"potentially","pos":"adv","meaning":"adv. 可能地，潛在地"},{"id":2200,"word":"pottery","pos":"n","meaning":"n. 陶器"},{"id":2201,"word":"poultry","pos":"n","meaning":"n. 家禽"},{"id":2202,"word":"pour","pos":"v","meaning":"v. （雨）傾盆而降；倒；灌"},{"id":2203,"word":"poverty","pos":"n","meaning":"n. 貧窮"},{"id":2204,"word":"powder","pos":"n","meaning":"n. 粉末"},{"id":2205,"word":"powdered","pos":"adj","meaning":"adj. 粉狀的，粉末的"},{"id":2206,"word":"power","pos":"n","meaning":"n. 能力，權力"},{"id":2207,"word":"powerful","pos":"adj","meaning":"adj. 強而有力的"},{"id":2208,"word":"practical","pos":"adj","meaning":"adj. 實際的；實用的"},{"id":2209,"word":"praise","pos":"v/n","meaning":"v/n. 讚揚，稱讚"},{"id":2210,"word":"prayer","pos":"n","meaning":"n. 祈禱；禱告"},{"id":2211,"word":"precious","pos":"adj","meaning":"adj. 珍愛的；寶貴的"},{"id":2212,"word":"precise","pos":"adj","meaning":"adj. 精準的；精確的"},{"id":2213,"word":"precisely","pos":"adv","meaning":"adv. 精確地，仔細地"},{"id":2214,"word":"precision","pos":"n","meaning":"n. 精確"},{"id":2215,"word":"predict","pos":"v","meaning":"v. 預言；預測"},{"id":2216,"word":"prediction","pos":"n","meaning":"n. 預測"},{"id":2217,"word":"prefer","pos":"v","meaning":"v. 更喜歡(A+to+B)"},{"id":2218,"word":"preferable","pos":"adj","meaning":"adj. 較合適的；較好的"},{"id":2219,"word":"preference","pos":"n","meaning":"n. 偏愛，優先選擇"},{"id":2220,"word":"pregnancy","pos":"n","meaning":"n. 懷孕"},{"id":2221,"word":"pregnant","pos":"adj","meaning":"adj. 懷孕的"},{"id":2222,"word":"preparation","pos":"n","meaning":"n. 準備"},{"id":2223,"word":"preposition","pos":"n","meaning":"n. 介系詞"},{"id":2224,"word":"presentation","pos":"n","meaning":"n. 呈現；表現；演出；上演"},{"id":2225,"word":"preservation","pos":"n","meaning":"n. 保存；維護"},{"id":2226,"word":"preserve","pos":"v","meaning":"v. 維持；維護；保存 (n) 保護區；禁獵區"},{"id":2227,"word":"pressure","pos":"n","meaning":"n. 壓力"},{"id":2228,"word":"pretend","pos":"v","meaning":"v. 假裝"},{"id":2229,"word":"prevail","pos":"v","meaning":"v. （思想）被接受，獲勝；盛行"},{"id":2230,"word":"prevent","pos":"v","meaning":"v. 防止"},{"id":2231,"word":"prevention","pos":"n","meaning":"n. 預防；防止；妨礙"},{"id":2232,"word":"previous","pos":"adj","meaning":"adj. 先前的"},{"id":2233,"word":"previously","pos":"adv","meaning":"adv. 先前地，以前地"},{"id":2234,"word":"priest","pos":"n","meaning":"n. 牧師；神父"},{"id":2235,"word":"primary","pos":"adj","meaning":"adj. 主要的；基本的；初級的；最初的"},{"id":2236,"word":"prime","pos":"adj","meaning":"adj. 主要的；最佳的 (n) 全盛期"},{"id":2237,"word":"primitive","pos":"adj","meaning":"adj. 原始的"},{"id":2238,"word":"principal","pos":"adj","meaning":"adj. 最重要的，首要的"},{"id":2239,"word":"principle","pos":"n","meaning":"n. 原則"},{"id":2240,"word":"priority","pos":"n","meaning":"n. 優先考慮的事/優先權"},{"id":2241,"word":"prison","pos":"n","meaning":"n. 監獄"},{"id":2242,"word":"prisoner","pos":"n","meaning":"n. 囚犯"},{"id":2243,"word":"privacy","pos":"n","meaning":"n. 隱私；私事"},{"id":2244,"word":"private","pos":"adj","meaning":"adj. 個人的，私立的"}]},
+{"unit":18,"unit_label":"p.35-36","words":[{"id":2245,"word":"privilege","pos":"n","meaning":"n. 特權；榮幸；恩惠"},{"id":2246,"word":"prize","pos":"n","meaning":"n. 獎品，獎項"},{"id":2247,"word":"probable","pos":"adj","meaning":"adj. 很有可能的"},{"id":2248,"word":"probably","pos":"adv","meaning":"adv. 或許，大概"},{"id":2249,"word":"procedure","pos":"n","meaning":"n. 程序；手續；步驟"},{"id":2250,"word":"proceed","pos":"v","meaning":"v. 繼續進行；前進"},{"id":2251,"word":"process","pos":"n","meaning":"n. 過程 (v) 加工；處理"},{"id":2252,"word":"produce","pos":"v","meaning":"v. 製造，生產"},{"id":2253,"word":"product","pos":"n","meaning":"n. 產品"},{"id":2254,"word":"production","pos":"n","meaning":"n. 生產；成果；產量"},{"id":2255,"word":"productive","pos":"adj","meaning":"adj. 有生產力的；豐碩的"},{"id":2256,"word":"profession","pos":"n","meaning":"n. 職業；專業"},{"id":2257,"word":"professional","pos":"adj","meaning":"adj. 職業的；專業的"},{"id":2258,"word":"professor","pos":"n","meaning":"n. 教授"},{"id":2259,"word":"proficiency","pos":"n","meaning":"n. 熟練，精通"},{"id":2260,"word":"proficient","pos":"adj","meaning":"adj. 熟練的，精通的"},{"id":2261,"word":"profit","pos":"n","meaning":"n. 利潤；利益 (v) 獲利；有利於"},{"id":2262,"word":"profitable","pos":"adj","meaning":"adj. 有益的；有利的"},{"id":2263,"word":"progress","pos":"v/n","meaning":"v/n. 進步，進展"},{"id":2264,"word":"progressive","pos":"adj","meaning":"adj. 穩定發展的，逐步的"},{"id":2265,"word":"prominent","pos":"adj","meaning":"adj. 突出的；重要的"},{"id":2266,"word":"promise","pos":"v/n","meaning":"v/n. 承諾"},{"id":2267,"word":"promising","pos":"adj","meaning":"adj. 有希望的；有前途的"},{"id":2268,"word":"promote","pos":"v","meaning":"v. 晉升；提升；宣傳；促銷"},{"id":2269,"word":"promotion","pos":"n","meaning":"n. 晉升；促銷；推廣"},{"id":2270,"word":"prompt","pos":"adj","meaning":"adj. 敏捷的；迅速的"},{"id":2271,"word":"pronoun","pos":"n","meaning":"n. 代名詞"},{"id":2272,"word":"pronunciation","pos":"n","meaning":"n. 發音"},{"id":2273,"word":"proof","pos":"n","meaning":"n. 證明；證據"},{"id":2274,"word":"probable","pos":"adj","meaning":"adj. 可能發生的(=likely)"},{"id":2275,"word":"proper","pos":"adj","meaning":"adj. 適合的；適當的"},{"id":2276,"word":"properly","pos":"adv","meaning":"adv. 正確地，適當地"},{"id":2277,"word":"property","pos":"n","meaning":"n. 財產"},{"id":2278,"word":"proposal","pos":"n","meaning":"n. 提案；求婚"},{"id":2279,"word":"prosper","pos":"v","meaning":"v. 繁榮；昌盛；成功"},{"id":2280,"word":"prosperity","pos":"n","meaning":"n. 興旺；繁榮；成功"},{"id":2281,"word":"prosperous","pos":"adj","meaning":"adj. 繁榮的；昌盛的"},{"id":2282,"word":"protect","pos":"v","meaning":"v. 保護(免於＋from；對抗＋against）"},{"id":2283,"word":"protection","pos":"n","meaning":"n. 保護；保障"},{"id":2284,"word":"protective","pos":"adj","meaning":"adj. 保護的"},{"id":2285,"word":"protein","pos":"n","meaning":"n. 蛋白質"},{"id":2286,"word":"protest","pos":"v","meaning":"v. 抗議；反對 (n) 抗議；反對"},{"id":2287,"word":"proverb","pos":"n","meaning":"n. 諺語；格言"},{"id":2288,"word":"provide","pos":"v","meaning":"v. 提供，供給"},{"id":2289,"word":"psychological","pos":"adj","meaning":"adj. 心理（上）的"},{"id":2290,"word":"psychologist","pos":"n","meaning":"n. 心理學家"},{"id":2291,"word":"psychology","pos":"n","meaning":"n. 心理（學）"},{"id":2292,"word":"pub","pos":"n","meaning":"n. 酒館；酒吧"},{"id":2293,"word":"publication","pos":"n","meaning":"n. 出版；發行"},{"id":2294,"word":"publicity","pos":"n","meaning":"n. 廣告；宣傳"},{"id":2295,"word":"publish","pos":"v","meaning":"v. 出版；發行；刊載"},{"id":2296,"word":"publisher","pos":"n","meaning":"n. 出版公司；發行公司；出版商"},{"id":2297,"word":"pull up","pos":"phr","meaning":"phr. 停車"},{"id":2298,"word":"punch","pos":"v","meaning":"v. 用力擊；用力按 (n) 拳打"},{"id":2299,"word":"punctual","pos":"adj","meaning":"adj. 準時的"},{"id":2300,"word":"punish","pos":"v","meaning":"v. 處罰"},{"id":2301,"word":"punishment","pos":"n","meaning":"n. 處罰"},{"id":2302,"word":"purchase","pos":"v/n","meaning":"v/n. 購買"},{"id":2303,"word":"pure","pos":"adj","meaning":"adj. 純淨的"},{"id":2304,"word":"pursue","pos":"v","meaning":"v. 追趕；追捕；追求"},{"id":2305,"word":"pursuit","pos":"n","meaning":"n. 追求；尋求"},{"id":2306,"word":"put (something) behind","pos":"phr","meaning":"phr. 拋諸腦後"},{"id":2307,"word":"put off","pos":"phr","meaning":"phr. 拖延"},{"id":2308,"word":"put something into action","pos":"phr","meaning":"phr. 將(某事)付諸實行"},{"id":2309,"word":"put something up","pos":"phr","meaning":"phr. 建造"},{"id":2310,"word":"quake","pos":"v","meaning":"v. 抖；哆嗦；震動；搖晃 (n) 地震；震動"},{"id":2311,"word":"quarrel","pos":"v","meaning":"v. 爭吵；不和 (n) 爭吵；不和"},{"id":2312,"word":"queer","pos":"adj","meaning":"adj. 奇怪的；古怪的"},{"id":2313,"word":"quilt","pos":"n","meaning":"n. 被子；被褥"},{"id":2314,"word":"quiver","pos":"v/n","meaning":"v/n. 輕微地顫抖"},{"id":2315,"word":"quotation","pos":"n","meaning":"n. 引文；語錄"},{"id":2316,"word":"quote","pos":"v","meaning":"v. 引用；引述；引文"},{"id":2317,"word":"racial","pos":"adj","meaning":"adj. 種族的"},{"id":2318,"word":"racism","pos":"n","meaning":"n. 種族歧視"},{"id":2319,"word":"racist","pos":"adj","meaning":"adj. 種族歧視的 (n) 種族主義者"},{"id":2320,"word":"radar","pos":"n","meaning":"n. 雷達"},{"id":2321,"word":"rag","pos":"n","meaning":"n. 破布"},{"id":2322,"word":"rage","pos":"n","meaning":"n. 盛怒 (v) 生氣；發怒；狂暴；肆虐"},{"id":2323,"word":"rainfall","pos":"n","meaning":"n. 降雨量"},{"id":2324,"word":"raise","pos":"v","meaning":"v. 舉起；養育"},{"id":2325,"word":"raisin","pos":"n","meaning":"n. 葡萄乾"},{"id":2326,"word":"range","pos":"v/n","meaning":"v/n. 範圍包括(from A to B 從A到B)"},{"id":2327,"word":"rank","pos":"n","meaning":"n. 等級；地位；階級 (v) 列為（某一）等級"},{"id":2328,"word":"rapid","pos":"adj","meaning":"adj. 快速的，迅速的"},{"id":2329,"word":"rapidly","pos":"adv","meaning":"adv. 快速地，迅速地"},{"id":2330,"word":"rate","pos":"n","meaning":"n. 比率；價格；等級 (v) 評價"},{"id":2331,"word":"rather than","pos":"phr","meaning":"phr. 而不是"},{"id":2332,"word":"raw","pos":"adj","meaning":"adj. 生的；未加工的"},{"id":2333,"word":"ray","pos":"n","meaning":"n. 光線"},{"id":2334,"word":"razor","pos":"n","meaning":"n. 剃刀"},{"id":2335,"word":"reach","pos":"v","meaning":"v. 實現，達成；抵達"},{"id":2336,"word":"reach out to someone","pos":"phr","meaning":"phr. 向～伸出援手"},{"id":2337,"word":"react","pos":"v","meaning":"v. 反應"},{"id":2338,"word":"reaction","pos":"n","meaning":"n. 反應"},{"id":2339,"word":"realistic","pos":"adj","meaning":"adj. 現實的；寫實的"},{"id":2340,"word":"realize","pos":"v","meaning":"v. 了解，發覺；實現"},{"id":2341,"word":"rear","pos":"adj","meaning":"adj. 後面的 (n) 後面 (v) 撫養"},{"id":2342,"word":"reasonable","pos":"adj","meaning":"adj. 講道理的；合理的"},{"id":2343,"word":"rebel","pos":"v","meaning":"v. 反叛 (n) 反抗者"},{"id":2344,"word":"recall","pos":"v","meaning":"v. 回想；收回"},{"id":2345,"word":"receipt","pos":"n","meaning":"n. 收據"},{"id":2346,"word":"receive","pos":"v","meaning":"v. 得到，收到"},{"id":2347,"word":"receiver","pos":"n","meaning":"n. 接收器；電話聽筒"},{"id":2348,"word":"recent","pos":"adj","meaning":"adj. 最近的，近來的"},{"id":2349,"word":"recently","pos":"adv","meaning":"adv. 最近，近來"},{"id":2350,"word":"reception","pos":"n","meaning":"n. 接待；歡迎"},{"id":2351,"word":"recipe","pos":"n","meaning":"n. 食譜"},{"id":2352,"word":"recite","pos":"v","meaning":"v. 背誦"},{"id":2353,"word":"recognition","pos":"n","meaning":"n. 認出；識別；承認；認可"},{"id":2354,"word":"recognize","pos":"v","meaning":"v. 認出；承認；感謝；表彰"},{"id":2355,"word":"recommend","pos":"v","meaning":"v. 推薦，介紹"},{"id":2356,"word":"recommendation","pos":"n","meaning":"n. 推薦、推薦信"},{"id":2357,"word":"reconcile","pos":"v","meaning":"v. 和解，和好"},{"id":2358,"word":"reconciliation","pos":"n","meaning":"n. 和解，和好"},{"id":2359,"word":"reconstruction","pos":"n","meaning":"n. 重建，復原"},{"id":2360,"word":"record","pos":"n/v","meaning":"n/v. 錄音；紀錄"},{"id":2361,"word":"recorder","pos":"n","meaning":"n. 錄音機；錄放影機"},{"id":2362,"word":"recover","pos":"v","meaning":"v. 康復；收復；尋回"},{"id":2363,"word":"recovery","pos":"n","meaning":"n. 康復；復元；取回；收復"},{"id":2364,"word":"recreation","pos":"n","meaning":"n. 消遣；娛樂"},{"id":2365,"word":"recruit","pos":"v","meaning":"v. 招募"},{"id":2366,"word":"recur","pos":"v","meaning":"v. 再發生， 復發"},{"id":2367,"word":"recurrence","pos":"n","meaning":"n. 反覆發生"},{"id":2368,"word":"recurrent","pos":"adj","meaning":"adj. 反覆出現的"},{"id":2369,"word":"recycle","pos":"v","meaning":"v. 回收；再利用"},{"id":2370,"word":"reduce","pos":"v","meaning":"v. 減少；使陷於～的地步；降級"},{"id":2371,"word":"reduction","pos":"n","meaning":"n. 減少"},{"id":2372,"word":"refer","pos":"v","meaning":"v. 參考；查閱；提到；說起"},{"id":2373,"word":"refer to … as","pos":"phr","meaning":"phr. 把A稱作B"},{"id":2374,"word":"reference","pos":"n","meaning":"n. 寫介紹信的人；證明書；介紹信；參考；言及；提及"},{"id":2375,"word":"reflect","pos":"v","meaning":"v. 反射；映現；反映；仔細思考"},{"id":2376,"word":"reflection","pos":"n","meaning":"n. 倒影；反映；沉思；深思熟慮"},{"id":2377,"word":"reform","pos":"v","meaning":"v. 改革 (n) 改革"},{"id":2378,"word":"refresh","pos":"v","meaning":"v. 使恢復活力；使喚起"},{"id":2379,"word":"refreshment","pos":"n","meaning":"n. 精力恢復；心曠神怡；點心"}]},
+{"unit":19,"unit_label":"p.37-38","words":[{"id":2380,"word":"refugee","pos":"n","meaning":"n. 難民"},{"id":2381,"word":"refusal","pos":"n","meaning":"n. 拒絕"},{"id":2382,"word":"refuse","pos":"v","meaning":"v. 拒絕"},{"id":2383,"word":"regard","pos":"v","meaning":"v. 認為，視為(A as B) (n) 尊敬，欽佩"},{"id":2384,"word":"regarding","pos":"prep","meaning":"prep. 關於"},{"id":2385,"word":"region","pos":"n","meaning":"n. 地區"},{"id":2386,"word":"regional","pos":"adj","meaning":"adj. 地區的"},{"id":2387,"word":"register","pos":"v","meaning":"v. 登記；註冊；以掛號寄出 (n) 名冊；登記簿"},{"id":2388,"word":"registration","pos":"n","meaning":"n. 登記；註冊；掛號"},{"id":2389,"word":"regret","pos":"v","meaning":"v. 後悔；遺憾 (n) 後悔；遺憾"},{"id":2390,"word":"regretful","pos":"adj","meaning":"adj. 後悔的，遺憾的"},{"id":2391,"word":"regretfully","pos":"adv","meaning":"adv. 後悔地；不幸地"},{"id":2392,"word":"regrettably","pos":"adv","meaning":"adv. 令人遺憾地，令人後悔地"},{"id":2393,"word":"regular","pos":"adj","meaning":"adj. 規律的，頻繁的"},{"id":2394,"word":"regularly","pos":"adv","meaning":"adv. 規律地"},{"id":2395,"word":"regulate","pos":"v","meaning":"v. 管理；控制；調節；調整"},{"id":2396,"word":"regulation","pos":"n","meaning":"n. 規定；規則"},{"id":2397,"word":"rehearsal","pos":"n","meaning":"n. 排練；預演"},{"id":2398,"word":"rehearse","pos":"v","meaning":"v. 排演"},{"id":2399,"word":"rejection","pos":"n","meaning":"n. 拒絕"},{"id":2400,"word":"relate","pos":"v","meaning":"v. （使）有關聯；與～有親戚關係"},{"id":2401,"word":"related","pos":"adj","meaning":"adj. 相關的，有關的"},{"id":2402,"word":"relation","pos":"n","meaning":"n. 關係，關聯"},{"id":2403,"word":"relationship","pos":"n","meaning":"n. 關係，人際關係"},{"id":2404,"word":"relative","pos":"n","meaning":"n. 親戚 (adj) 相對的；比較的"},{"id":2405,"word":"relax","pos":"v","meaning":"v. 使輕鬆；休息；放鬆"},{"id":2406,"word":"relaxation","pos":"n","meaning":"n. 消遣；娛樂；鬆弛；鬆懈"},{"id":2407,"word":"relaxed","pos":"adj","meaning":"adj. 放鬆的"},{"id":2408,"word":"release","pos":"v","meaning":"v. 釋放；解除；發行 (n) 釋放；解脫；發行的作品"},{"id":2409,"word":"reliable","pos":"adj","meaning":"adj. 可靠的"},{"id":2410,"word":"reliance","pos":"n","meaning":"n. 對～的依賴"},{"id":2411,"word":"relief","pos":"n","meaning":"n. 減輕；消除；慰藉"},{"id":2412,"word":"relieve","pos":"v","meaning":"v. 減輕；解除"},{"id":2413,"word":"relieved","pos":"adj","meaning":"adj. 寬慰的，放心的"},{"id":2414,"word":"religion","pos":"n","meaning":"n. 宗教（信仰）"},{"id":2415,"word":"religious","pos":"adj","meaning":"adj. 宗教的；虔誠的"},{"id":2416,"word":"reluctant","pos":"adj","meaning":"adj. 不情願的"},{"id":2417,"word":"rely","pos":"v","meaning":"v. 依賴；依靠"},{"id":2418,"word":"rely on","pos":"phr","meaning":"phr. 依賴"},{"id":2419,"word":"remain","pos":"v","meaning":"v. 存留；保持；留待"},{"id":2420,"word":"remains","pos":"n","meaning":"n. 剩餘物，遺跡"},{"id":2421,"word":"remark","pos":"v","meaning":"v. 說；評論 (n) 談論；評論"},{"id":2422,"word":"remarkable","pos":"adj","meaning":"adj. 顯著的；非凡的"},{"id":2423,"word":"remedy","pos":"n","meaning":"n. 治療法；補救辦法 (v) 補救"},{"id":2424,"word":"remind","pos":"v","meaning":"v. 提醒；使想起"},{"id":2425,"word":"remote","pos":"adj","meaning":"adj. 遙遠的；偏僻的"},{"id":2426,"word":"remove","pos":"v","meaning":"v. 移開"},{"id":2427,"word":"renew","pos":"v","meaning":"v. 使延期；更換（執照等）；更新"},{"id":2428,"word":"rent","pos":"v","meaning":"v. 租；出租 (n) 房租"},{"id":2429,"word":"repair","pos":"v","meaning":"v. 修理 (n) 修理；修復"},{"id":2430,"word":"repetition","pos":"n","meaning":"n. 重複；反覆"},{"id":2431,"word":"replace","pos":"v","meaning":"v. 取代"},{"id":2432,"word":"replacement","pos":"n","meaning":"n. 替代者，替代物"},{"id":2433,"word":"reply","pos":"v/n","meaning":"v/n. 回覆"},{"id":2434,"word":"represent","pos":"v","meaning":"v. 代表；表示；象徵"},{"id":2435,"word":"representation","pos":"n","meaning":"n. 代表（權）"},{"id":2436,"word":"representative","pos":"n","meaning":"n. 代表 (adj) 代表性的"},{"id":2437,"word":"reproduce","pos":"vi","meaning":"vi. 繁殖，生殖"},{"id":2438,"word":"reproduction","pos":"n","meaning":"n. 繁殖、生殖"},{"id":2439,"word":"republic","pos":"n","meaning":"n. 共和國；共和政體"},{"id":2440,"word":"reputation","pos":"n","meaning":"n. 名譽；名聲"},{"id":2441,"word":"request","pos":"v","meaning":"v. 請求；要求；點歌 (n) 請求；要求；點播曲"},{"id":2442,"word":"require","pos":"v","meaning":"v. 需要，要求"},{"id":2443,"word":"requirement","pos":"n","meaning":"n. 必需品，必要條件"},{"id":2444,"word":"rescue","pos":"v","meaning":"v. 救援 (n) 救援"},{"id":2445,"word":"research","pos":"n","meaning":"n. 研究 (v) 研究"},{"id":2446,"word":"researcher","pos":"n","meaning":"n. 研究人員"},{"id":2447,"word":"resemble","pos":"v","meaning":"v. 像"},{"id":2448,"word":"reservation","pos":"n","meaning":"n. 預訂；疑慮；懷疑"},{"id":2449,"word":"reserve","pos":"v","meaning":"v. 保留；保存；預定 (n) 保護區"},{"id":2450,"word":"reside","pos":"v","meaning":"v. 居住"},{"id":2451,"word":"residence","pos":"n","meaning":"n. 住所"},{"id":2452,"word":"resident","pos":"n","meaning":"n. 居民"},{"id":2453,"word":"residential","pos":"adj","meaning":"adj. 居住的，住宅的"},{"id":2454,"word":"resign","pos":"v","meaning":"v. 辭職"},{"id":2455,"word":"resignation","pos":"n","meaning":"n. 辭職；辭呈"},{"id":2456,"word":"resist","pos":"v","meaning":"v. 抵抗；忍住；抑制"},{"id":2457,"word":"resistance","pos":"n","meaning":"n. 抵抗；抗拒；抵抗力"},{"id":2458,"word":"resistant","pos":"adj","meaning":"adj. 有抵抗力的"},{"id":2459,"word":"resolution","pos":"n","meaning":"n. 決心；解決"},{"id":2460,"word":"resolve","pos":"v","meaning":"v. 決定；解決"},{"id":2461,"word":"resource","pos":"n","meaning":"n. 資源"},{"id":2462,"word":"respectable","pos":"adj","meaning":"adj. 值得尊敬的；體面的"},{"id":2463,"word":"respectful","pos":"adj","meaning":"adj. 尊敬的；有禮貌的"},{"id":2464,"word":"respective","pos":"a","meaning":"a. 分別的 各自的"},{"id":2465,"word":"respectively","pos":"adv","meaning":"adv. 分別，依次地"},{"id":2466,"word":"respond","pos":"v","meaning":"v. 回答；回應"},{"id":2467,"word":"response","pos":"n","meaning":"n. 回答；回覆；回應"},{"id":2468,"word":"responsibility","pos":"n","meaning":"n. 責任感"},{"id":2469,"word":"responsible","pos":"adj","meaning":"adj. 負責任的"},{"id":2470,"word":"restore","pos":"v","meaning":"v. 恢復；歸還；使復原；使恢復健康"},{"id":2471,"word":"restrict","pos":"v","meaning":"v. 限制"},{"id":2472,"word":"restricted","pos":"adj","meaning":"adj. 受限制的；被限定的"},{"id":2473,"word":"restriction","pos":"n","meaning":"n. 限制"},{"id":2474,"word":"restrictive","pos":"adj","meaning":"adj. 限制的；約束的"},{"id":2475,"word":"result","pos":"n","meaning":"n. 結果 (v) 造成(+in)，由～引起(+from)"},{"id":2476,"word":"retain","pos":"v","meaning":"v. 保持；保有"},{"id":2477,"word":"retire","pos":"v","meaning":"v. 退休"},{"id":2478,"word":"retreat","pos":"v","meaning":"v. 撤退；退後；退隱；躲避 (n) 撤退；退隱處；僻靜處"},{"id":2479,"word":"return","pos":"v/n","meaning":"v/n. 回應，回報；返回"},{"id":2480,"word":"reunion","pos":"n","meaning":"n. 重聚；團圓"},{"id":2481,"word":"reveal","pos":"v","meaning":"v. 透露"},{"id":2482,"word":"revenge","pos":"n","meaning":"n. 復仇 (v) 報仇；報復"},{"id":2483,"word":"revise","pos":"v","meaning":"v. 修訂"},{"id":2484,"word":"revision","pos":"n","meaning":"n. 修訂（版）"},{"id":2485,"word":"revolution","pos":"n","meaning":"n. 革命；旋轉"},{"id":2486,"word":"revolutionary","pos":"adj","meaning":"adj. 革新的 (n) 革命份子；改革者"},{"id":2487,"word":"reward","pos":"n","meaning":"n. 報酬 (v) 報答；酬謝"},{"id":2488,"word":"rhyme","pos":"n","meaning":"n. 韻文；押韻詞 (v) 押韻"},{"id":2489,"word":"rhythm","pos":"n","meaning":"n. 節奏；韻律"},{"id":2490,"word":"ribbon","pos":"n","meaning":"n. 緞帶"},{"id":2491,"word":"rid","pos":"v","meaning":"v. 除掉 (adj) 除掉的"},{"id":2492,"word":"riddle","pos":"n","meaning":"n. 謎"},{"id":2493,"word":"ridicule","pos":"v/n","meaning":"v/n. 奚落、嘲笑"},{"id":2494,"word":"ridiculous","pos":"adj","meaning":"adj. 可笑的，荒唐的"},{"id":2495,"word":"ripe","pos":"adj","meaning":"adj. 成熟的"},{"id":2496,"word":"rise","pos":"v","meaning":"v. 升起，上升（rose, risen）"},{"id":2497,"word":"risk","pos":"v","meaning":"v. 冒著危險 (n) 危險；風險"},{"id":2498,"word":"ritual","pos":"n","meaning":"n. 儀式"},{"id":2499,"word":"rival","pos":"n","meaning":"n. 競爭對手 (v) 比得上～，與～匹敵"},{"id":2500,"word":"rivalry","pos":"n","meaning":"n. 競爭"},{"id":2501,"word":"roar","pos":"v","meaning":"v. 大聲吼叫 (n) 吼聲；轟響聲"},{"id":2502,"word":"roast","pos":"v","meaning":"v. 烤 (n) 烤肉（活動）"},{"id":2503,"word":"rob","pos":"v","meaning":"v. 搶奪"},{"id":2504,"word":"robber","pos":"n","meaning":"n. 搶匪"},{"id":2505,"word":"robbery","pos":"n","meaning":"n. 搶案；搶劫"},{"id":2506,"word":"robe","pos":"n","meaning":"n. 袍子"},{"id":2507,"word":"rocket","pos":"n","meaning":"n. 火箭"},{"id":2508,"word":"roll","pos":"v","meaning":"v. 流，滴，滾動"},{"id":2509,"word":"romance","pos":"n","meaning":"n. 戀愛（故事）；浪漫情調"},{"id":2510,"word":"romantic","pos":"adj","meaning":"adj. 浪漫的"}]},
+{"unit":20,"unit_label":"p.39-40","words":[{"id":2511,"word":"rot","pos":"v","meaning":"v. 腐爛"},{"id":2512,"word":"rotten","pos":"adj","meaning":"adj. 腐爛的"},{"id":2513,"word":"rough","pos":"adj","meaning":"adj. 粗糙的"},{"id":2514,"word":"roughly","pos":"adv","meaning":"adv. 粗暴地；約略地"},{"id":2515,"word":"route","pos":"n","meaning":"n. 路線"},{"id":2516,"word":"routine","pos":"n","meaning":"n. 例行公事 (adj)例行的"},{"id":2517,"word":"rug","pos":"n","meaning":"n. 小塊地毯"},{"id":2518,"word":"ruin","pos":"v","meaning":"v. 毀滅；毀壞；使破產 (n) 毀滅；衰敗；廢墟；遺跡（用複數形）"},{"id":2519,"word":"rumor","pos":"n","meaning":"n. 謠言；傳說 (v) 謠傳"},{"id":2520,"word":"run a risk (of doing something)","pos":"phr","meaning":"phr. 冒～的風險"},{"id":2521,"word":"run into","pos":"phr","meaning":"phr. 撞見；偶遇"},{"id":2522,"word":"run out","pos":"phr","meaning":"phr. 用完，耗盡"},{"id":2523,"word":"rural","pos":"adj","meaning":"adj. 鄉村的"},{"id":2524,"word":"rust","pos":"n","meaning":"n. 鏽 (v) 生鏽"},{"id":2525,"word":"rusty","pos":"adj","meaning":"adj. 生鏽的"},{"id":2526,"word":"sack","pos":"n","meaning":"n. 大袋子 (v) 解雇"},{"id":2527,"word":"sacrifice","pos":"n","meaning":"n. 犧牲；獻祭；祭品 (v) 犧牲；獻祭；祭祀"},{"id":2528,"word":"sake","pos":"n","meaning":"n. 緣故"},{"id":2529,"word":"salary","pos":"n","meaning":"n. 薪水"},{"id":2530,"word":"salesperson","pos":"n","meaning":"n. 售貨員"},{"id":2531,"word":"satellite","pos":"n","meaning":"n. 衛星"},{"id":2532,"word":"satisfaction","pos":"n","meaning":"n. 滿足；滿意"},{"id":2533,"word":"satisfactory","pos":"adj","meaning":"adj. 令人滿意的"},{"id":2534,"word":"satisfy","pos":"v","meaning":"v. 使滿意"},{"id":2535,"word":"satisfying","pos":"adj","meaning":"adj. 令人滿意的"},{"id":2536,"word":"saucer","pos":"n","meaning":"n. 杯碟"},{"id":2537,"word":"sausage","pos":"n","meaning":"n. 香腸"},{"id":2538,"word":"savings","pos":"n","meaning":"n. 存款"},{"id":2539,"word":"scale","pos":"n","meaning":"n. 記數法；基準；規模；程度；刻度；尺度；磅秤"},{"id":2540,"word":"scan","pos":"v","meaning":"v. 掃描，粗略地看"},{"id":2541,"word":"scanner","pos":"n","meaning":"n. 掃瞄器"},{"id":2542,"word":"scarce","pos":"adj","meaning":"adj. 缺乏的；不足的"},{"id":2543,"word":"scarcely","pos":"adv","meaning":"adv. 幾乎不"},{"id":2544,"word":"scarecrow","pos":"n","meaning":"n. 稻草人"},{"id":2545,"word":"scary","pos":"adj","meaning":"adj. 可怕的"},{"id":2546,"word":"scatter","pos":"v","meaning":"v. （使）消散；（使）散開；撒"},{"id":2547,"word":"scenery","pos":"n","meaning":"n. 風景"},{"id":2548,"word":"schedule","pos":"n","meaning":"n. 計劃表；日程安排表；時間表 (v) 預定；安排"},{"id":2549,"word":"scholar","pos":"n","meaning":"n. 學者"},{"id":2550,"word":"scholarship","pos":"n","meaning":"n. 獎學金"},{"id":2551,"word":"science","pos":"n","meaning":"n. 科學"},{"id":2552,"word":"scientific","pos":"adj","meaning":"adj. 科學的"},{"id":2553,"word":"scientist","pos":"n","meaning":"n. 科學家"},{"id":2554,"word":"scold","pos":"v","meaning":"v. 責罵"},{"id":2555,"word":"scoop","pos":"n","meaning":"n. 勺子；一勺；獨家消息 (v) 用勺子挖"},{"id":2556,"word":"scout","pos":"n","meaning":"n. 童子軍；星探；球探"},{"id":2557,"word":"scratch","pos":"v","meaning":"v. 抓；搔；刮 (n) 抓傷；刮痕"},{"id":2558,"word":"scream","pos":"v","meaning":"v. 尖叫 (n) 尖叫聲"},{"id":2559,"word":"screw","pos":"n","meaning":"n. 螺旋；螺絲"},{"id":2560,"word":"screwdriver","pos":"n","meaning":"n. 螺絲起子"},{"id":2561,"word":"scrub","pos":"v","meaning":"v. 洗刷 (n) 洗刷"},{"id":2562,"word":"sculpture","pos":"n","meaning":"n. 雕刻（品）"},{"id":2563,"word":"seagull","pos":"n","meaning":"n. 海鷗"},{"id":2564,"word":"seal","pos":"n","meaning":"n. 封條；印鑑；海豹 (v) 密封；蓋章"},{"id":2565,"word":"secondary","pos":"adj","meaning":"adj. 次要的；第二的"},{"id":2566,"word":"secret","pos":"n","meaning":"n. 秘密 (adj) 秘密的"},{"id":2567,"word":"security","pos":"n","meaning":"n. 安全（感）"},{"id":2568,"word":"see for oneself","pos":"phr","meaning":"phr. 親自看看"},{"id":2569,"word":"seek","pos":"v","meaning":"v. 尋求"},{"id":2570,"word":"seek out","pos":"phr","meaning":"phr. 找出"},{"id":2571,"word":"seem","pos":"v","meaning":"v. 看來，似乎"},{"id":2572,"word":"seize","pos":"v","meaning":"v. 抓住；把握"},{"id":2573,"word":"seldom","pos":"adv","meaning":"adv. 很少；不常"},{"id":2574,"word":"select","pos":"v","meaning":"v. 挑選"},{"id":2575,"word":"selection","pos":"n","meaning":"n. 挑選，選擇"},{"id":2576,"word":"semester","pos":"n","meaning":"n. 學期"},{"id":2577,"word":"senior","pos":"adj","meaning":"adj. 較年長的；資深的 (n) 較年長或資深者；大四或高三學生"},{"id":2578,"word":"sense","pos":"v","meaning":"v. 感覺到，意識到 (n) 感覺，意識"},{"id":2579,"word":"sensible","pos":"adj","meaning":"adj. 明理的；明智的"},{"id":2580,"word":"sensitive","pos":"adj","meaning":"adj. 敏感的"},{"id":2581,"word":"sensitivity","pos":"n","meaning":"n. 體貼，善解人意"},{"id":2582,"word":"separate","pos":"v","meaning":"v. 分隔，分開 (adj) 分開的"},{"id":2583,"word":"separation","pos":"n","meaning":"n. 分離"},{"id":2584,"word":"serve","pos":"v","meaning":"v. 服務，當作～"},{"id":2585,"word":"service","pos":"n","meaning":"n. 服務，宗教儀式"},{"id":2586,"word":"set off","pos":"phr","meaning":"phr. 出發、動身"},{"id":2587,"word":"settler","pos":"n","meaning":"n. 移民；殖民者"},{"id":2588,"word":"severe","pos":"adj","meaning":"adj. 嚴厲的；嚴重的"},{"id":2589,"word":"severity","pos":"n","meaning":"n. 嚴重性，劇烈"},{"id":2590,"word":"sew","pos":"v","meaning":"v. 縫"},{"id":2591,"word":"sex","pos":"n","meaning":"n. 性別；性行為"},{"id":2592,"word":"sexual","pos":"adj","meaning":"adj. 性（別）的；性方面的"},{"id":2593,"word":"sexy","pos":"adj","meaning":"adj. 性感的"},{"id":2594,"word":"shabby","pos":"adj","meaning":"adj. 破舊的，破爛的"},{"id":2595,"word":"shade","pos":"n","meaning":"n. 陰影；陰涼處；（色彩）濃淡；色調 (v) 遮蔽"},{"id":2596,"word":"shadow","pos":"n","meaning":"n. 影子"},{"id":2597,"word":"shady","pos":"adj","meaning":"adj. 遮蔽的"},{"id":2598,"word":"shallow","pos":"adj","meaning":"adj. 淺的；膚淺的"},{"id":2599,"word":"shame","pos":"n","meaning":"n. 羞愧；恥辱；可惜的事；憾事"},{"id":2600,"word":"shameful","pos":"adj","meaning":"adj. 可恥的"},{"id":2601,"word":"shampoo","pos":"n","meaning":"n. 洗髮精 (v) 洗頭髮"},{"id":2602,"word":"sharp","pos":"adj","meaning":"adj. 敏銳的，銳利的"},{"id":2603,"word":"shave","pos":"v","meaning":"v. 刮（鬍子） (n) 刮鬍子"},{"id":2604,"word":"shaver","pos":"n","meaning":"n. 刮鬍刀"},{"id":2605,"word":"shelter","pos":"n","meaning":"n. 庇護；庇護所；避難所"},{"id":2606,"word":"shepherd","pos":"n","meaning":"n. 牧羊人"},{"id":2607,"word":"shift","pos":"n","meaning":"n. 改變；輪值；輪班 (v) 改變；變速；換檔"},{"id":2608,"word":"shine","pos":"v","meaning":"v. 發亮(shone, shone); (v)擦亮(shined, shined)"},{"id":2609,"word":"shiny","pos":"adj","meaning":"adj. 發亮的"},{"id":2610,"word":"shorten","pos":"v","meaning":"v. 縮短；變短"},{"id":2611,"word":"shortly","pos":"adv","meaning":"adv. 不久；馬上"},{"id":2612,"word":"shortsighted","pos":"adj","meaning":"adj. 近視的；無遠見的"},{"id":2613,"word":"shovel","pos":"n","meaning":"n. 鏟子 (v) 用鏟子鏟"},{"id":2614,"word":"shrink","pos":"v","meaning":"v. 縮水；退縮"},{"id":2615,"word":"shrug","pos":"v","meaning":"v. 聳肩 (n) 聳肩"},{"id":2616,"word":"shuttle","pos":"n","meaning":"n. 太空梭；接駁車 (v) 接駁"},{"id":2617,"word":"sigh","pos":"v","meaning":"v. 嘆氣 (n) 嘆息"},{"id":2618,"word":"sight","pos":"n","meaning":"n. 景色，視力，看到"},{"id":2619,"word":"sightseeing","pos":"n","meaning":"n. 觀光"},{"id":2620,"word":"signal","pos":"n","meaning":"n. 信號 (v) 打信號；用信號通知"},{"id":2621,"word":"signature","pos":"n","meaning":"n. 簽名"},{"id":2622,"word":"significance","pos":"n","meaning":"n. 重要（性）"},{"id":2623,"word":"significant","pos":"adj","meaning":"adj. 重要的；有特殊意義的"},{"id":2624,"word":"signify","pos":"v","meaning":"v. 意味著，象徵"},{"id":2625,"word":"silence","pos":"n","meaning":"n. 寂靜，無聲"},{"id":2626,"word":"silent","pos":"adj","meaning":"adj. 沈默的"},{"id":2627,"word":"similar","pos":"adj","meaning":"adj. 相似的，類似的"},{"id":2628,"word":"similarity","pos":"n","meaning":"n. 相似處"},{"id":2629,"word":"simply","pos":"adv","meaning":"adv. 僅僅，只是"},{"id":2630,"word":"simultaneous","pos":"adj","meaning":"adj. 同時的"},{"id":2631,"word":"simultaneously","pos":"adv","meaning":"adv. 同時地"},{"id":2632,"word":"sin","pos":"n","meaning":"n. （宗教的）罪"},{"id":2633,"word":"sincere","pos":"adj","meaning":"adj. 認真的；真誠的"},{"id":2634,"word":"sincerity","pos":"n","meaning":"n. 誠意"},{"id":2635,"word":"singular","pos":"adj","meaning":"adj. 單數的 (n) 單數（形）"},{"id":2636,"word":"sip","pos":"v","meaning":"v. 啜飲 (n) 一小口"},{"id":2637,"word":"sit back","pos":"phr","meaning":"phr. 不採取行動，悠閒坐好"},{"id":2638,"word":"site","pos":"n","meaning":"n. 地點；場所"},{"id":2639,"word":"situation","pos":"n","meaning":"n. 情況；局勢"},{"id":2640,"word":"skate","pos":"n","meaning":"n. 溜冰鞋 (v) 溜冰"},{"id":2641,"word":"sketch","pos":"n","meaning":"n. 素描；梗概；大要 (v) 畫素描；略述；記述概要"},{"id":2642,"word":"ski","pos":"v","meaning":"v. 滑雪 (n) 滑雪板"}]}
+];
+
+/* ================= words ================= */
+const $ = id => document.getElementById(id);
+const POS_OK=/^(n|v|vt|vi|adj|adv|a|prep|phr|aux|conj|pron|int)(\/(n|v|adj|adv))?$/i;
+function posKey(p){ p=(p||'').toLowerCase().split('/')[0]; return p==='vt'||p==='vi'?'v':p==='a'?'adj':p; }
+function cleanMeaning(m){
+  // "adv可能地" → "adv. 可能地"
+  return m.trim().replace(/^([a-z]+(?:\/[a-z]+)?)\.?\s*/i,(x,p)=>POS_OK.test(p)?p+'. ':x);
+}
+function glosses(m){
+  const s=m.replace(/\([^)]*\)|（[^）]*）/g,' ').replace(/\b(n|v|vt|vi|adj|adv|a|prep|phr|aux|conj)\b\.?/gi,' ');
+  return s.split(/[；;，,、\/\s]+/).map(x=>x.replace(/[～~.。]/g,'').replace(/[的地]$/,'')).filter(x=>/[一-鿿]/.test(x));
+}
+function spellForm(w){
+  const s=w.replace(/\(=[^)]*\)/g,'').trim().toLowerCase().replace(/\s+/g,' ');
+  return /^[a-z][a-z' \-]*$/.test(s)?s:null;
+}
+const normWord=w=>w.replace(/\(=[^)]*\)/g,'').trim().toLowerCase();
+const WORDS={}, UNIT_IDS={};
+UNITS.forEach(un=>{
+  UNIT_IDS[un.unit]=[];
+  un.words.forEach(w=>{
+    const meaning=cleanMeaning(w.meaning);
+    let pos=w.pos; if(!pos){const m=meaning.match(/^([a-z]+(?:\/[a-z]+)?)\./i); pos=m?m[1]:'';}
+    WORDS[w.id]={id:w.id,word:w.word.trim(),meaning,pk:posKey(pos),unit:un.unit,gl:glosses(meaning),spell:spellForm(w.word)};
+    UNIT_IDS[un.unit].push(w.id);
+  });
+});
+const ALL_IDS=Object.keys(WORDS).map(Number);
+const overlap=(a,b)=>a.some(x=>b.includes(x));
+
+/* ================= state ================= */
+let sel=UNITS.map(u=>u.unit), modes={e2c:true,c2e:true,spell:false}, weakOnly=false;
+let stats={};             // id → [streak, right, wrong]
+let order=[], qi=-1, Q=null, again=false, answered=false, water=0, shown=0;
+let retry=[];             // [{id, due}]
+const mastered=id=>(stats[id]&&stats[id][0]>=2);
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+function selIds(){ return sel.flatMap(u=>UNIT_IDS[u]||[]); }
+function pool(){
+  const all=selIds();
+  if(!weakOnly) return all;
+  const weak=all.filter(id=>!mastered(id));
+  if(!weak.length){ toast('這個範圍的字全都熟了，改成全部出'); return all; }
+  return weak;
+}
+
+/* ---------- building a question ---------- */
+function distractors(t){
+  const out=[];
+  const fits=id=>{
+    const c=WORDS[id];
+    if(!c || id===t.id || out.includes(id)) return false;
+    if(normWord(c.word)===normWord(t.word) || overlap(c.gl,t.gl)) return false;
+    return out.every(o=>normWord(WORDS[o].word)!==normWord(c.word) && !overlap(WORDS[o].gl,c.gl));
+  };
+  const fill=list=>{for(const id of shuffle(list)){ if(out.length>=3) break; if(fits(id)) out.push(id); }};
+  const inSel=selIds(), same=id=>WORDS[id].pk===t.pk;
+  // one look-alike neighbour from the list (e.g. oppress / oppression) makes it a real test
+  if(Math.random()<.7){
+    for(const id of shuffle(inSel.filter(id=>same(id)&&Math.abs(id-t.id)<=6))){ if(fits(id)){out.push(id);break} }
+  }
+  fill(inSel.filter(same));
+  if(out.length<3) fill(ALL_IDS.filter(same));
+  if(out.length<3) fill(ALL_IDS);
+  return out;
+}
+function buildQ(id){
+  const w=WORDS[id], types=[];
+  if(modes.e2c) types.push('e2c');
+  if(modes.c2e) types.push('c2e');
+  if(modes.spell && w.spell) types.push('spell');
+  if(!types.length) types.push('e2c');     // spelling only, but this one is a phrase with ( ) — ask it as a choice
+  const type=types[Math.floor(Math.random()*types.length)];
+  if(type==='spell') return {id,type};
+  const opts=shuffle([id,...distractors(w)]);
+  return {id,type,opts,a:opts.indexOf(id)};
+}
+
+/* ---------- flow ---------- */
+function nextQuestion(){
+  shown++;
+  const r=retry.findIndex(x=>x.due<=shown);
+  let id;
+  if(r>=0){ id=retry.splice(r,1)[0].id; again=true; }
+  else{
+    qi++;
+    if(qi>=order.length){
+      if(order.length) toast('這個範圍全部出過一輪了，重新洗牌');
+      order=shuffle(pool()); qi=0;
+      if(Q && order.length>1 && order[0]===Q.id) order.push(order.shift());
+    }
+    id=order[qi]; again=false;
+    retry=retry.filter(x=>x.id!==id);
+  }
+  Q=buildQ(id);
+  showQuestion();
+  save();
+}
+
+const SPEAK_SVG='<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 8h3l4-3.5v11L6 12H3z" fill="currentColor"/><path d="M13 7.2a4 4 0 0 1 0 5.6M15.2 5a7 7 0 0 1 0 10" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>';
+function sayBtn(word){
+  const b=document.createElement('button');
+  b.className='say'; b.type='button'; b.innerHTML=SPEAK_SVG; b.setAttribute('aria-label','唸出 '+word);
+  b.hidden=!canSpeak; b.onclick=()=>speak(word);
+  return b;
+}
+const KIND={e2c:'看英文選中文',c2e:'看中文選英文',spell:'看中文拼英文'};
+function showQuestion(){
+  const w=WORDS[Q.id];
+  answered=false;
+  $('kind').textContent=KIND[Q.type];
+  $('again').hidden=!again;
+  updateScope();
+  const pr=$('prompt'); pr.innerHTML='';
+  if(Q.type==='e2c'){
+    const s=document.createElement('span'); s.className='word'; s.textContent=w.word; pr.append(s, sayBtn(w.word));
+  }else{
+    const s=document.createElement('span'); s.className='mean'; s.textContent=w.meaning; pr.append(s);
+  }
+  const ul=$('opts'); ul.innerHTML='';
+  $('spell').hidden=Q.type!=='spell';
+  if(Q.type==='spell'){
+    const t=$('typed'); t.value=''; t.disabled=false; t.className='';
+    $('check').disabled=false; $('giveup').disabled=false;
+    $('letters').textContent=w.spell.split('').map((c,i)=>i===0?c:c===' '?' ':c==='-'||c==="'"?c:'_').join(' ');
+    const cnt=document.createElement('small'); cnt.textContent='（'+w.spell.replace(/[^a-z]/g,'').length+' 個字母）'; $('letters').append(cnt);
+    if(matchMedia('(pointer:fine)').matches) t.focus({preventScroll:true});
+  }else{
+    Q.opts.forEach((oid,i)=>{
+      const o=WORDS[oid];
+      const li=document.createElement('li');
+      const b=document.createElement('button');
+      b.className='opt'+(Q.type==='c2e'?' en':'');
+      b.innerHTML='<span class="k">'+'ABCD'[i]+'</span><span></span>';
+      b.lastChild.textContent=Q.type==='c2e'?o.word:o.meaning;
+      b.onclick=()=>answer(i);
+      li.appendChild(b); ul.appendChild(li);
+    });
+  }
+  $('after').classList.remove('on');
+  $('quiz').scrollTop=0;
+}
+function record(id,ok){
+  const s=stats[id]||[0,0,0];
+  if(ok){s[0]++;s[1]++}else{s[0]=0;s[2]++}
+  stats[id]=s;
+}
+function finish(ok,badText){
+  const w=WORDS[Q.id];
+  record(Q.id,ok);
+  const msg=$('msg');
+  if(ok){
+    const got=Q.type==='spell'?2:1;
+    water+=got; renderDrops(true);
+    msg.className='msg good';
+    msg.textContent= water===got ? '答對了，得到'+(got===2?'兩滴':'一滴')+'水。點土地，把它滴下去。'
+      : (got===2?'拼對了，拿兩滴水。':'答對了，又多一滴水。')+(mastered(Q.id)&&stats[Q.id][0]===2?'這個字熟了。':'');
+  }else{
+    retry.push({id:Q.id,due:shown+3+Math.floor(Math.random()*3)});
+    msg.className='msg bad';
+    msg.textContent=badText+'這個字過一會兒會再出現。';
+  }
+  const card=$('card'); card.innerHTML='';
+  const b=document.createElement('b'); b.textContent=w.word;
+  const s=document.createElement('span'); s.textContent=w.meaning;
+  card.append(b, sayBtn(w.word), s);
+  $('after').classList.add('on');
+  $('next').focus({preventScroll:true});
+  requestAnimationFrame(()=>$('after').scrollIntoView({block:'nearest',behavior:'smooth'}));
+  save();
+}
+function answer(i){
+  if(answered||Q.type==='spell'||i>=Q.opts.length) return;
+  answered=true;
+  [...document.querySelectorAll('.opt')].forEach((b,k)=>{
+    b.disabled=true;
+    if(k===Q.a) b.classList.add('right');
+    else if(k===i) b.classList.add('wrong');
+    else b.classList.add('dim');
+  });
+  finish(i===Q.a,'答案是 '+'ABCD'[Q.a]+'。');
+}
+const tidy=s=>s.toLowerCase().replace(/[’‘`]/g,"'").replace(/\s+/g,' ').trim();
+function submitSpell(giveUp){
+  if(answered||Q.type!=='spell') return;
+  const w=WORDS[Q.id], t=$('typed'), v=tidy(t.value);
+  if(!giveUp && !v){ t.focus(); return; }
+  answered=true;
+  const ok=!giveUp && v===w.spell;
+  t.disabled=true; t.className=ok?'ok':'no';
+  $('check').disabled=true; $('giveup').disabled=true;
+  finish(ok, giveUp?'沒關係，記一下拼法。':'正確拼法是 '+w.spell+'。');
+}
+$('spell').onsubmit=e=>{e.preventDefault();submitSpell(false)};
+$('giveup').onclick=()=>submitSpell(true);
+$('next').onclick=nextQuestion;
+document.addEventListener('keydown',e=>{
+  if(!$('pick').hidden) return;
+  if(e.target.tagName==='INPUT') return;
+  if(e.target.tagName==='BUTTON' && (e.key==='Enter'||e.key===' ')) return;
+  const k=e.key.toUpperCase();
+  const idx='ABCD'.indexOf(k)>=0?'ABCD'.indexOf(k):'1234'.indexOf(k);
+  if(!answered && Q && Q.type!=='spell' && idx>=0 && k.length===1){answer(idx)}
+  else if(answered && e.key==='Enter'){nextQuestion()}
+});
+
+/* ---------- speech ---------- */
+const canSpeak='speechSynthesis' in window && typeof SpeechSynthesisUtterance!=='undefined';
+let enVoice=null;
+function pickVoice(){ try{const vs=speechSynthesis.getVoices(); enVoice=vs.find(v=>/^en-US/i.test(v.lang))||vs.find(v=>/^en/i.test(v.lang))||null;}catch(e){} }
+if(canSpeak){ pickVoice(); try{speechSynthesis.addEventListener('voiceschanged',pickVoice)}catch(e){} }
+function speak(t){
+  if(!canSpeak) return;
+  try{
+    speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(t.replace(/\([^)]*\)/g,' ').replace(/…/g,' '));
+    u.lang='en-US'; u.rate=.85; if(enVoice) u.voice=enVoice;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+/* ---------- range picker ---------- */
+function pageSpan(units){
+  // "p.31-32" + "p.33-34" → "p.31-34"
+  const r=units.map(u=>{const un=UNITS.find(x=>x.unit===u);const m=(un&&un.unit_label||'').match(/(\d+)\D+(\d+)/);return m?[+m[1],+m[2],un.unit_label]:[null,null,un?un.unit_label:'']});
+  const parts=[]; let cur=null;
+  for(const [a,b,l] of r){
+    if(a===null){parts.push(l);cur=null;continue}
+    if(cur && a===cur[1]+1){cur[1]=b} else {cur=[a,b];parts.push(cur)}
+  }
+  return parts.map(p=>typeof p==='string'?p:'p.'+p[0]+'-'+p[1]).join('、');
+}
+function updateScope(){
+  const ids=selIds(), m=ids.filter(mastered).length;
+  $('scope').textContent=pageSpan(sel)+' · 熟 '+m+'/'+ids.length;
+}
+let draft=null;
+function openPick(){
+  draft={sel:[...sel],modes:{...modes},weakOnly};
+  renderPick();
+  $('quiz').hidden=true; $('pick').hidden=false; $('pick').scrollTop=0;
+}
+function renderPick(){
+  const box=$('units'); box.innerHTML='';
+  UNITS.forEach(un=>{
+    const ids=UNIT_IDS[un.unit], m=ids.filter(mastered).length;
+    const b=document.createElement('button');
+    b.className='unit'; b.setAttribute('aria-pressed',draft.sel.includes(un.unit));
+    b.innerHTML='<span class="pg"></span><span class="meta"></span><span class="bar"><i></i></span>';
+    b.querySelector('.pg').textContent=un.unit_label||('Unit '+un.unit);
+    b.querySelector('.meta').textContent=ids.length+' 字 · 熟 '+m;
+    b.querySelector('i').style.width=(ids.length?m/ids.length*100:0)+'%';
+    b.onclick=()=>{
+      const i=draft.sel.indexOf(un.unit);
+      if(i>=0) draft.sel.splice(i,1); else draft.sel.push(un.unit);
+      draft.sel.sort((a,b)=>a-b); renderPick();
+    };
+    box.appendChild(b);
+  });
+  document.querySelectorAll('#modes .chip').forEach(c=>{
+    c.setAttribute('aria-pressed',!!draft.modes[c.dataset.m]);
+    c.onclick=()=>{draft.modes[c.dataset.m]=!draft.modes[c.dataset.m];renderPick()};
+  });
+  $('weak').setAttribute('aria-pressed',draft.weakOnly);
+  const n=draft.sel.flatMap(u=>UNIT_IDS[u]||[]).length;
+  const anyMode=draft.modes.e2c||draft.modes.c2e||draft.modes.spell;
+  const go=$('go');
+  go.disabled=!n||!anyMode;
+  go.textContent=!n?'至少選一個範圍':!anyMode?'至少選一種題型':'開始（'+pageSpan(draft.sel)+'，共 '+n+' 字）';
+}
+$('weak').onclick=()=>{draft.weakOnly=!draft.weakOnly;renderPick()};
+$('all').onclick=()=>{draft.sel=UNITS.map(u=>u.unit);renderPick()};
+$('none').onclick=()=>{draft.sel=[];renderPick()};
+$('range').onclick=()=>{ if($('pick').hidden) openPick(); else closePick(false); };
+function closePick(apply){
+  if(apply){
+    const changed=JSON.stringify([sel,weakOnly])!==JSON.stringify([draft.sel,draft.weakOnly]);
+    const modesChanged=JSON.stringify(modes)!==JSON.stringify(draft.modes);
+    sel=draft.sel; modes=draft.modes; weakOnly=draft.weakOnly;
+    if(changed || !Q){
+      const inSel=new Set(selIds());
+      order=[]; qi=-1; retry=retry.filter(x=>inSel.has(x.id));
+      $('pick').hidden=true; $('quiz').hidden=false;
+      nextQuestion(); return;
+    }
+    if(modesChanged && !answered){ Q=buildQ(Q.id); showQuestion(); }
+    save();
+  }
+  if(!Q) return;                 // nothing to go back to yet
+  $('pick').hidden=true; $('quiz').hidden=false;
+  updateScope();
+}
+$('go').onclick=()=>closePick(true);
+let wipeT=null;
+$('wipe').onclick=()=>{
+  const b=$('wipe');
+  if(!b.classList.contains('armed')){
+    b.classList.add('armed'); b.textContent='再按一次清除';
+    clearTimeout(wipeT); wipeT=setTimeout(()=>{b.classList.remove('armed');b.textContent='清除單字紀錄'},3000);
+    return;
+  }
+  clearTimeout(wipeT); b.classList.remove('armed'); b.textContent='清除單字紀錄';
+  stats={}; retry=[]; order=[]; qi=-1; Q=null;
+  renderPick(); save(); toast('單字紀錄清掉了');
+};
+
+const DROP_SVG='<svg viewBox="0 0 18 24" aria-hidden="true"><path d="M9 1C9 1 2 10 2 15a7 7 0 0 0 14 0C16 10 9 1 9 1Z" fill="var(--water)"/><path d="M6 15a3 3 0 0 0 3 3" stroke="#fff" stroke-opacity=".6" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>';
+function renderDrops(gained){
+  const d=$('drops');
+  land.classList.toggle('has-water',water>0);
+  if(water===0){d.innerHTML='<span class="none">答對一題就有水</span>';d.removeAttribute('aria-label');updateHint();return}
+  const cap=innerWidth<480?6:12;
+  const n=Math.min(water,cap);
+  let h=''; for(let i=0;i<n;i++) h+=DROP_SVG;
+  if(water>cap) h+='<span class="more">共 '+water+' 滴</span>';
+  d.innerHTML=h;
+  d.setAttribute('aria-label','手上有 '+water+' 滴水');
+  if(gained && water<=cap) d.children[n-1].classList.add('pop');
+  updateHint();
+}
+
+/* ================= land ================= */
+const cv=$('cv'), ctx=cv.getContext('2d'), land=$('land');
+let W=0,H=0,DPR=1,U=1,S=1, ground=null, hover=null, gen=0;
+const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const plants=[], wets=[], ponds=[], flies=[], falls=[], rings=[];
+
+const PAL={
+  grass:['#7f9c47','#6b8a3c','#8fae52','#5f7f36'],
+  // index 5 is the rare one: it only appears by chance, then spreads like any other colour
+  flower:['#f2f0f7','#f3c645','#e07f98','#8d9be0','#e9a063','#5b45d1'],
+  leaf:'#5f8a3a', canopy:['#4f6f3a','#58793f','#476634'], canopyHi:'#7a9c55',
+  trunk:'#6e5136', shadow:'rgba(40,28,15,.18)',
+  pond:'#6f9fb3', pondDeep:'#557f93', pondRim:'rgba(60,45,28,.28)',
+  pad:'#5d8d47', cap:['#b5563f','#c98a4a','#e8dcc8'],
+  fly:['#f1d36b','#f3f1ea','#e39a58','#9fb7e6']
+};
+const now=()=>performance.now();
+const cssVar=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const hash=(seed,k)=>{const x=Math.sin(seed*9301+k*49297)*233280;return x-Math.floor(x)};
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const chance=p=>Math.random()<p;
+const dist=(ax,ay,bx,by)=>Math.hypot((ax-bx)*W,(ay-by)*H);
+
+function resize(){
+  const r=land.getBoundingClientRect();
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=r.width;H=r.height;
+  cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);
+  U=Math.min(W,H); S=Math.max(1,Math.min(2.2,U/450));
+  buildGround();
+}
+function buildGround(){
+  ground=document.createElement('canvas');
+  ground.width=cv.width;ground.height=cv.height;
+  const g=ground.getContext('2d');
+  g.scale(DPR,DPR);
+  g.fillStyle=cssVar('--soil');g.fillRect(0,0,W,H);
+  const c1=cssVar('--speck'),c2=cssVar('--speck2');
+  for(let i=0,n=Math.floor(W*H/260);i<n;i++){
+    const x=hash(i,1)*W,y=hash(i,2)*H,r=hash(i,3)*1.6+.4;
+    g.fillStyle=hash(i,4)<.5?c1:c2;g.globalAlpha=.35+hash(i,5)*.4;
+    g.beginPath();g.ellipse(x,y,r*1.4,r,0,0,Math.PI*2);g.fill();
+  }
+  for(let i=0,n=Math.floor(W*H/9000);i<n;i++){
+    const x=hash(i,11)*W,y=hash(i,12)*H,r=6+hash(i,13)*22;
+    g.fillStyle=hash(i,14)<.5?c1:c2;g.globalAlpha=.12;
+    g.beginPath();g.ellipse(x,y,r*1.6,r*.8,0,0,Math.PI*2);g.fill();
+  }
+  g.globalAlpha=1;
+}
+
+/* ---------- ponds ---------- */
+// a pond is an ellipse; r is a fraction of U
+function pondRx(p){return p.r*U*1.35} function pondRy(p){return p.r*U*.75}
+function inPond(p,x,y,pad=1){const dx=(x-p.x)*W/(pondRx(p)*pad),dy=(y-p.y)*H/(pondRy(p)*pad);return dx*dx+dy*dy<1}
+function pondAt(x,y,pad=1){return ponds.find(p=>inPond(p,x,y,pad))}
+function pondEdge(p){const a=Math.random()*Math.PI*2,k=1.05+Math.random()*.25;return [p.x+Math.cos(a)*pondRx(p)*k/W,p.y+Math.sin(a)*pondRy(p)*k/H]}
+function pondInside(p){const a=Math.random()*Math.PI*2,k=Math.random()*.6;return [p.x+Math.cos(a)*pondRx(p)*k/W,p.y+Math.sin(a)*pondRy(p)*k/H]}
+function makePond(x,y){
+  const p={x,y,r:.04+Math.random()*.02,born:now()};
+  ponds.push(p);
+  // nothing is lost: whatever grew here is nudged out to the bank
+  for(const q of plants) if(q.type!=='lily' && inPond(p,q.x,q.y,1.05)){ [q.x,q.y]=pondEdge(p); }
+  rings.push({x,y,t0:now(),type:'splash'});
+  toast('水積成了一個小水塘');
+}
+
+/* ---------- plants ---------- */
+function addPlant(type,x,y,opts={}){
+  if(plants.length>900) return null;
+  x=Math.max(.02,Math.min(.98,x)); y=Math.max(.05,Math.min(.99,y));
+  const pd=pondAt(x,y,1.05);
+  if(type==='lily'){ if(!pd) return null; }
+  else if(pd){ [x,y]=pondEdge(pd); }
+  let color=opts.color;
+  if(color===undefined) color = chance(.03) ? 5 : Math.floor(Math.random()*5);
+  const p={type,x,y,stage:opts.stage||1,v:0,born:now(),seed:Math.random(),color};
+  plants.push(p);
+  if(type==='flower' && color===5 && opts.color===undefined) toast('開了一朵沒見過的花');
+  return p;
+}
+function grow(p){ if(p.stage<3){p.stage++; ring(p);} }
+function ring(p){ rings.push({x:p.x,y:p.y,t0:now()}) }
+function around(x,y,minR,maxR){
+  const a=Math.random()*Math.PI*2,r=(minR+Math.random()*(maxR-minR))*U;
+  return [x+Math.cos(a)*r/W, y+Math.sin(a)*r*.7/H];
+}
+function addFly(x,y){ flies.push({x,y,seed:Math.random(),c:Math.floor(Math.random()*PAL.fly.length),born:now()}) }
+
+/* ---------- the hidden rules: what one drop does ---------- */
+function outcome(x,y){
+  const acts=[];
+  const R=.11*U;
+  const near=plants.map(p=>({p,d:dist(p.x,p.y,x,y)})).filter(o=>o.d<R && o.p.type!=='lily').sort((a,b)=>a.d-b.d).map(o=>o.p);
+  const count=t=>near.filter(p=>p.type===t).length;
+  const nG=count('grass'), nF=count('flower');
+  const bigTrees=near.filter(p=>p.type==='tree'&&p.stage===3);
+
+  // 1. dropped into a pond: lily pads, or the bank gets greener
+  const pd=pondAt(x,y);
+  if(pd){
+    const lilies=plants.filter(p=>p.type==='lily'&&inPond(pd,p.x,p.y));
+    const small=lilies.find(p=>p.stage<2);
+    if(small && chance(.5)) acts.push(()=>grow(small));
+    else if(lilies.length<4 && chance(.6)) acts.push(()=>{const [a,b]=pondInside(pd);addPlant('lily',a,b)});
+    else for(let i=0;i<2;i++) acts.push(()=>{const [a,b]=pondEdge(pd);addPlant(chance(.6)?'grass':'flower',a,b)});
+    return acts;
+  }
+
+  // 2. watering the same bare patch again and again pools into a pond
+  const soaked=wets.filter(w=>dist(w.x,w.y,x,y)<.022*U).length;   // includes this drop
+  const treeClose=plants.some(p=>p.type==="tree"&&p.stage===3&&dist(p.x,p.y,x,y)<.04*U);
+  if(soaked>=6 && ponds.length<4 && !treeClose && !ponds.some(p=>dist(p.x,p.y,x,y)<.16*U) && chance(.35)){
+    acts.push(()=>makePond(x,y)); return acts;
+  }
+
+  const fresh=()=>{
+    const lush=near.length>=4, t=Math.random();
+    if(t<(lush?.62:.72)) acts.push(()=>addPlant('grass',x,y));
+    else if(t<(lush?.88:.94)) acts.push(()=>addPlant('flower',x,y));
+    else acts.push(()=>addPlant('tree',x,y));
+    if(chance(.35)){
+      for(let i=0,k=1+Math.floor(Math.random()*2);i<k;i++){const [a,b]=around(x,y,.025,.06);acts.push(()=>addPlant('grass',a,b))}
+    }
+  };
+
+  if(!near.length){ fresh(); }
+  else{
+    const r=Math.random();
+    const growable=near.filter(p=>p.stage<3);
+    if(r<.45 && growable.length){
+      // a crowded spot lets more than one plant grow at once
+      const k=1+(near.length>=6?1:0)+(near.length>=10&&chance(.5)?1:0);
+      growable.slice(0,k).forEach(p=>acts.push(()=>grow(p)));
+    }else if(r<.85){
+      const src=near[Math.floor(Math.pow(Math.random(),2)*near.length)];
+      ring(src);
+      if(src.type==='grass'||src.type==='mushroom'){
+        for(let i=0,k=1+Math.floor(Math.random()*3);i<k;i++){const [a,b]=around(x,y,.02,.07);acts.push(()=>addPlant('grass',a,b))}
+        if(chance(.12)){const [a,b]=around(x,y,.02,.06);acts.push(()=>addPlant('flower',a,b))}
+      }else if(src.type==='flower'){
+        for(let i=0,k=1+(chance(.4)?1:0);i<k;i++){const [a,b]=around(src.x,src.y,.025,.07);acts.push(()=>addPlant('flower',a,b,{color:chance(.8)?src.color:undefined}))}
+        if(chance(.5)){const [a,b]=around(x,y,.02,.05);acts.push(()=>addPlant('grass',a,b))}
+      }else{
+        const t=Math.random(), sap=bigTrees.length>=2?.3:.15;   // a grove seeds more trees
+        const [a,b]=around(src.x,src.y,.04,.1);
+        if(t<.85-sap) acts.push(()=>addPlant(t<.45?'grass':'flower',a,b));
+        else acts.push(()=>addPlant('tree',a,b));
+        if(src.stage===3 && chance(.4)){
+          for(let i=0;i<3;i++){const [c,d]=around(src.x,src.y,.05,.09);acts.push(()=>addPlant(chance(.5)?'flower':'grass',c,d))}
+        }
+      }
+      // grass near flowers sometimes turns into a flower
+      const g=near.find(p=>p.type==='grass');
+      if(g && nF>=2 && chance(.2)){
+        const col=near.find(p=>p.type==='flower').color;
+        acts.push(()=>{const i=plants.indexOf(g);if(i>=0){plants.splice(i,1);addPlant('flower',g.x,g.y,{color:col})}});
+      }
+    }else fresh();
+
+    // clusters are rewarded: a meadow blooms, a flower bed thickens
+    if(nG>=5 && chance(.25)){const [a,b]=around(x,y,.01,.05);acts.push(()=>addPlant('flower',a,b))}
+    if(nF>=4 && chance(.4)){const f=near.find(p=>p.type==='flower'&&p.stage<3);if(f)acts.push(()=>grow(f))}
+  }
+
+  // rare: butterflies settle over a big flower bed
+  if(nF>=5 && flies.length<6 && !flies.some(f=>dist(f.x,f.y,x,y)<.12*U) && chance(.15)){
+    acts.push(()=>{
+      if(flies.length>=6 || flies.some(f=>dist(f.x,f.y,x,y)<.12*U)) return;
+      addFly(x,y);toast('有東西飛來了');
+    });
+  }
+  // rare: mushrooms ring the shade of a big tree
+  const tree=bigTrees[0];
+  if(tree && !plants.some(p=>p.type==='mushroom'&&dist(p.x,p.y,tree.x,tree.y)<.1*U) && chance(.12)){
+    acts.push(()=>{
+      if(plants.some(p=>p.type==='mushroom'&&dist(p.x,p.y,tree.x,tree.y)<.1*U)) return;
+      const n=5+Math.floor(Math.random()*3), off=Math.random()*Math.PI*2;
+      for(let i=0;i<n;i++){
+        const a=off+i/n*Math.PI*2, rr=(.055+Math.random()*.012)*U;
+        addPlant('mushroom',tree.x+Math.cos(a)*rr/W,tree.y+Math.sin(a)*rr*.5/H+.012*U/H);
+      }
+    });
+  }
+  // near a pond the bank grows thicker
+  const bank=ponds.find(p=>inPond(p,x,y,2.6));
+  if(bank && chance(.4)) acts.push(()=>{const [a,b]=pondEdge(bank);addPlant(chance(.7)?'grass':'flower',a,b)});
+
+  if(!acts.length) fresh();
+  return acts;
+}
+
+function dropAt(x,y){
+  if(water<=0){ toast('答對一題，就有一滴水'); return; }
+  water--; renderDrops(false); save();
+  const g=gen;
+  falls.push({x,y,t0:now()});
+  setTimeout(()=>{
+    if(g!==gen) return;
+    wets.push({x,y,t0:now(),r:14+Math.random()*8});
+    const acts=outcome(x,y);
+    acts.forEach((f,i)=>setTimeout(()=>{if(g===gen){f();save()}},120+i*(reduceMotion?0:180)));
+    save();
+    setTimeout(updateHint,200);
+  },reduceMotion?0:420);
+}
+
+let toastT;
+function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove('show'),2200)}
+function updateHint(){
+  const h=$('hint');
+  if(plants.length||ponds.length||falls.length){h.classList.add('gone');return}
+  h.classList.remove('gone');
+  h.textContent= water>0 ? '點一下土地' : '一片安靜的空地';
+}
+
+cv.addEventListener('pointermove',e=>{
+  if(e.pointerType!=='mouse'){hover=null;return}
+  const r=cv.getBoundingClientRect();hover={x:(e.clientX-r.left)/W,y:(e.clientY-r.top)/H};
+});
+cv.addEventListener('pointerleave',()=>hover=null);
+cv.addEventListener('click',e=>{
+  const r=cv.getBoundingClientRect();
+  dropAt((e.clientX-r.left)/W,(e.clientY-r.top)/H);
+});
+
+/* ================= drawing ================= */
+const easeBack=t=>{const c=1.7;t=Math.min(1,Math.max(0,t));return 1+(c+1)*Math.pow(t-1,3)+c*Math.pow(t-1,2)};
+function drawGrass(p,X,Y,v,a,time){
+  const s=S*a, n=3+Math.round(v*3);
+  ctx.lineCap='round';
+  for(let i=0;i<n;i++){
+    const hf=.6+hash(p.seed,i)*.6, h=s*(7+v*7)*hf;
+    const off=(i-(n-1)/2)*s*1.5+(hash(p.seed,i+20)-.5)*s*2;
+    const lean=(hash(p.seed,i+40)-.5)*s*6+off*.6;
+    const sway=reduceMotion?0:Math.sin(time*.0013+p.seed*20+i*.7)*s*1.1;
+    ctx.strokeStyle=PAL.grass[Math.floor(hash(p.seed,i+60)*4)];
+    ctx.lineWidth=s*1.5;
+    ctx.beginPath();ctx.moveTo(X+off,Y);
+    ctx.quadraticCurveTo(X+off+lean*.2,Y-h*.6,X+off+lean+sway,Y-h);
+    ctx.stroke();
+  }
+}
+function flowerHead(cx,cy,pr,col,open){
+  if(open<=0){
+    ctx.fillStyle=PAL.leaf;ctx.beginPath();ctx.ellipse(cx,cy,pr*.55,pr*.85,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle=col;ctx.beginPath();ctx.ellipse(cx,cy-pr*.4,pr*.35,pr*.45,0,0,Math.PI*2);ctx.fill();
+    return;
+  }
+  ctx.fillStyle=col;
+  for(let k=0;k<5;k++){
+    const an=k/5*Math.PI*2-Math.PI/2;
+    ctx.beginPath();ctx.arc(cx+Math.cos(an)*pr*.8*open,cy+Math.sin(an)*pr*.8*open,pr*(.35+.3*open),0,Math.PI*2);ctx.fill();
+  }
+  ctx.fillStyle=col==='#f3c645'?'#8a5a2b':(col==='#5b45d1'?'#f4f1ff':'#f0c24a');
+  ctx.beginPath();ctx.arc(cx,cy,pr*.42,0,Math.PI*2);ctx.fill();
+}
+function drawFlower(p,X,Y,v,a,time){
+  const s=S*a, col=PAL.flower[p.color]||PAL.flower[0];
+  const sway=reduceMotion?0:Math.sin(time*.0011+p.seed*30)*s*1.4;
+  drawGrass({seed:p.seed+.5},X,Y,.3,a*.8,time);
+  const heads=v>2.5?2:1;
+  for(let h=0;h<heads;h++){
+    const hh=s*(12+v*6)*(h?.72:1);
+    const dx=h?s*7*(hash(p.seed,3)<.5?-1:1):0;
+    const tx=X+dx+sway, ty=Y-hh;
+    ctx.strokeStyle=PAL.leaf;ctx.lineWidth=s*1.3;ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(X,Y);ctx.quadraticCurveTo(X+dx*.3,Y-hh*.5,tx,ty);ctx.stroke();
+    if(!h){ctx.fillStyle=PAL.leaf;ctx.beginPath();ctx.ellipse(X+s*2.5,Y-hh*.35,s*2.6,s*1.1,-.5,0,Math.PI*2);ctx.fill();}
+    const open=Math.max(0,Math.min(1,(v-1)*1.4));
+    flowerHead(tx,ty,s*(2.4+Math.min(v,2.4)*.9)*(h?.8:1),col,open);
+  }
+}
+function drawTree(p,X,Y,v,a,time){
+  const s=S*a, cr=Math.max(0,(v-.9))*s*9.5;
+  ctx.fillStyle=PAL.shadow;
+  ctx.beginPath();ctx.ellipse(X+cr*.2,Y+s,s*3+cr*1.05,s*1.2+cr*.35,0,0,Math.PI*2);ctx.fill();
+  const th=s*(8+v*11), tw=s*(1.2+v*1.3);
+  ctx.fillStyle=PAL.trunk;
+  ctx.beginPath();ctx.moveTo(X-tw,Y);ctx.lineTo(X-tw*.55,Y-th);ctx.lineTo(X+tw*.55,Y-th);ctx.lineTo(X+tw,Y);ctx.closePath();ctx.fill();
+  const sway=reduceMotion?0:Math.sin(time*.0008+p.seed*12)*s*.8;
+  if(v<1.8){
+    ctx.globalAlpha=Math.min(1,(1.8-v)*1.3);
+    ctx.fillStyle=PAL.leaf;
+    ctx.beginPath();ctx.ellipse(X-s*3+sway,Y-th-s,s*3.2,s*1.5,.5,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.ellipse(X+s*3+sway,Y-th-s*2,s*3.2,s*1.5,-.5,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  }
+  if(cr>0){
+    const cy=Y-th-cr*.55;
+    for(let k=0;k<5;k++){
+      const ox=(hash(p.seed,k)-.5)*cr*1.1+sway, oy=(hash(p.seed,k+9)-.5)*cr*.7;
+      ctx.fillStyle=PAL.canopy[k%3];
+      ctx.beginPath();ctx.arc(X+ox,cy+oy,cr*(.55+hash(p.seed,k+5)*.3),0,Math.PI*2);ctx.fill();
+    }
+    ctx.fillStyle=PAL.canopyHi;ctx.globalAlpha=.55;
+    ctx.beginPath();ctx.arc(X-cr*.28+sway,cy-cr*.3,cr*.32,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  }
+}
+function drawMushroom(p,X,Y,a){
+  const s=S*a*(.8+hash(p.seed,1)*.5);
+  ctx.fillStyle='#efe6d4';
+  ctx.fillRect(X-s*.9,Y-s*3.2,s*1.8,s*3.2);
+  ctx.fillStyle=PAL.cap[Math.floor(hash(p.seed,2)*3)];
+  ctx.beginPath();ctx.ellipse(X,Y-s*3.2,s*3,s*2.2,0,Math.PI,0);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.85)';
+  ctx.beginPath();ctx.arc(X-s*1.1,Y-s*4.2,s*.45,0,Math.PI*2);ctx.arc(X+s*.9,Y-s*4.6,s*.35,0,Math.PI*2);ctx.fill();
+}
+function drawLily(p,X,Y,v,a){
+  const s=S*a;
+  const rot=hash(p.seed,1)*Math.PI*2;
+  ctx.fillStyle=PAL.pad;
+  ctx.beginPath();ctx.moveTo(X,Y);
+  ctx.ellipse(X,Y,s*5,s*2.4,0,rot+.35,rot+Math.PI*2-.35);ctx.closePath();ctx.fill();
+  if(v>1.5){
+    const k=Math.min(1,(v-1.5)*2);
+    ctx.fillStyle='#f0b8c8';
+    for(let i=0;i<6;i++){const an=i/6*Math.PI*2;ctx.beginPath();ctx.ellipse(X+Math.cos(an)*s*1.3*k,Y-s*1.2+Math.sin(an)*s*.6*k,s*1.1*k,s*.7*k,an,0,Math.PI*2);ctx.fill()}
+    ctx.fillStyle='#f3d36a';ctx.beginPath();ctx.arc(X,Y-s*1.2,s*.6*k,0,Math.PI*2);ctx.fill();
+  }
+}
+function drawPond(p,t){
+  const a=reduceMotion?1:Math.max(.001,Math.min(1,(t-p.born)/1200));
+  const X=p.x*W,Y=p.y*H,rx=pondRx(p)*a,ry=pondRy(p)*a;
+  ctx.fillStyle=PAL.pondRim;ctx.beginPath();ctx.ellipse(X,Y+ry*.08,rx*1.08,ry*1.12,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=PAL.pond;ctx.beginPath();ctx.ellipse(X,Y,rx,ry,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=PAL.pondDeep;ctx.globalAlpha=.5;ctx.beginPath();ctx.ellipse(X+rx*.1,Y+ry*.12,rx*.6,ry*.5,0,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=.35;ctx.strokeStyle='#fff';ctx.lineWidth=1.2*S;ctx.lineCap='round';
+  const sh=reduceMotion?0:Math.sin(t*.001+p.x*9)*rx*.05;
+  ctx.beginPath();ctx.ellipse(X-rx*.25+sh,Y-ry*.35,rx*.3,ry*.12,0,Math.PI*1.1,Math.PI*1.8);ctx.stroke();
+  ctx.globalAlpha=1;
+}
+function drawFly(f,t){
+  const k=reduceMotion?0:t*.001;
+  const X=f.x*W+Math.sin(k*.7+f.seed*10)*.04*U+Math.sin(k*1.9+f.seed*3)*.01*U;
+  const Y=f.y*H-18*S+Math.cos(k*1.1+f.seed*7)*.025*U;
+  const flap=reduceMotion?1:.25+.75*Math.abs(Math.sin(t*.018+f.seed*30));
+  const s=S*Math.max(.001,Math.min(1,(t-f.born)/800));
+  ctx.fillStyle=PAL.shadow;ctx.beginPath();ctx.ellipse(X,Y+20*S,3*S,1.2*S,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=PAL.fly[f.c];
+  for(const d of [-1,1]){
+    ctx.beginPath();ctx.ellipse(X+d*s*2.4*flap,Y-s*1,s*2.6*flap,s*2.2,d*.3,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.ellipse(X+d*s*1.8*flap,Y+s*1.6,s*1.8*flap,s*1.5,-d*.3,0,Math.PI*2);ctx.fill();
+  }
+  ctx.fillStyle='#3a3226';ctx.fillRect(X-s*.35,Y-s*2,s*.7,s*4.2);
+}
+function drawDrop(X,Y,s,al){
+  ctx.globalAlpha=al;
+  ctx.fillStyle=cssVar('--water');
+  ctx.beginPath();ctx.moveTo(X,Y-9*s);
+  ctx.bezierCurveTo(X+2*s,Y-5*s,X+6*s,Y-s,X+6*s,Y+2.5*s);
+  ctx.arc(X,Y+2.5*s,6*s,0,Math.PI);
+  ctx.bezierCurveTo(X-6*s,Y-s,X-2*s,Y-5*s,X,Y-9*s);
+  ctx.fill();
+  ctx.globalAlpha=al*.6;ctx.strokeStyle='#fff';ctx.lineWidth=1.3*s;ctx.lineCap='round';
+  ctx.beginPath();ctx.arc(X,Y+2.5*s,3.4*s,Math.PI*.6,Math.PI*.95);ctx.stroke();
+  ctx.globalAlpha=1;
+}
+
+let last=now(), wetColor='';
+function paint(t,withHover){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.drawImage(ground,0,0,W,H);
+  for(const w of wets){
+    const age=(t-w.t0)/1000;
+    ctx.fillStyle=wetColor;ctx.globalAlpha=.035+.3*Math.max(0,1-age/4);
+    ctx.beginPath();ctx.ellipse(w.x*W,w.y*H,w.r*S*1.5,w.r*S*.8,0,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  for(const p of ponds) drawPond(p,t);
+  for(let i=rings.length-1;i>=0;i--){
+    const r=rings[i],k=(t-r.t0)/900;
+    if(k>=1){rings.splice(i,1);continue}
+    ctx.strokeStyle=r.type==='splash'?cssVar('--water'):'rgba(255,255,255,.8)';
+    ctx.globalAlpha=(1-k)*.7;ctx.lineWidth=1.5*S;
+    ctx.beginPath();ctx.ellipse(r.x*W,r.y*H,(6+k*26)*S,(3+k*12)*S,0,0,Math.PI*2);ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+  // lily pads lie flat on the water, so they go under everything standing
+  const flat=plants.filter(p=>p.type==='lily'), up=plants.filter(p=>p.type!=='lily').sort((a,b)=>a.y-b.y);
+  for(const p of flat.concat(up)){
+    const a=reduceMotion?1:Math.max(.001,easeBack((t-p.born)/700));
+    const X=p.x*W,Y=p.y*H;
+    if(p.type==='grass') drawGrass(p,X,Y,p.v,a,t);
+    else if(p.type==='flower') drawFlower(p,X,Y,p.v,a,t);
+    else if(p.type==='tree') drawTree(p,X,Y,p.v,a,t);
+    else if(p.type==='mushroom') drawMushroom(p,X,Y,a);
+    else if(p.type==='lily') drawLily(p,X,Y,p.v,a);
+  }
+  for(const f of flies) drawFly(f,t);
+  if(!withHover) return;
+  for(let i=falls.length-1;i>=0;i--){
+    const f=falls[i],k=reduceMotion?1:(t-f.t0)/420;
+    if(k>=1){falls.splice(i,1);rings.push({x:f.x,y:f.y,t0:t,type:'splash'});continue}
+    drawDrop(f.x*W,f.y*H-(1-k*k)*160*S,S*1.1,1);
+  }
+  if(hover && water>0){
+    ctx.fillStyle=PAL.shadow;
+    ctx.beginPath();ctx.ellipse(hover.x*W,hover.y*H,6*S,2.5*S,0,0,Math.PI*2);ctx.fill();
+    drawDrop(hover.x*W,hover.y*H-22*S-(reduceMotion?0:Math.sin(t*.004)*2*S),S,.85);
+  }
+}
+function frame(t){
+  const dt=Math.min(.05,(t-last)/1000);last=t;
+  for(const p of plants) p.v+=(p.stage-p.v)*Math.min(1,dt*(reduceMotion?60:2.6));
+  paint(t,true);
+  requestAnimationFrame(frame);
+}
+
+/* ================= save on this device ================= */
+const SAVE_KEY='drop-vocab-v1';
+let saveT=null;
+function save(){
+  clearTimeout(saveT);
+  saveT=setTimeout(()=>{
+    try{
+      localStorage.setItem(SAVE_KEY,JSON.stringify({
+        v:1, water, sel, modes, weakOnly, stats, order, qi, shown, retry, Q, again, answered,
+        plants:plants.map(p=>[p.type,+p.x.toFixed(4),+p.y.toFixed(4),p.stage,p.color,+p.seed.toFixed(6)]),
+        wets:wets.slice(-400).map(w=>[+w.x.toFixed(4),+w.y.toFixed(4),+w.r.toFixed(1)]),
+        ponds:ponds.map(p=>[+p.x.toFixed(4),+p.y.toFixed(4),+p.r.toFixed(4)]),
+        flies:flies.map(f=>[+f.x.toFixed(4),+f.y.toFixed(4),+f.seed.toFixed(6),f.c])
+      }));
+    }catch(e){}
+  },250);
+}
+// returns 'question' when a question is back on screen, 'next' when the quiz can continue, false for a fresh start
+function load(){
+  let d=null;
+  try{d=JSON.parse(localStorage.getItem(SAVE_KEY)||'null')}catch(e){}
+  if(!d) return false;
+  water=Math.max(0,d.water|0);
+  (d.plants||[]).forEach(a=>plants.push({type:a[0],x:a[1],y:a[2],stage:a[3],v:a[3],color:a[4],seed:a[5],born:-1e9}));
+  (d.wets||[]).forEach(a=>wets.push({x:a[0],y:a[1],r:a[2],t0:-1e9}));
+  (d.ponds||[]).forEach(a=>ponds.push({x:a[0],y:a[1],r:a[2],born:-1e9}));
+  (d.flies||[]).forEach(a=>flies.push({x:a[0],y:a[1],seed:a[2],c:a[3],born:-1e9}));
+  if(d.stats && typeof d.stats==='object') for(const k in d.stats) if(WORDS[k]) stats[k]=d.stats[k];
+  if(d.modes && typeof d.modes==='object') modes={e2c:!!d.modes.e2c,c2e:!!d.modes.c2e,spell:!!d.modes.spell};
+  if(!modes.e2c&&!modes.c2e&&!modes.spell) modes.e2c=true;
+  weakOnly=!!d.weakOnly;
+  if(Array.isArray(d.sel)){
+    const ok=d.sel.filter(u=>UNIT_IDS[u]);
+    if(ok.length) sel=ok; else return false;      // the saved range no longer exists: ask again
+  }else return false;
+  const inSel=new Set(selIds());
+  if(Array.isArray(d.order) && d.order.length && d.order.every(id=>WORDS[id])){
+    order=d.order; qi=d.qi|0; shown=d.shown|0;
+  }
+  retry=Array.isArray(d.retry)?d.retry.filter(x=>x&&WORDS[x.id]&&inSel.has(x.id)):[];
+  const q=d.Q;
+  if(q && WORDS[q.id] && !d.answered && (q.type==='spell' || (Array.isArray(q.opts)&&q.opts.every(id=>WORDS[id])))){
+    Q=q; again=!!d.again; return 'question';
+  }
+  return 'next';
+}
+
+/* ================= clear the land ================= */
+let armT=null;
+$('reset').onclick=()=>{
+  const b=$('reset');
+  if(!b.classList.contains('armed')){
+    b.classList.add('armed'); b.textContent='再按一次清空';
+    clearTimeout(armT);
+    armT=setTimeout(()=>{b.classList.remove('armed');b.textContent='清空土地'},3000);
+    return;
+  }
+  clearTimeout(armT); b.classList.remove('armed'); b.textContent='清空土地';
+  gen++;
+  for(const a of [plants,wets,ponds,flies,falls,rings]) a.length=0;
+  water=0;
+  renderDrops(false); updateHint(); save();
+  toast('土地清空了，單字紀錄還在');
+};
+
+/* ================= save a picture ================= */
+function stamp(){const d=new Date(),z=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())}
+async function snapshot(){
+  paint(now(),false);                     // one clean frame without the hovering drop
+  return new Promise(res=>cv.toBlob(res,'image/png'));
+}
+(async()=>{
+  const btn=$('snap');
+  let downloads=null;
+  try{ if(window.claude && typeof window.claude.use==='function') downloads=await window.claude.use('downloads'); }catch(e){}
+  if(downloads){
+    btn.hidden=false;
+    btn.onclick=async()=>{
+      const blob=await snapshot();
+      try{ await downloads.save({filename:'我的小土地-'+stamp()+'.png',data:blob}); toast('圖片存好了'); }
+      catch(e){
+        if(e&&e.code==='declined') return;
+        if(e&&e.code==='rate_limited'){toast('稍等一下再試');return}
+        btn.hidden=true; toast('這裡沒辦法存圖片');
+      }
+    };
+  }else if(!window.claude){
+    // opened as a plain file outside Claude: a normal link download works
+    btn.hidden=false;
+    btn.onclick=async()=>{
+      const blob=await snapshot(), a=document.createElement('a');
+      a.href=URL.createObjectURL(blob); a.download='我的小土地-'+stamp()+'.png'; a.click();
+      setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    };
+  }
+})();
+
+/* ================= start ================= */
+function themeChanged(){ wetColor=cssVar('--wet'); buildGround(); }
+new ResizeObserver(resize).observe(land);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',themeChanged);
+new MutationObserver(themeChanged).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+resize(); wetColor=cssVar('--wet');
+const resumed=load();
+if(resumed==='question'){ $('quiz').hidden=false; showQuestion(); }
+else if(resumed==='next'){ $('quiz').hidden=false; nextQuestion(); }
+else openPick();
+renderDrops(false);
+updateHint();
+requestAnimationFrame(frame);
+
+</script>
+</body>
+</html>
