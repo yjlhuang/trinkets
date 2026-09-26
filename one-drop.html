@@ -182,6 +182,7 @@ canvas{display:block;width:100%;height:100%;touch-action:manipulation;cursor:def
 .chip{border-radius:999px;padding:.4rem .9rem}
 .chip small{color:var(--muted);margin-left:.3rem}
 .go{margin-top:1.25rem}
+.ver-line{margin:.9rem 0 0;font-size:.75rem;color:var(--muted)}
 .fine{margin-top:1.5rem;display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
 
 button:focus-visible,.unit:focus-visible,.chip:focus-visible{outline:3px solid var(--water);outline-offset:2px}
@@ -256,6 +257,7 @@ button:focus-visible,.unit:focus-visible,.chip:focus-visible{outline:3px solid v
       <span>連續答對兩次，就算這個字「熟了」。紀錄存在這台裝置上。</span>
       <button class="bar-btn" id="wipe">清除單字紀錄</button>
     </div>
+    <p class="ver-line" id="ver"></p>
   </section>
 </aside>
 
@@ -615,6 +617,9 @@ world.on('external',()=>{ stale=true; world.freeze(); showBanners(); });
 world.on('saveerror',()=>{ saveFailed=true; showBanners(); });
 world.on('saved',()=>{ if(saveFailed){ saveFailed=false; showBanners(); } });
 function save(){ world.save(); }
+// 版本號（範圍選單底部）：頁面改了就更新 PAGE_VERSION；world 的版本由載入的 world 檔自己報
+const PAGE_VERSION='2026-09-26';
+$('ver').textContent='版本 '+PAGE_VERSION+' · world '+OneDropWorld.VERSION;
 
 /* ================= 讀檔（題庫進度） ================= */
 // returns 'question' when a question is back on screen, 'next' when the quiz can continue, false for a fresh start

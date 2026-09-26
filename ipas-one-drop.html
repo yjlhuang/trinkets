@@ -250,7 +250,7 @@ button:focus-visible,.unit:focus-visible,.chip:focus-visible{outline:3px solid v
       <span>連續答對兩次，就算這題「熟了」。紀錄存在這台裝置上。</span>
       <button class="bar-btn" id="wipe">清除作答紀錄</button>
     </div>
-    <p class="credit">題目：iPAS AI 應用規劃師（初級）114-4、115-1、115-2、115-3 公告試題，以及學習指引模擬考題（已套用官方勘誤）。歷屆試題沒有官方解析，學習指引的題目才有。<span class="ver">v2 · 2026-09-26</span></p>
+    <p class="credit">題目：iPAS AI 應用規劃師（初級）114-4、115-1、115-2、115-3 公告試題，以及學習指引模擬考題（已套用官方勘誤）。歷屆試題沒有官方解析，學習指引的題目才有。<span class="ver" id="ver"></span></p>
   </section>
 </aside>
 
@@ -614,6 +614,9 @@ world.on('external',()=>{ stale=true; world.freeze(); showBanners(); });
 world.on('saveerror',()=>{ saveFailed=true; showBanners(); });
 world.on('saved',()=>{ if(saveFailed){ saveFailed=false; showBanners(); } });
 function save(){ world.save(); }
+// 版本號（範圍選單底部）：頁面改了就更新 PAGE_VERSION；world 的版本由載入的 world 檔自己報
+const PAGE_VERSION='v3 · 2026-09-26';
+$('ver').textContent=PAGE_VERSION+' · world '+OneDropWorld.VERSION;
 
 /* ================= 讀檔（題庫進度） ================= */
 // returns 'question' when a question is back on screen, 'next' when the quiz can continue, false for a fresh start
