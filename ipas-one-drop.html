@@ -376,15 +376,17 @@ function record(id,ok){
   if(ok){s[0]++;s[1]++}else{s[0]=0;s[2]++}
   stats[id]=s;
 }
+// iPAS 的題目比較長：答對一題給兩滴水（world 不用改，只改這裡呼叫 addWater 的量）
+const REWARD=2;
 function finish(ok){
   const q=QS[Q.id];
   record(Q.id,ok);
   const msg=$('msg');
   if(ok){
-    world.addWater(1);
+    world.addWater(REWARD);
     msg.className='msg good';
-    msg.textContent= world.water===1 ? '答對了，得到一滴水。點土地，把它滴下去。'
-      : '答對了，又多一滴水。'+(mastered(Q.id)&&stats[Q.id][0]===2?'這題熟了。':'');
+    msg.textContent= world.water===REWARD ? '答對了，得到兩滴水。點土地，把它們滴下去。'
+      : '答對了，又多兩滴水。'+(mastered(Q.id)&&stats[Q.id][0]===2?'這題熟了。':'');
   }else{
     retry.push({id:Q.id,due:shown+3+Math.floor(Math.random()*3)});
     msg.className='msg bad';
@@ -587,7 +589,7 @@ function renderDrops(gained){
   if(water>cap) h+='<span class="more">共 '+water+' 滴</span>';
   d.innerHTML=h;
   d.setAttribute('aria-label','手上有 '+water+' 滴水');
-  if(gained && water<=cap) d.children[n-1].classList.add('pop');
+  if(gained && water<=cap) for(let i=Math.max(0,n-REWARD);i<n;i++) d.children[i].classList.add('pop');
 }
 
 /* ================= 土地（共用 world：one-drop-lib/world.vX.Y.js） =================
@@ -605,7 +607,7 @@ const world=OneDropWorld.create({
 });
 world.on('water',e=>renderDrops(e.gained));
 world.on('discover',e=>{ if(DISCOVER_TEXT[e.kind]) toast(DISCOVER_TEXT[e.kind]); });
-world.on('nowater',()=>toast('答對一題，就有一滴水'));
+world.on('nowater',()=>toast('答對一題，就有兩滴水'));
 world.on('message',toast);
 // 橫幅：stale（別的分頁改了存檔）與 saveFailed（寫入失敗）都由這頁擁有；兩個同時成立時只顯示 stale
 let stale=false, saveFailed=false;
@@ -615,7 +617,7 @@ world.on('saveerror',()=>{ saveFailed=true; showBanners(); });
 world.on('saved',()=>{ if(saveFailed){ saveFailed=false; showBanners(); } });
 function save(){ world.save(); }
 // 版本號（範圍選單底部）：頁面改了就更新 PAGE_VERSION；world 的版本由載入的 world 檔自己報
-const PAGE_VERSION='v3 · 2026-09-26';
+const PAGE_VERSION='v4 · 2026-09-27';
 $('ver').textContent=PAGE_VERSION+' · world '+OneDropWorld.VERSION;
 
 /* ================= 讀檔（題庫進度） ================= */
