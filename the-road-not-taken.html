@@ -24,12 +24,12 @@ body{touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-u
 .tx.out{opacity:0}
 .tx.top{top:max(5.5vh,20px)}
 .tx.center{top:50%;transform:translateY(-50%)}
-.tx.left{top:13vh;right:auto;width:min(46vw,720px);text-align:left;padding-left:6vw}
+.tx.left{top:13vh;right:auto;width:min(66vw,1100px);text-align:left;padding-left:6vw}
 .tx.left::before{left:-10%;right:-10%}
 .line{display:block;font-size:clamp(20px,2.3vw + .9vh,48px);line-height:1.34;color:var(--ink);opacity:0;
   text-shadow:0 0 14px rgba(255,248,228,.95),0 0 5px rgba(255,248,228,.9),0 0 1px rgba(255,248,228,1);
   text-wrap:balance;will-change:opacity,transform}
-.line+.line{margin-top:.18em}
+.line+.line{margin-top:.3em}
 .dark .line{color:#f5e8cb;text-shadow:0 0 14px rgba(12,8,10,.95),0 0 4px rgba(12,8,10,.9)}
 .line.title{font-size:clamp(34px,5.6vw + 1vh,96px);letter-spacing:.01em;line-height:1.1}
 .line.by{font-size:clamp(15px,1.3vw + .6vh,26px);font-style:italic;margin-top:.6em}
@@ -51,7 +51,8 @@ body{touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-u
 @keyframes breathe{0%,100%{opacity:.5}50%{opacity:1}}
 .breathe{animation:breathe 9s ease-in-out infinite}
 @media (max-aspect-ratio:9/10){
-  .line{font-size:clamp(19px,5.2vw,34px)}
+  .line{font-size:clamp(19px,5.2vw,34px);line-height:1.25}
+  .line+.line{margin-top:.55em}
   .line.title{font-size:clamp(34px,10vw,64px)}
   .line.by{font-size:clamp(15px,4vw,22px)}
   .line.begin{font-size:clamp(15px,3.9vw,20px)}
@@ -498,22 +499,22 @@ const PF=bez(AG.trunk,.985);
 const B=[
  {key:'cover',world:'A',pos:'center',special:'cover',settle:1.6,dur:8,leaves:16,cam:(t,P)=>pick(F.cover,P)},
  {key:'walk',world:'A',lines:[[0,4.4]],settle:9.8,dur:15,leaves:14,camIn:.01,cam:(t,P)=>lerpF(pick(F.cover,P),pick(F.walk,P),ease(ramp(t,0,9.8)))},
- {key:'stood',world:'A',lines:[[1,1.0]],settle:7.6,dur:19,leaves:12,camIn:3,cam:(t,P)=>pick(F.stood,P)},
- {key:'choose',world:'A',choice:true,lines:[[3,.8]],settle0:1.6,leaves:10,camIn:2.4,
-   settleC:()=>state.tc+5.2,durC:()=>state.tc+10.5,
+ {key:'stood',world:'A',lines:[[1,1.0],[2,6.8]],settle:8,dur:19,leaves:12,camIn:3,cam:(t,P)=>pick(F.stood,P)},
+ {key:'choose',world:'A',choice:true,lines:[[3,.8],[4,()=>state.gazed?state.tc+3.6:1e9]],settle0:1.6,leaves:10,camIn:2.4,
+   settleC:()=>state.tc+5,durC:()=>state.tc+11.5,
    cam:(t,P)=>{const pre=pick(F.choose,P);if(!state.gazed)return pre;return lerpF(pre,gazeF(state.gazed,P),ease(ramp(t,state.tc+.2,state.tc+4.6)));}},
  {key:'other',world:'A',lines:[[5,1.3]],settle:4.4,dur:11,leaves:10,camIn:3.2,cam:(t,P)=>pick(F.other,P)},
- {key:'grassy',world:'A',lines:[[6,1.0]],settle:5.4,dur:13,leaves:8,camIn:2.6,cam:(t,P)=>pick(F.compare,P)},
- {key:'same',world:'A',lines:[[9,3.5]],settle:5.8,dur:15,leaves:8,camIn:2,cam:(t,P)=>pick(F.compare,P)},
- {key:'leaves',world:'C',trans:'gust',lines:[[11,1.6]],settle:5,dur:18,leaves:9,cam:(t,P)=>lerpF(pick(F.c0,P),pick(F.c1,P),ease(ramp(t,5.5,18.5)))},
+ {key:'grassy',world:'A',lines:[[6,1.0],[7,3.4]],settle:4.8,dur:15,leaves:8,camIn:2.6,cam:(t,P)=>pick(F.compare,P)},
+ {key:'same',world:'A',lines:[[8,1.0],[9,3.5]],settle:5.8,dur:16,leaves:8,camIn:2,cam:(t,P)=>pick(F.compare,P)},
+ {key:'leaves',world:'C',trans:'gust',lines:[[10,1.2],[11,4.0]],settle:5.2,dur:20,leaves:9,cam:(t,P)=>lerpF(pick(F.c0,P),pick(F.c1,P),ease(ramp(t,6.4,19.5)))},
  {key:'kept',world:'A',trans:'gust',lines:[[12,1.8]],settle:3,dur:12,leaves:12,cam:(t,P)=>pick(F.kept,P)},
- {key:'ways',world:'D',trans:'gust',lines:[[13,1.8]],settle:3.2,dur:23,leaves:5,cam:(t,P)=>waysCam(t,P)},
+ {key:'ways',world:'D',trans:'gust',lines:[[13,1.8],[14,9.4]],settle:10.4,dur:23,leaves:5,cam:(t,P)=>waysCam(t,P)},
  {key:'hence',world:'E',trans:'dark',pos:'left',dark:true,lines:[[15,2.6],[16,6.8]],settle:7.8,dur:16,leaves:0,cam:(t,P)=>lerpF(pick(F.room,P),pick(F.room2,P),smooth(ramp(t,0,16)))},
  {key:'telling',world:'E',pos:'left',dark:true,lines:[[17,1.6],[18,5.8]],settle:6.8,dur:16,leaves:0,cam:(t,P)=>lerpF(pick(F.room2,P),pick(F.win,P),ease(ramp(t,0,5.2)))},
  {key:'difference',world:'E',pos:'left',dark:true,lines:[[19,1.6]],settle:2.6,dur:13,leaves:0,cam:(t,P)=>lerpF(pick(F.win,P),pick(F.room,P),ease(ramp(t,3.2,10)))},
  {key:'end',world:'A',trans:'gust',special:'end',settle:6.2,dur:null,leaves:18,final:true,cam:(t,P)=>{const f=pick(F.end,P);return{cx:f.cx,cy:f.cy-18*smooth(ramp(t,0,24)),w:f.w,h:f.h};}}
 ];
-B.forEach((b,i)=>b.i=i);
+B.forEach((b,i)=>{b.i=i;if(b.lines&&!b.choice){const m=Math.max.apply(null,b.lines.map(l=>l[1]))+1.25;if(b.settle<m)b.settle=m;}});
 const settleOf=b=>b.choice?(state.gazed?b.settleC():b.settle0):b.settle;
 const durOf=b=>b.choice?(state.gazed?b.durC():Infinity):(b.dur==null?Infinity:b.dur);
 
@@ -552,9 +553,9 @@ function updA(b,t){
     d.style.display='';const land=bez(AG[gz],.2+k*.11),sx=land.x+sideS(gz)*50,sy=land.y-300,x=lerp(sx,land.x,p)+Math.sin(p*8+k)*22*(1-p),y=lerp(sy,land.y,Math.pow(p,1.15)),
       s=sA(land.y)*11,sq=p<1?1:.55;d.setAttribute('transform','translate('+f1(x)+' '+f1(y)+') scale(1 '+sq+') rotate('+Math.round(p*320+k*60)+') scale('+f1(s)+')');});
 }
-function updC(b,t){const tk=taken(),n=t<5.6?0:Math.floor((t-5.6)/.42)+1;
+function updC(b,t){const tk=taken(),n=t<6.4?0:Math.floor((t-6.4)/.42)+1;
   const all=RC.pt.concat(RC.pb[tk]);RC.pbg[tk].style.display='';RC.pbg[other(tk)].style.display='none';
-  all.forEach((g,i)=>{const o=i<n?clamp((t-5.6-i*.42)/.3,0,1):0;g.setAttribute('opacity',o.toFixed(2));});}
+  all.forEach((g,i)=>{const o=i<n?clamp((t-6.4-i*.42)/.3,0,1):0;g.setAttribute('opacity',o.toFixed(2));});}
 function updD(b,t){const d=RD.L*(.04+.35*ramp(t,.4,23)),p=RD.route.getPointAtLength(d),s=.14+p.y*.00026;
   poseFigure(RD.fig,p.x,p.y,s,t*6,0,0);
   RD.br.forEach(br=>{if(br.d==null)return;br.g.setAttribute('opacity',(1-.62*ramp(d-br.d,30,420)).toFixed(3));});
@@ -597,7 +598,7 @@ function stepLeaves(dt){const tgt=RM?Math.min(4,leafTarget):leafTarget;let nn=0;
 const textEl=document.getElementById('text');let tx=null;
 function buildText(b){if(tx){const old=tx;old.classList.add('out');setTimeout(()=>old.remove(),700);}
   tx=document.createElement('div');tx.className='tx '+(b.pos||'top')+(b.dark?' dark':'');
-  const add=(txt,at,cls)=>{const s=document.createElement('span');s.className='line'+(cls?' '+cls:'');s.dataset.at=at;if(typeof txt==='string')s.textContent=txt;else s.appendChild(txt);tx.appendChild(s);return s;};
+  const add=(txt,at,cls)=>{const s=document.createElement('span');s.className='line'+(cls?' '+cls:'');if(typeof at==='function')s._at=at;else s.dataset.at=at;if(typeof txt==='string')s.textContent=txt;else s.appendChild(txt);tx.appendChild(s);return s;};
   if(b.special==='cover'){add('The Road Not Taken',.2,'title');add('Robert Frost',.8,'by');
     const f=document.createDocumentFragment();f.appendChild(document.createTextNode('tap to begin · '));
     const btn=document.createElement('button');btn.className='linkish';btn.type='button';btn.textContent='or let it play';
@@ -607,7 +608,7 @@ function buildText(b){if(tx){const old=tx;old.classList.add('out');setTimeout(()
     btn.addEventListener('click',e=>{e.stopPropagation();setAuto(false);goto(0);});add(btn,5.6,'begin');}
   else(b.lines||[]).forEach(([i,at])=>add(POEM[i],at));
   textEl.appendChild(tx);}
-function updText(t){if(!tx)return;let m=0;tx.querySelectorAll('.line').forEach(s=>{const o=smooth(ramp(t,+s.dataset.at,+s.dataset.at+1.2));m=Math.max(m,o);
+function updText(t){if(!tx)return;let m=0;tx.querySelectorAll('.line').forEach(s=>{const at=s._at?s._at():+s.dataset.at,o=smooth(ramp(t,at,at+1.2));m=Math.max(m,o);
   s.style.opacity=o.toFixed(3);s.style.transform='translateY('+((1-o)*8).toFixed(1)+'px)';s.style.pointerEvents=o>.5?'':'none';});tx.style.setProperty('--w',m.toFixed(3));}
 
 /* ---------- core loop ---------- */
