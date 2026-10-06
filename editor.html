@@ -197,6 +197,7 @@
       <button class="btn" onclick="cleanMd()">洗MD</button>
       <button class="btn" onclick="shrinkNewlines()" title="連續換行減少一個">縮</button>
       <button class="btn" onclick="growNewlines()" title="連續換行增加一個">增</button>
+      <button class="btn" id="btnJoin" onclick="joinLines()" title="合併選取範圍內段落中的單一換行" disabled>合</button>
       <div class="dv"></div>
       <button class="btn ylw" onclick="insKakko()">【 】</button>
       <div class="dv"></div>
@@ -221,7 +222,7 @@
       <button class="btn-md grn" onclick="wrapMd('`','`','code')"><code style="font-size:11px">`code`</code></button>
       <button class="btn-md grn" onclick="insertCodeBlock()"><code style="font-size:11px">```塊</code></button>
       <span class="btn-md sep-md"></span>
-      <button class="btn-md ylw" onclick="ins('\n---\n')">— 分隔</button>
+      <button class="btn-md ylw" onclick="ins('\n---\n\n')">— 分隔</button>
       <button class="btn-md ylw" onclick="prefixMd('- ')">- 列表</button>
       <button class="btn-md ylw" onclick="prefixMd('1. ')">1. 列表</button>
       <button class="btn-md ylw" onclick="prefixMd('> ')">› 引用</button>
@@ -389,7 +390,8 @@ function downloadMd() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = '復盤_' + new Date().toISOString().slice(0,10) + '.md';
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  a.download = d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) + '_' + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + '.md';
   document.body.appendChild(a); a.click();
   document.body.removeChild(a); URL.revokeObjectURL(url);
   toast('📥 MD 檔已下載');
@@ -403,13 +405,13 @@ function ins(str) {
 
 // ── SEPARATORS ──
 const SEPS = {
-  short:  '\n-------------',
-  long:   '\n----------------------------------------',
-  me:     '\n----------------------------------------\n\n我',
-  gemini: '\n----------------------------------------\n\nGemini',
-  gpt:    '\n----------------------------------------\n\nGPT',
-  sonnet: '\n----------------------------------------\n\nSonnet',
-  opus:   '\n----------------------------------------\n\nOpus',
+  short:  '\n-------------\n',
+  long:   '\n----------------------------------------\n',
+  me:     '\n----------------------------------------\n\n\n我',
+  gemini: '\n----------------------------------------\n\n\nGemini',
+  gpt:    '\n----------------------------------------\n\n\nGPT',
+  sonnet: '\n----------------------------------------\n\n\nSonnet',
+  opus:   '\n----------------------------------------\n\n\nOpus',
 };
 function insertSep(k) { ins(SEPS[k]); }
 
@@ -478,6 +480,58 @@ function growNewlines() {
   applyToRange(t => t.replace(/\n+/g, m => m + '\n'));
   toast('↕ 換行已增加');
 }
+// ── JOIN LINES (合): 選取範圍內，段落中的單一換行合併；保守、不破壞 Markdown 結構 ──
+// 純函式：回傳 { text, end, count }。end = 新的選取結尾。
+function joinLinesIn(v, s, e) {
+  const lines = v.split('\n');
+  const protectedLine = l => /^\s*(#{1,6}\s|[-*+•]\s|\d+[.)]\s|>|```|~~~|[-*_=]{3,}\s*$|\|)/.test(l);
+  const blank = l => l.trim() === '';
+  // 標記 code fence 內的行
+  const inFence = new Array(lines.length).fill(false);
+  let fence = false;
+  lines.forEach((l, k) => {
+    if (/^\s*(```|~~~)/.test(l)) { inFence[k] = true; fence = !fence; }
+    else inFence[k] = fence;
+  });
+  let out = '', off = 0, newEnd = e, count = 0, lstrip = false;
+  for (let k = 0; k < lines.length; k++) {
+    let line = lines[k];
+    let consumed = 0;
+    if (lstrip) { const t = line.replace(/^[ \t]+/, ''); consumed = line.length - t.length; line = t; lstrip = false; }
+    out += line;
+    if (k < lines.length - 1) {
+      const nlIdx = off + lines[k].length;           // 此換行在原文的位置
+      const next = lines[k + 1];
+      const ok = nlIdx >= s && nlIdx < e &&
+        !blank(lines[k]) && !blank(next) &&
+        !inFence[k] && !inFence[k + 1] &&
+        !protectedLine(lines[k]) && !protectedLine(next);
+      if (ok) {
+        const a = lines[k].replace(/[ \t]+$/, '').slice(-1), b = next.trim().charAt(0);
+        const sp = /[\x21-\x7E]/.test(a) && /[\x21-\x7E]/.test(b) ? ' ' : '';   // 兩側皆半形字元才補一個空格，避免英文黏在一起
+        const lead = next.length - next.replace(/^[ \t]+/, '').length;
+        out += sp; lstrip = true; count++;
+        if (nlIdx < e) newEnd += sp.length - 1 - lead;
+      } else out += '\n';
+    }
+    off += lines[k].length + 1;
+  }
+  return { text: out, end: newEnd, count };
+}
+function joinLines() {
+  const s = editor.selectionStart, e = editor.selectionEnd;
+  if (s === e) return;
+  const r = joinLinesIn(editor.value, s, e);
+  if (!r.count) { toast('沒有可合併的換行'); return; }
+  editor.value = r.text;
+  editor.selectionStart = s; editor.selectionEnd = r.end;
+  editor.focus(); pushUndo(r.text); localStorage.setItem('fuban_content', r.text);
+  toast('⤴ 已合併 ' + r.count + ' 處換行');
+}
+function updateJoinBtn() { document.getElementById('btnJoin').disabled = editor.selectionStart === editor.selectionEnd; }
+document.addEventListener('selectionchange', updateJoinBtn);
+['input', 'keyup', 'mouseup', 'touchend', 'focus'].forEach(ev => editor.addEventListener(ev, updateJoinBtn));
+
 function toggleEmoji() {
   const ex = document.getElementById('emojiExtra');
   const btn = document.getElementById('btnEmojiToggle');
