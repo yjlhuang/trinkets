@@ -16,21 +16,21 @@
   --wet:#6f5a40;
   --panel:#e8ebe1; --ink:#27301f; --muted:#66705a; --line:#c9cfbd;
   --opt:#f4f6ef; --opt-hover:#fbfcf8;
-  --water:#3b7ea8; --right:#4c7a33; --wrong:#a4513b;
+  --water:#3b7ea8; --right:#4c7a33; --wrong:#a4513b; --star:#a8741a;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     --soil:#5c4f3d; --speck:#4b4032; --speck2:#6a5c48; --wet:#2e251a;
     --panel:#1c2119; --ink:#e2e6d8; --muted:#9aa38c; --line:#343c2e;
     --opt:#252b21; --opt-hover:#2d3428;
-    --water:#6fb1d8; --right:#8fbf6c; --wrong:#e0886f;
+    --water:#6fb1d8; --right:#8fbf6c; --wrong:#e0886f; --star:#e2b55a;
   }
 }
 :root[data-theme="dark"]{
   --soil:#5c4f3d; --speck:#4b4032; --speck2:#6a5c48; --wet:#2e251a;
   --panel:#1c2119; --ink:#e2e6d8; --muted:#9aa38c; --line:#343c2e;
   --opt:#252b21; --opt-hover:#2d3428;
-  --water:#6fb1d8; --right:#8fbf6c; --wrong:#e0886f;
+  --water:#6fb1d8; --right:#8fbf6c; --wrong:#e0886f; --star:#e2b55a;
 }
 *,*::before,*::after{box-sizing:inherit}
 html,body{height:100%;margin:0}
@@ -92,6 +92,9 @@ canvas{display:block;width:100%;height:100%;touch-action:manipulation;cursor:def
 .kind{color:var(--ink);background:var(--opt);border:1px solid var(--line);border-radius:999px;padding:.05rem .6rem}
 .again{color:var(--wrong)}
 .again[hidden]{display:none}
+.star{margin-left:auto;font-size:.85rem;color:var(--muted);background:none;border:1px solid var(--line);border-radius:999px;padding:.1rem .7rem;cursor:pointer;white-space:nowrap}
+.star:hover{color:var(--ink);border-color:var(--muted)}
+.star[aria-pressed="true"]{color:var(--star);border-color:var(--star)}
 
 .stem{margin:0 0 1rem;font-size:1.08rem;line-height:1.8;white-space:pre-line}
 
@@ -146,7 +149,7 @@ canvas{display:block;width:100%;height:100%;touch-action:manipulation;cursor:def
 .unit .meta{font-size:.8rem;color:var(--muted)}
 .unit .bar{height:4px;border-radius:2px;background:var(--line);overflow:hidden}
 .unit .bar i{display:block;height:100%;background:var(--right)}
-.quick{display:flex;gap:.5rem;margin:.6rem 0 0}
+.quick{display:flex;flex-wrap:wrap;gap:.5rem;margin:.6rem 0 0}
 .quick button{font-size:.85rem;padding:.25rem .8rem;border-radius:999px;border:1px solid var(--line);background:none;color:var(--muted);cursor:pointer}
 .chips{display:flex;flex-wrap:wrap;gap:.5rem}
 .chip{border-radius:999px;padding:.4rem .9rem}
@@ -170,6 +173,12 @@ canvas{display:block;width:100%;height:100%;touch-action:manipulation;cursor:def
 .book li.open .bans{display:block}
 .book .tag{color:var(--wrong);font-size:.8rem}
 .book .tag.ok{color:var(--right)}
+.book .tag.plain{color:var(--muted)}
+.book li{display:flex;align-items:flex-start;gap:.4rem}
+.book .bq{flex:1;min-width:0}
+.bstar{flex:none;background:none;border:0;color:var(--muted);font-size:1.1rem;line-height:1;padding:.55rem .2rem;cursor:pointer}
+.bstar[aria-pressed="true"]{color:var(--star)}
+.book-btns{display:flex;gap:.4rem;flex-wrap:wrap}
 .stale{
   position:absolute;left:50%;top:.75rem;transform:translateX(-50%);width:max-content;max-width:calc(100% - 2rem);
   background:var(--panel);color:var(--ink);border:1.5px solid var(--wrong);border-radius:12px;
@@ -219,7 +228,7 @@ button:focus-visible,.unit:focus-visible,.chip:focus-visible{outline:3px solid v
   </div>
 
   <section class="view" id="quiz" hidden>
-    <p class="where"><span class="kind" id="kind"></span><span id="scope"></span><span class="again" id="again" hidden>上次答錯的題</span></p>
+    <p class="where"><span class="kind" id="kind"></span><span id="scope"></span><span class="again" id="again" hidden>上次答錯的題</span><button class="star" id="star" type="button" aria-pressed="false" title="標成不確定（鍵盤 S）">☆ 不確定</button></p>
     <p class="stem" id="stem"></p>
     <ul class="opts" id="opts"></ul>
     <div class="after" id="after">
@@ -238,6 +247,7 @@ button:focus-visible,.unit:focus-visible,.chip:focus-visible{outline:3px solid v
       <button type="button" data-q="2">全選科目二</button>
       <button type="button" data-q="all">全選</button>
       <button id="book" type="button">看錯題本</button>
+      <button id="starbook" type="button">看星號題</button>
     </div>
     <div class="wrongbook" id="wrongbook" hidden></div>
     <h3>出題方式</h3>
@@ -283,6 +293,7 @@ const RANGES=[];
 for(const s of [1,2]) RANGES.push({key:'g'+s, subj:s, label:'指引 科目'+CN[s], desc:'模擬考題，附解析',
   ids:(ids=>()=>ids)(ALL_IDS.filter(id=>QS[id].src==='guide'&&QS[id].subj===s))});
 RANGES.push({key:'wrong', label:'錯題', desc:'在這裡答錯過的題', ids:()=>ALL_IDS.filter(everWrong)});
+RANGES.push({key:'star', label:'星號題', desc:'標成不確定的題', ids:()=>ALL_IDS.filter(id=>starred.has(id))});
 const BASE=RANGES.filter(r=>r.subj).map(r=>r.key);
 const rangeOf=k=>RANGES.find(r=>r.key===k);
 function idsOf(keys){ return [...new Set(keys.flatMap(k=>{const r=rangeOf(k);return r?r.ids():[]}))]; }
@@ -304,6 +315,8 @@ let sel=BASE.slice(), weakOnly=false, mix=true;
 let stats={};             // id → [streak, right, wrong]；wrong 永久累計，不因「熟了」清掉
 let order=[], qi=-1, Q=null, again=false, answered=false, shown=0;
 let retry=[];             // [{id, due}]
+let starred=new Set();    // 標成「不確定」的題（使用者自己標的，清除作答紀錄不會清掉）
+let picks={};             // id → 最近一次答錯時選的「原始」選項索引（匯出分析用）
 const mastered=id=>(stats[id]&&stats[id][0]>=2);
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function selIds(){ return idsOf(sel); }
@@ -356,6 +369,7 @@ function showQuestion(){
   answered=false;
   $('kind').textContent=where(q);
   $('again').hidden=!again;
+  showStar();
   updateScope();
   $('stem').textContent=q.q;
   const ul=$('opts'); ul.innerHTML='';
@@ -371,6 +385,15 @@ function showQuestion(){
   $('after').classList.remove('on');
   $('quiz').scrollTop=0;
 }
+function showStar(){
+  const on=!!Q&&starred.has(Q.id), b=$('star');
+  b.setAttribute('aria-pressed',on); b.textContent=(on?'★':'☆')+' 不確定';
+}
+function toggleStar(id){
+  if(starred.has(id)) starred.delete(id); else starred.add(id);
+  save();
+}
+$('star').onclick=()=>{ if(!Q) return; toggleStar(Q.id); showStar(); toast(starred.has(Q.id)?'標上星號了，範圍選單可以匯出':'星號拿掉了'); };
 function record(id,ok){
   const s=stats[id]||[0,0,0];
   if(ok){s[0]++;s[1]++}else{s[0]=0;s[2]++}
@@ -408,6 +431,7 @@ function finish(ok){
 function answer(i){
   if(answered||i>=4) return;
   answered=true;
+  if(i!==Q.a) picks[Q.id]=Q.perm[i];
   [...document.querySelectorAll('.opt')].forEach((b,k)=>{
     b.disabled=true;
     if(k===Q.a) b.classList.add('right');
@@ -438,6 +462,7 @@ document.addEventListener('keydown',e=>{
   // （剛關掉的範圍選單裡的「開始」鈕若還留著焦點，也算題目區）
   const ours = t===document.body || t===cv || !!t.closest('[hidden]') || $('quiz').contains(t);
   if(!ours) return;
+  if(e.key==='s'||e.key==='S'){ if(!e.repeat) $('star').click(); e.preventDefault(); return; }
   if(answered){
     if(e.key==='Enter'){ e.preventDefault(); nextQuestion(); }
     return;
@@ -466,7 +491,7 @@ function updateScope(){
   const ids=selIds(), m=ids.filter(mastered).length;
   $('scope').textContent=rangeLabel(sel)+' · 熟 '+m+'/'+ids.length;
 }
-let draft=null, bookOpen=false;
+let draft=null, bookOpen=null;    // null／'wrong'（錯題本）／'star'（星號題）
 function openPick(){
   draft={sel:[...sel],weakOnly,mix};
   renderPick();
@@ -493,8 +518,10 @@ function renderPick(){
     box.appendChild(b);
   });
   const nWrong=ALL_IDS.filter(everWrong).length;
-  $('book').textContent=(bookOpen?'收起錯題本':'看錯題本')+'（'+nWrong+'）';
+  if(bookOpen==='wrong'&&!nWrong || bookOpen==='star'&&!starred.size) bookOpen=null;
+  $('book').textContent=(bookOpen==='wrong'?'收起錯題本':'看錯題本')+'（'+nWrong+'）';
   $('book').disabled=!nWrong;
+  renderStarBtn();
   renderBook();
   $('weak').setAttribute('aria-pressed',draft.weakOnly);
   $('mix').setAttribute('aria-pressed',draft.mix);
@@ -513,37 +540,116 @@ document.querySelectorAll('.quick [data-q]').forEach(b=>{
     draft.sel=want.slice(); sortSel(); renderPick();
   };
 });
-/* ---------- 錯題本：曾經答錯的題都留著，標示待加強／已熟；點一下展開全文 ---------- */
+/* ---------- 錯題本／星號題：點一下展開全文；右邊的 ☆ 可直接加減星號；可匯出成 Markdown 拿去分析 ---------- */
+function bookIds(mode){
+  if(mode==='star') return ALL_IDS.filter(id=>starred.has(id));
+  return ALL_IDS.filter(everWrong).sort((a,b)=>(+!!mastered(a) - +!!mastered(b))||(stats[b][2]-stats[a][2]));
+}
+function renderStarBtn(){
+  const b=$('starbook');
+  b.textContent=(bookOpen==='star'?'收起星號題':'看星號題')+'（'+starred.size+'）';
+  b.disabled=!starred.size && bookOpen!=='star';
+}
 function renderBook(){
-  const box=$('wrongbook');
-  box.hidden=!bookOpen;
-  if(!bookOpen) return;
-  const ids=ALL_IDS.filter(everWrong).sort((a,b)=>(+!!mastered(a) - +!!mastered(b))||(stats[b][2]-stats[a][2]));
+  const box=$('wrongbook'), mode=bookOpen;
+  box.hidden=!mode;
+  if(!mode) return;
+  const ids=bookIds(mode);
   const weakN=ids.filter(id=>!mastered(id)).length;
   box.innerHTML='';
   const head=document.createElement('div'); head.className='book-head';
   const p=document.createElement('p'); p.className='sub';
-  p.textContent='答錯過 '+ids.length+' 題，其中待加強 '+weakN+' 題';
-  const only=document.createElement('button'); only.className='ghost'; only.type='button'; only.textContent='只練這些';
-  only.onclick=()=>{draft.sel=['wrong'];renderPick();$('go').scrollIntoView({block:'nearest',behavior:'smooth'})};
-  head.append(p,only); box.append(head);
+  p.textContent= mode==='star' ? '標了星號 '+ids.length+' 題，其中答錯過 '+ids.filter(everWrong).length+' 題'
+                               : '答錯過 '+ids.length+' 題，其中待加強 '+weakN+' 題';
+  const btns=document.createElement('div'); btns.className='book-btns';
+  const mk=(t,f)=>{const b=document.createElement('button'); b.className='ghost'; b.type='button'; b.textContent=t; b.onclick=f; btns.append(b);};
+  mk('只練這些',()=>{draft.sel=[mode];renderPick();$('go').scrollIntoView({block:'nearest',behavior:'smooth'})});
+  mk('下載',()=>downloadBook(mode));
+  mk('複製',()=>copyBook(mode));
+  head.append(p,btns); box.append(head);
   const ul=document.createElement('ul'); ul.className='book';
   for(const id of ids){
-    const q=QS[id], li=document.createElement('li');
+    const q=QS[id], st=stats[id], li=document.createElement('li');
     const btn=document.createElement('button'); btn.type='button'; btn.className='bq';
     btn.setAttribute('aria-expanded','false');
     const src=document.createElement('small'); src.className='src'; src.textContent=where(q);
-    const tag=document.createElement('small'); tag.className='tag'+(mastered(id)?' ok':'');
-    tag.textContent=(mastered(id)?'已熟':'待加強')+' · 錯 '+stats[id][2]+' 次';
+    const tag=document.createElement('small');
+    if(st&&st[2]>0){ tag.className='tag'+(mastered(id)?' ok':''); tag.textContent=(mastered(id)?'已熟':'待加強')+' · 錯 '+st[2]+' 次'; }
+    else{ tag.className='tag plain'; tag.textContent=st?'對 '+st[1]+' 次 · 沒錯過':'還沒作答過'; }
     const stem=document.createElement('span'); stem.className='bstem'; stem.textContent=q.q;
     const ans=document.createElement('span'); ans.className='bans'; ans.textContent='答案：'+q.o[q.a];
     btn.append(src, tag, stem, ans);
     btn.onclick=()=>{ const on=li.classList.toggle('open'); btn.setAttribute('aria-expanded',on); };
-    li.append(btn); ul.append(li);
+    const sb=document.createElement('button'); sb.type='button'; sb.className='bstar';
+    const paint=()=>{const on=starred.has(id); sb.textContent=on?'★':'☆'; sb.setAttribute('aria-pressed',on); sb.setAttribute('aria-label',on?'拿掉星號':'標上星號');};
+    paint();
+    // 在星號題清單裡拿掉星號：這一列先留著（可以反悔再點回來），下次打開清單才消失
+    sb.onclick=()=>{ toggleStar(id); paint(); renderStarBtn(); };
+    li.append(btn, sb); ul.append(li);
   }
   box.append(ul);
 }
-$('book').onclick=()=>{bookOpen=!bookOpen;renderPick()};
+/* ---------- 匯出：Markdown。選項照原始試卷順序（作答時可能打亂過），附正解、上次選錯的選項、解析、作答次數 ---------- */
+const pad=n=>String(n).padStart(2,'0');
+const ymd=(d,sep)=>d.getFullYear()+sep+pad(d.getMonth()+1)+sep+pad(d.getDate());
+function bookText(mode){
+  const ids=bookIds(mode), now=new Date(), L=[];
+  L.push('# iPAS AI 應用規劃師（初級）・'+(mode==='star'?'星號題（不確定）':'錯題')+'匯出','');
+  L.push('匯出時間：'+ymd(now,'-')+' '+pad(now.getHours())+':'+pad(now.getMinutes())+'　共 '+ids.length+' 題  ');
+  if(mode==='star') L.push('這些是我作答時覺得不確定、自己標上星號（★）的題，其中答錯過 '+ids.filter(everWrong).length+' 題。  ');
+  else{
+    const w=ids.filter(id=>!mastered(id)).length;
+    L.push('待加強 '+w+' 題、已熟（後來連對兩次）'+(ids.length-w)+' 題；其中 '+ids.filter(id=>starred.has(id)).length+' 題我也標了不確定（★）。  ');
+  }
+  L.push('選項依原始試卷順序列出。歷屆試題沒有官方解析，學習指引的題目才有。','');
+  // 分布：科目 → 來源（歷屆試題）或章節（學習指引）
+  L.push('## 分布','');
+  for(const s of [1,2]){
+    const sub=ids.filter(id=>QS[id].subj===s);
+    if(!sub.length) continue;
+    const c={};
+    sub.forEach(id=>{const q=QS[id], k=q.src==='guide'?'指引 '+q.sec:q.src; c[k]=(c[k]||0)+1;});
+    L.push('- 科目'+CN[s]+' '+SUBJ[s]+'：'+sub.length+' 題（'+Object.keys(c).sort().map(k=>k+' '+c[k]).join('、')+'）');
+  }
+  L.push('','## 題目','');
+  ids.forEach((id,n)=>{
+    const q=QS[id], st=stats[id]||[0,0,0], flags=[];
+    if(st[2]>0) flags.push(mastered(id)?'已熟':'待加強');
+    flags.push('答錯 '+st[2]+' 次','答對 '+st[1]+' 次');
+    if(starred.has(id)) flags.push('★不確定');
+    L.push('### '+(n+1)+'. '+where(q)+'　〔'+flags.join(' · ')+'〕','');
+    L.push(q.q,'');
+    q.o.forEach((o,k)=>L.push('('+'ABCD'[k]+') '+o+'  '));
+    L.push('');
+    L.push('- 正解：('+'ABCD'[q.a]+') '+q.o[q.a]);
+    if(picks[id]!=null && picks[id]!==q.a) L.push('- 我上次答錯選了：('+'ABCD'[picks[id]]+') '+q.o[picks[id]]);
+    L.push('- 解析：'+(q.ex||'（歷屆試題沒有官方解析）'),'');
+  });
+  return L.join('\n');
+}
+function downloadBook(mode){
+  const now=new Date();
+  const name='iPAS-'+(mode==='star'?'星號題':'錯題')+'-'+ymd(now,'')+'-'+pad(now.getHours())+pad(now.getMinutes())+'.md';
+  const url=URL.createObjectURL(new Blob([bookText(mode)],{type:'text/markdown;charset=utf-8'}));
+  const a=document.createElement('a'); a.href=url; a.download=name;
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+  toast('下載了 '+name);
+}
+function copyBook(mode){
+  const t=bookText(mode);
+  const done=()=>toast('複製好了，可以貼給 AI 幫你分析');
+  const fallback=()=>{
+    const ta=document.createElement('textarea'); ta.value=t; ta.style.cssText='position:fixed;opacity:0';
+    document.body.append(ta); ta.select();
+    let ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+    ta.remove(); if(ok) done(); else toast('複製失敗，改用「下載」');
+  };
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(done,fallback);
+  else fallback();
+}
+$('book').onclick=()=>{bookOpen=bookOpen==='wrong'?null:'wrong';renderPick()};
+$('starbook').onclick=()=>{bookOpen=bookOpen==='star'?null:'star';renderPick()};
 $('weak').onclick=()=>{draft.weakOnly=!draft.weakOnly;renderPick()};
 $('mix').onclick=()=>{draft.mix=!draft.mix;renderPick()};
 $('range').onclick=()=>{ if($('pick').hidden) openPick(); else closePick(false); };
@@ -575,8 +681,8 @@ $('wipe').onclick=()=>{
     return;
   }
   clearTimeout(wipeT); b.classList.remove('armed'); b.textContent='清除作答紀錄';
-  stats={}; retry=[]; order=[]; qi=-1; Q=null;
-  renderPick(); save(); toast('作答紀錄清掉了');
+  stats={}; picks={}; retry=[]; order=[]; qi=-1; Q=null;
+  renderPick(); save(); toast('作答紀錄清掉了（星號還留著）');
 };
 
 const DROP_SVG='<svg viewBox="0 0 18 24" aria-hidden="true"><path d="M9 1C9 1 2 10 2 15a7 7 0 0 0 14 0C16 10 9 1 9 1Z" fill="var(--water)"/><path d="M6 15a3 3 0 0 0 3 3" stroke="#fff" stroke-opacity=".6" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>';
@@ -603,7 +709,7 @@ function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');
 const DISCOVER_TEXT={pond:'水積成了一個小水塘','rare-flower':'開了一朵沒見過的花',butterfly:'有東西飛來了'};
 const world=OneDropWorld.create({
   root:$('land'), key:SAVE_KEY, snapshotPrefix:'我的小土地-iPAS-',
-  getProgress:()=>({sel, weakOnly, mix, stats, order, qi, shown, retry, Q, again, answered}),      // 存檔欄位與順序照舊
+  getProgress:()=>({sel, weakOnly, mix, stats, order, qi, shown, retry, Q, again, answered, starred:[...starred], picks}),      // 原有欄位與順序照舊；v5 起在最後加 starred、picks
 });
 world.on('water',e=>renderDrops(e.gained));
 world.on('discover',e=>{ if(DISCOVER_TEXT[e.kind]) toast(DISCOVER_TEXT[e.kind]); });
@@ -617,7 +723,7 @@ world.on('saveerror',()=>{ saveFailed=true; showBanners(); });
 world.on('saved',()=>{ if(saveFailed){ saveFailed=false; showBanners(); } });
 function save(){ world.save(); }
 // 版本號（範圍選單底部）：頁面改了就更新 PAGE_VERSION；world 的版本由載入的 world 檔自己報
-const PAGE_VERSION='v4 · 2026-09-27';
+const PAGE_VERSION='v5 · 2026-10-12';
 $('ver').textContent=PAGE_VERSION+' · world '+OneDropWorld.VERSION;
 
 /* ================= 讀檔（題庫進度） ================= */
@@ -626,6 +732,8 @@ function load(){
   const d=world.load();                  // 土地由 world 讀進去；這裡只還原題庫進度
   if(!d) return false;
   if(d.stats && typeof d.stats==='object') for(const k in d.stats) if(QS[k]) stats[k]=d.stats[k];
+  if(Array.isArray(d.starred)) d.starred.forEach(id=>{ if(QS[id]) starred.add(id); });
+  if(d.picks && typeof d.picks==='object') for(const k in d.picks) if(QS[k] && d.picks[k]>=0 && d.picks[k]<4) picks[k]=d.picks[k]|0;
   weakOnly=!!d.weakOnly;
   mix=d.mix!==false;
   if(Array.isArray(d.sel)){
