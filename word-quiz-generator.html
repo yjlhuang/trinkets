@@ -455,6 +455,15 @@ phr. / 引起（某人的）共鳴 / strike a chord (with sb.)"></textarea>
         <iframe id="preview-frame"></iframe>
       </div>
 
+      <div class="status-line" style="display:flex;align-items:center;gap:8px;margin:8px 0;">
+        <label for="sel-align">版面位置：</label>
+        <select id="sel-align">
+          <option value="left" selected>靠左（只需裁右邊）</option>
+          <option value="center">置中（兩邊都留白）</option>
+          <option value="right">靠右（只需裁左邊）</option>
+        </select>
+      </div>
+
       <div class="footer-actions">
         <button class="ghost" id="btn-back-3">上一步再調整</button>
         <button class="primary" id="btn-download">下載 HTML</button>
@@ -1446,6 +1455,15 @@ function getOrderedExportList(){
   ];
 }
 
+function getPagePad(){
+  // 左右白邊合計維持 22mm（內容寬度不變）；靠左／靠右時留 5mm 給印表機不可列印區
+  const a = document.getElementById("sel-align");
+  const v = a ? a.value : "center";
+  if(v==="left") return "8mm 17mm 8mm 5mm";
+  if(v==="right") return "8mm 5mm 8mm 17mm";
+  return "8mm 11mm";
+}
+
 function buildFinalHTML(){
   const orderedList = getOrderedExportList();
   const quizItems = orderedList.map((w,i)=>buildQuizItemHTML(i+1,w));
@@ -1459,7 +1477,7 @@ function buildFinalHTML(){
 <meta charset="UTF-8">
 <title>單字小考</title>
 <style>
-:root{--font-body:10pt;--font-small:9.3pt;--font-title:14pt;--page-pad:8mm 11mm;--item-pad-v:1.5px;}
+:root{--font-body:10pt;--font-small:9.3pt;--font-title:14pt;--page-pad:${getPagePad()};--item-pad-v:1.5px;}
 @page{size:A4 portrait;margin:0;}
 *,*::before,*::after{box-sizing:border-box;}
 html,body{margin:0;padding:0;font-family:"Microsoft JhengHei","微軟正黑體","Noto Sans TC","PingFang TC","Heiti TC",sans-serif;font-size:var(--font-body);line-height:1.4;color:#000;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
@@ -1581,6 +1599,9 @@ function renderExport(){
 }
 
 document.getElementById("btn-back-3").addEventListener("click", ()=>goToStep(3));
+document.getElementById("sel-align").addEventListener("change", ()=>{
+  document.getElementById("preview-frame").srcdoc = buildFinalHTML();
+});
 
 document.getElementById("btn-download").addEventListener("click", ()=>{
   const html = buildFinalHTML();
