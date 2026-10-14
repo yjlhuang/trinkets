@@ -19,7 +19,7 @@ ROOT = os.path.dirname(HERE)
 SRC = os.path.join(ROOT, "watercolor.html")
 OUT = os.path.join(ROOT, "vocab-watercolor.html")
 
-PAGE_VERSION = "2026-10-14"
+PAGE_VERSION = "2026-10-14b"
 
 # 單字清單只有一份：one-drop.html 的 UNITS（修過錯字的版本），這裡原封不動複製過去
 ONE_DROP = os.path.join(ROOT, "one-drop.html")

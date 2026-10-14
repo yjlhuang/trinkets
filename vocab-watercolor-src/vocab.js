@@ -6,7 +6,7 @@
    引擎在使用者用「上色」點到一個區塊時，先問 window.__vwGate(畫作 id, 區塊編號)，回傳 false 就不上色。 */
 (() => {
 const PAGE_VERSION = '__PAGE_VERSION__';
-const REWARD = { e2c: 5, c2e: 5, spell: 10 };
+const REWARD = { e2c: 1, c2e: 1, spell: 2 };
 // github.io 上所有 trinkets 頁面共用同一個 localStorage / IndexedDB：key 一律帶頁名
 const SAVE_KEY = 'vocab-watercolor-v1';
 
@@ -134,7 +134,7 @@ window.__vwGate=(id, rid)=>{
   const r=window.__aw&&window.__aw.regions&&window.__aw.regions.regions[rid-1];
   if(r && r.area<4) return true;
   if(credits<=0){
-    toast('這塊還沒塗過：答對一題，就能再塗 5 塊');
+    toast('這塊還沒塗過：答對一題，就能再塗一塊');
     setTab('quiz');
     return false;
   }
@@ -258,7 +258,7 @@ function finish(ok,badText){
   record(Q.id,ok);
   const msg=$('q-msg');
   if(ok){
-    const got=REWARD[Q.type]||5;
+    const got=REWARD[Q.type]||1;
     const first=credits===0;
     credits+=got;
     renderCredits(true);
