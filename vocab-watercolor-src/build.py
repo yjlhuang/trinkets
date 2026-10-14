@@ -19,9 +19,10 @@ ROOT = os.path.dirname(HERE)
 SRC = os.path.join(ROOT, "watercolor.html")
 OUT = os.path.join(ROOT, "vocab-watercolor.html")
 
-PAGE_VERSION = "2026-10-14c"
+PAGE_VERSION = "2026-10-14d"
 
-# 單字清單只有一份：one-drop.html 的 UNITS（修過錯字的版本），這裡原封不動複製過去
+# 單字從 one-drop.html 的 UNITS 原封不動複製過來。UNITS 本身是從班網同步的：
+# 正本 longjin2026/data/wordsblue.xlsx → build_blue.py → 班網 JSON → ../tools/sync_blue.py → one-drop.html → 這裡
 ONE_DROP = os.path.join(ROOT, "one-drop.html")
 
 # 「換畫作」選單，由簡到難。regions = 在瀏覽器量的：__aw.regions.regions.filter(r=>r.area>=300).length
