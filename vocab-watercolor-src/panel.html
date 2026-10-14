@@ -1,0 +1,106 @@
+  <aside class="tray" aria-label="答題與調色">
+    <div class="vw-top">
+      <p class="vw-credits" id="vw-credits" aria-live="polite"><span class="vw-dot" aria-hidden="true"></span><span>可塗</span><b id="vw-n">0</b><span>塊</span></p>
+      <span class="vw-prog" id="vw-prog"></span>
+      <div class="vw-tabs" role="tablist" aria-label="面板">
+        <button type="button" role="tab" id="vw-tab-quiz" data-vwtab="quiz" aria-controls="vw-quiz">答題</button>
+        <button type="button" role="tab" id="vw-tab-paint" data-vwtab="paint" aria-controls="vw-paint">調色</button>
+      </div>
+    </div>
+
+    <div class="vw-pane" id="vw-quiz" role="tabpanel" aria-labelledby="vw-tab-quiz">
+      <section id="q-quiz" hidden>
+        <p class="q-where"><span class="q-kind" id="q-kind"></span><span id="q-scope"></span><span class="q-again" id="q-again" hidden>上次答錯的字</span><button type="button" class="q-range" id="q-range">範圍</button></p>
+        <div class="q-prompt" id="q-prompt"></div>
+        <ul class="q-opts" id="q-opts"></ul>
+        <form class="q-spell" id="q-spell" hidden autocomplete="off">
+          <p class="q-letters" id="q-letters"></p>
+          <input id="q-typed" type="text" inputmode="latin" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="輸入英文拼法">
+          <div class="q-row">
+            <button class="q-next" type="submit" id="q-check">送出</button>
+            <button class="q-ghost" type="button" id="q-giveup">不會，看答案</button>
+          </div>
+        </form>
+        <div class="q-after" id="q-after">
+          <p class="q-msg" id="q-msg"></p>
+          <div class="q-card" id="q-card"></div>
+          <button class="q-next" type="button" id="q-nextq">下一題</button>
+        </div>
+      </section>
+
+      <section id="q-pick" hidden>
+        <div class="q-head"><h2>要練哪幾頁？</h2><button type="button" class="q-range" id="q-back" hidden>回到題目</button></div>
+        <p class="q-sub">可以選一個，也可以多選一起考。</p>
+        <div class="q-units" id="q-units"></div>
+        <div class="q-quick"><button type="button" id="q-all">全選</button><button type="button" id="q-none">全不選</button></div>
+        <h3>題型（可複選，會隨機出）</h3>
+        <div class="q-chips" id="q-modes">
+          <button type="button" class="q-chip" data-m="e2c">看英文選中文</button>
+          <button type="button" class="q-chip" data-m="c2e">看中文選英文</button>
+          <button type="button" class="q-chip" data-m="spell">看中文拼英文<small>可塗兩倍</small></button>
+        </div>
+        <h3>出題方式</h3>
+        <div class="q-chips">
+          <button type="button" class="q-chip" id="q-weak">只出還不熟的字</button>
+        </div>
+        <button type="button" class="q-next q-go" id="q-go">開始</button>
+        <div class="q-fine">
+          <span>選擇題答對可以塗 5 塊新區塊，拼字答對 10 塊。塗過的區塊之後怎麼疊色都不用再花。連續答對兩次，就算這個字「熟了」。紀錄存在這台裝置上。</span>
+          <button type="button" class="q-ghost q-small" id="q-wipe">清除單字紀錄</button>
+        </div>
+        <p class="q-ver" id="q-ver"></p>
+      </section>
+    </div>
+
+    <div class="vw-pane vw-paint" id="vw-paint" role="tabpanel" aria-labelledby="vw-tab-paint">
+      <header class="title">
+        <div><h1 id="title">單字水彩</h1><p id="latin"></p></div>
+        <button type="button" id="change" class="change">換畫作</button>
+      </header>
+      <div class="group schemes">
+        <span>配色</span>
+        <div class="seg" role="group" aria-label="配色">
+          <button type="button" data-scheme="autumn">秋日</button>
+          <button type="button" data-scheme="dusk">暮色</button>
+          <button type="button" data-scheme="mist">晨霧</button>
+          <button type="button" data-scheme="spring">春日</button>
+          <button type="button" data-scheme="all">全部</button>
+        </div>
+      </div>
+      <div class="palette">
+        <div class="box"><div class="pans" id="pans" role="radiogroup" aria-label="顏料"></div></div>
+        <p class="color-name"><span>顏料</span><b id="color-name"></b></p>
+      </div>
+      <div class="group">
+        <span>點一下區域時</span>
+        <div class="seg" role="group" aria-label="點一下區域時">
+          <button type="button" data-tool="paint">上色</button>
+          <button type="button" data-tool="lighten">洗淡</button>
+          <button type="button" data-tool="clear">洗掉</button>
+        </div>
+      </div>
+      <div class="group">
+        <span>每次的顏料量</span>
+        <div class="seg" role="group" aria-label="每次的顏料量">
+          <button type="button" data-amount="light">淡彩</button>
+          <button type="button" data-amount="mid">適中</button>
+          <button type="button" data-amount="rich">飽和</button>
+        </div>
+      </div>
+      <div class="group line">
+        <span>線稿</span>
+        <div class="seg" role="group" aria-label="線稿">
+          <button type="button" data-line="show">顯示</button>
+          <button type="button" data-line="faint">淡化</button>
+          <button type="button" data-line="hide">隱藏</button>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="undo" aria-label="復原"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 5 3.5 9l4 4"/><path d="M4 9h8a4.5 4.5 0 0 1 0 9h-2"/></svg>復原</button>
+        <button type="button" id="redo" aria-label="重做"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12.5 5 4 4-4 4"/><path d="M16 9H8a4.5 4.5 0 0 0 0 9h2"/></svg>重做</button>
+        <button type="button" class="primary" id="save">存成圖片</button>
+        <button type="button" class="quiet" id="reset">重新開始</button>
+      </div>
+      <p class="credit">水彩模擬引擎改寫自 <a href="https://github.com/msurguy/watercolor-playground" target="_blank" rel="noopener">watercolor-playground</a>（Maksim Surguy，MIT 授權）。<span id="sync">作品會自動保存在這台裝置的瀏覽器中。</span> <span id="vw-ver"></span></p>
+    </div>
+  </aside>
