@@ -19,18 +19,21 @@ ROOT = os.path.dirname(HERE)
 SRC = os.path.join(ROOT, "watercolor.html")
 OUT = os.path.join(ROOT, "vocab-watercolor.html")
 
-PAGE_VERSION = "2026-10-14b"
+PAGE_VERSION = "2026-10-14c"
 
 # 單字清單只有一份：one-drop.html 的 UNITS（修過錯字的版本），這裡原封不動複製過去
 ONE_DROP = os.path.join(ROOT, "one-drop.html")
 
-# 「換畫作」選單，由簡到難。regions = 水彩引擎實際切出來的區塊數（在瀏覽器量的：__aw.regions.regions.length）
+# 「換畫作」選單，由簡到難。regions = 在瀏覽器量的：__aw.regions.regions.filter(r=>r.area>=300).length
+# 只算「要花顏料」的區塊（面積 ≥ vocab.js 的 TAP_MIN）；更小的碎塊免費、也不算進完成度
 ART = [
-    {"id": "vw-tools",  "name": "畫具桌",   "level": "入門", "regions": 44},
-    {"id": "vw-desk",   "name": "書桌窗景", "level": "",     "regions": 84},
-    {"id": "vw-vase",   "name": "花瓶靜物", "level": "",     "regions": 93},
-    {"id": "vw-fruit",  "name": "水果籃",   "level": "",     "regions": 91},
-    {"id": "vw-starry", "name": "星夜",     "level": "進階", "regions": 175},
+    {"id": "vw-tools",   "name": "畫具桌",   "level": "入門", "regions": 43},
+    {"id": "vw-desk",    "name": "書桌窗景", "level": "",     "regions": 74},
+    {"id": "vw-fruit",   "name": "水果籃",   "level": "",     "regions": 84},
+    {"id": "vw-vase",    "name": "花瓶靜物", "level": "",     "regions": 88},
+    {"id": "vw-village", "name": "山間小鎮", "level": "進階", "regions": 140},
+    {"id": "vw-starry",  "name": "星夜",     "level": "進階", "regions": 171},
+    {"id": "vw-lotus",   "name": "荷花池",   "level": "挑戰", "regions": 253},
 ]
 
 
@@ -108,6 +111,9 @@ def main():
     t = once(t, "if(!a||!Wt)return;let K=Wt.regions[a-1];",
              'if(!a||!Wt)return;if(H.tool==="paint"&&window.__vwGate&&!window.__vwGate(_.id,a))return;let K=Wt.regions[a-1];',
              "jp 點擊入口")
+    # ---- 還原備份時先擋住引擎的自動存檔（不然 reload 前的 pagehide 會把剛還原的畫蓋回去） ----
+    t = once(t, "async function At(){if(!vt||ae||!xl)return;",
+             "async function At(){if(!vt||ae||!xl||window.__vwHold)return;", "At 存檔入口")
     # ---- 換畫作完成時通知答題層（更新「這張塗過幾塊」） ----
     t = once(t, "finally{vt=!1,xl=!0,yp.hidden=!0,yt(),he(),ll()}",
              "finally{vt=!1,xl=!0,yp.hidden=!0,yt(),he(),ll(),window.__vwOnDrawing&&window.__vwOnDrawing(_.id,Wt)}",

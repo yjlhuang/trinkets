@@ -120,6 +120,15 @@
 .vw-stale button { font-size: 13px; padding: 4px 12px; border-radius: 999px; border: 0; background: var(--ink); color: #f7f7f4; }
 .pick small { color: var(--soft); font-size: 11.5px; }
 
+/* ---- 進度備份 ---- */
+.vw-backup { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.vw-bk-head { margin: 0; font-size: 12.5px; color: var(--muted); display: flex; gap: 4px 10px; align-items: baseline; flex-wrap: wrap; }
+.vw-bk-head b { color: var(--ink); font-weight: 600; font-size: 13.5px; }
+.vw-bk-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.vw-bk-btns button { border: 1px solid var(--line); background: var(--well); color: var(--ink); border-radius: 11px; min-height: 40px; padding: 6px 8px; font-size: 14px; }
+.vw-bk-btns button:disabled { opacity: .5; cursor: default; }
+.vw-confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 60; }
+
 /* ---- 直立／手機：畫紙在上，面板在下、固定高度（畫紙才不會跟著題目長短跳動） ---- */
 @media (orientation: portrait), (max-width: 760px) {
   .studio { grid-template-columns: minmax(0, 1fr); }
@@ -130,6 +139,7 @@
   .vw-tabs button { padding: 5px 12px; min-height: 32px; }
   .vw-pane { padding: 12px 12px 14px; }
   .vw-paint { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-content: start; }
+  .vw-backup { grid-column: 1 / -1; }
   .q-prompt .word { font-size: 25px; }
   .q-prompt .mean { font-size: 16px; }
   .q-opt { font-size: 14.5px; padding: 7px 10px; }

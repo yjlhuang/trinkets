@@ -2,13 +2,19 @@
    State ownership（誰能寫什麼）：
    - credits（手上還能塗幾塊新區塊）：只有「答對」會加、只有 gate()「解鎖新區塊」會減。
    - unlocked[畫作 id]（塗過的區塊編號）：只有 gate() 會加；洗掉、復原、重新開始都不會拿掉。
-   - 畫面上的顏色歸水彩引擎管（自己存在 IndexedDB），這裡不碰；引擎的復原只動顏色，不退顏料。
+   - done[畫作 id]（整張塗完）：只有 gate() 解鎖最後一塊、或載入時發現已經塗完，才會設成 true。
+   - 畫面上的顏色歸水彩引擎管（自己存在 IndexedDB），平常不碰；只有「從備份檔還原」會整批換掉，
+     而且換之前先設 window.__vwHold 擋住引擎的自動存檔。引擎的復原只動顏色，不退顏料。
    引擎在使用者用「上色」點到一個區塊時，先問 window.__vwGate(畫作 id, 區塊編號)，回傳 false 就不上色。 */
 (() => {
 const PAGE_VERSION = '__PAGE_VERSION__';
 const REWARD = { e2c: 1, c2e: 1, spell: 2 };
 // github.io 上所有 trinkets 頁面共用同一個 localStorage / IndexedDB：key 一律帶頁名
 const SAVE_KEY = 'vocab-watercolor-v1';
+const UI_KEY = 'vocab-watercolor.ui';      // 引擎的設定（顏色、線稿、目前畫作），build.py 換的名字
+const DB_NAME = 'vocab-watercolor';        // 引擎的 IndexedDB（store "paint"，key "paint:<畫作 id>"）
+// 太小的碎塊（面積 < TAP_MIN 平方像素，約 17×17，手指很難點準）：免費塗，也不算進「整張塗完」
+const TAP_MIN = 300;
 
 /* ================= 單字資料（build.py 從 ../one-drop.html 的 UNITS 複製過來，兩頁共用同一份） ================= */
 const UNITS = __UNITS__;
@@ -50,6 +56,8 @@ let order=[], qi=-1, Q=null, again=false, answered=false, shown=0;
 let retry=[];             // [{id, due}]
 let credits=0;            // 手上還能塗幾塊新區塊
 let unlocked={};          // 畫作 id → [區塊編號…]
+let done={};              // 畫作 id → true（整張塗完）
+let backupAt=0, backupMark=0;   // 上次下載備份的時間、當時總共塗過幾塊
 let tab='quiz';
 const mastered=id=>(stats[id]&&stats[id][0]>=2);
 function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
@@ -64,12 +72,13 @@ function pool(){
 
 /* ================= 存檔 ================= */
 let stale=false;
+function snapshot(){
+  return {v:1, credits, unlocked, done, backupAt, backupMark, tab,
+    sel, modes, weakOnly, stats, order, qi, shown, retry, Q, again, answered};
+}
 function save(){
   if(stale) return;
-  try{
-    localStorage.setItem(SAVE_KEY, JSON.stringify({v:1, credits, unlocked, tab,
-      sel, modes, weakOnly, stats, order, qi, shown, retry, Q, again, answered}));
-  }catch(e){}
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(snapshot())); }catch(e){}
 }
 // 另一個分頁也開著這頁：先停止存檔，免得兩邊互相蓋掉（顏料數會對不上）
 window.addEventListener('storage', e=>{
@@ -84,6 +93,8 @@ function load(){
   credits=Math.max(0, d.credits|0);
   if(d.unlocked && typeof d.unlocked==='object')
     for(const k in d.unlocked) if(Array.isArray(d.unlocked[k])) unlocked[k]=d.unlocked[k].filter(n=>Number.isInteger(n)&&n>0);
+  if(d.done && typeof d.done==='object') for(const k in d.done) if(d.done[k]===true) done[k]=true;
+  backupAt=Number(d.backupAt)||0; backupMark=Number(d.backupMark)||0;
   if(d.tab==='paint') tab='paint';
   if(d.stats && typeof d.stats==='object') for(const k in d.stats) if(WORDS[k]) stats[k]=d.stats[k];
   if(d.modes && typeof d.modes==='object') modes={e2c:!!d.modes.e2c,c2e:!!d.modes.c2e,spell:!!d.modes.spell};
@@ -112,35 +123,57 @@ function toast(t, ms=2600){
   el.textContent=t; el.classList.add('on');
   clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('on'), ms);
 }
-let curArt=null, curTotal=0;
+let curArt=null, curNeed=new Set(), curTotal=0;
+const painted=()=>curArt?(unlocked[curArt]||[]).filter(r=>curNeed.has(r)).length:0;
+const totalPainted=()=>Object.values(unlocked).reduce((s,l)=>s+l.length,0);
 function renderCredits(gained){
   const box=$('vw-credits');
   $('vw-n').textContent=credits;
   box.classList.toggle('zero', credits===0);
   box.setAttribute('aria-label','還可以塗 '+credits+' 塊新區塊');
   if(gained){ box.classList.remove('pop'); void box.offsetWidth; box.classList.add('pop'); }
-  const n=curArt?(unlocked[curArt]||[]).length:0;
-  $('vw-prog').textContent=curTotal?('這張塗過 '+Math.min(n,curTotal)+' / '+curTotal+' 塊'):'';
+  $('vw-prog').textContent=!curTotal?'':done[curArt]?'這張塗完了 ✓':('這張塗過 '+painted()+' / '+curTotal+' 塊');
 }
 window.__vwOnDrawing=(id, set)=>{
-  curArt=id; curTotal=set&&set.regions?set.regions.length:0;
+  curArt=id;
+  curNeed=new Set(set&&set.regions?set.regions.map((r,i)=>r.area>=TAP_MIN?i+1:0).filter(Boolean):[]);
+  curTotal=curNeed.size;
+  // 之前就塗完的：默默記下來，不放彩紙
+  if(curTotal && !done[id] && painted()>=curTotal){ done[id]=true; save(); }
   renderCredits(false);
 };
+// 剛塗完最後一塊 → 彩紙；全部的圖都塗完 → 大彩紙
+function checkDone(id){
+  if(id!==curArt || done[id] || !curTotal || painted()<curTotal) return false;
+  done[id]=true; save(); renderCredits(false);
+  const arts=window.__VW_ART||[], all=arts.length>0 && arts.every(a=>done[a.id]);
+  confetti(all);
+  toast(all?'全部 '+arts.length+' 張都塗完了！太厲害了':'整張都塗過了！可以到「調色」存成圖片', 4500);
+  return true;
+}
+let persistAsked=false, reminded=false;
+function askPersist(){
+  // 請瀏覽器不要在空間不夠時自動清掉這頁的資料（不保證每個瀏覽器都答應）
+  if(persistAsked) return; persistAsked=true;
+  try{ const s=navigator.storage; if(s&&s.persist&&s.persisted) s.persisted().then(p=>p||s.persist()).catch(()=>{}); }catch(e){}
+}
 window.__vwGate=(id, rid)=>{
   if(stale){ toast('另一個分頁也開著這頁，請重新載入'); return false; }
   const list=unlocked[id]||(unlocked[id]=[]);
   if(list.includes(rid)) return true;
   // 小到引擎不會上色的碎塊：放行但不扣（不然顏料白花）
   const r=window.__aw&&window.__aw.regions&&window.__aw.regions.regions[rid-1];
-  if(r && r.area<4) return true;
+  if(r && r.area<TAP_MIN) return true;
   if(credits<=0){
     toast('這塊還沒塗過：答對一題，就能再塗一塊');
     setTab('quiz');
     return false;
   }
   credits--; list.push(rid);
-  renderCredits(false); save();
+  renderCredits(false); save(); askPersist();
+  if(checkDone(id)) return true;
   if(credits===0) toast('顏料用完了，回去答題吧');
+  else if(!reminded && totalPainted()-backupMark>=30){ reminded=true; toast('已經塗了不少，記得到「調色」下載備份檔', 3600); }
   return true;
 };
 
@@ -419,6 +452,169 @@ $('q-wipe').onclick=()=>{
   renderPick(); save(); toast('單字紀錄清掉了');
 };
 
+/* ================= 彩紙 ================= */
+const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)');
+function confetti(big){
+  if(reduceMotion.matches) return;
+  const cv=document.createElement('canvas'); cv.className='vw-confetti'; cv.setAttribute('aria-hidden','true');
+  document.body.appendChild(cv);
+  const W=innerWidth, H=innerHeight, dpr=Math.min(2,devicePixelRatio||1);
+  cv.width=W*dpr; cv.height=H*dpr;
+  const g=cv.getContext('2d'); g.scale(dpr,dpr);
+  const COLORS=['#d4544a','#e8a33d','#f2d15c','#6aa84f','#3b8fc4','#7b5ea7','#e57fa8'];
+  const P=[], sp=Math.max(.75,Math.min(1.2,H/800));
+  const burst=(x,y,ang,n)=>{ for(let i=0;i<n;i++){
+    const a=ang+(Math.random()-.5)*1.1, v=(10+Math.random()*10)*sp;
+    P.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,w:5+Math.random()*6,h:8+Math.random()*8,
+      r:Math.random()*6.3,vr:(Math.random()-.5)*.35,t:Math.random()*6.3,c:COLORS[i%COLORS.length]});
+  }};
+  burst(0,H,-Math.PI/3,big?110:70); burst(W,H,-Math.PI*2/3,big?110:70);
+  const DUR=big?4600:3200, t0=performance.now(); let last=t0, extra=big;
+  (function step(now){
+    const el=now-t0, f=Math.min(3,(now-last)/16.7); last=now;
+    if(extra && el>500){ extra=false; burst(W/2,H,-Math.PI/2,130); }
+    g.clearRect(0,0,W,H);
+    g.globalAlpha=Math.max(0,Math.min(1,(DUR-el)/700));
+    for(const p of P){
+      p.vy+=.32*f; p.vx*=Math.pow(.985,f); p.vy*=Math.pow(.985,f);
+      p.x+=p.vx*f; p.y+=p.vy*f; p.r+=p.vr*f; p.t+=.12*f;
+      g.save(); g.translate(p.x,p.y); g.rotate(p.r); g.scale(1,Math.cos(p.t));
+      g.fillStyle=p.c; g.fillRect(-p.w/2,-p.h/2,p.w,p.h); g.restore();
+    }
+    if(el<DUR) requestAnimationFrame(step); else cv.remove();
+  })(t0);
+}
+// 「存成圖片」＝作品完成要帶走：放個彩紙
+$('save').addEventListener('click',()=>setTimeout(()=>confetti(false),300));
+
+/* ================= 進度備份：存成檔案，瀏覽器資料被清掉或換手機時可以還原 =================
+   檔案內容：答題層存檔（顏料、塗過哪些塊、單字紀錄）＋引擎設定＋每張畫的顏色（IndexedDB 原樣，二進位轉 base64）。
+   還原是「整份取代」，不是合併。 */
+const BK_APP='vocab-watercolor';
+function idb(){
+  return new Promise((res,rej)=>{
+    const q=indexedDB.open(DB_NAME,1);
+    q.onupgradeneeded=()=>q.result.createObjectStore('paint');
+    q.onsuccess=()=>res(q.result); q.onerror=()=>rej(q.error||new Error('打不開資料庫'));
+  });
+}
+function b64(buf){
+  const u=new Uint8Array(buf); let s='';
+  for(let i=0;i<u.length;i+=32768) s+=String.fromCharCode.apply(null,u.subarray(i,i+32768));
+  return btoa(s);
+}
+function unb64(s){ const t=atob(s), u=new Uint8Array(t.length); for(let i=0;i<t.length;i++) u[i]=t.charCodeAt(i); return u.buffer; }
+const TA={Int8Array,Uint8Array,Uint8ClampedArray,Int16Array,Uint16Array,Int32Array,Uint32Array,Float32Array,Float64Array};
+const enc=v=>v instanceof ArrayBuffer?{$b:b64(v)}
+  :ArrayBuffer.isView(v)?{$t:v.constructor.name,$b:b64(v.buffer.slice(v.byteOffset,v.byteOffset+v.byteLength))}
+  :Array.isArray(v)?v.map(enc)
+  :v&&typeof v==='object'?Object.fromEntries(Object.entries(v).map(([k,x])=>[k,enc(x)])):v;
+const dec=v=>Array.isArray(v)?v.map(dec)
+  :v&&typeof v==='object'?('$b' in v?(v.$t?new TA[v.$t](unb64(v.$b)):unb64(v.$b))
+    :Object.fromEntries(Object.entries(v).map(([k,x])=>[k,dec(x)]))):v;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+async function makeBackup(){
+  // 先把引擎還沒寫進去的顏色存好（平常是停筆 1.8 秒後才存）
+  try{ window.__aw.finishRun(); await window.__aw.saveNow(); await sleep(400); await window.__aw.saveNow(); }catch(e){}
+  const db=await idb();
+  const paint=await new Promise((res,rej)=>{
+    const out={}, tx=db.transaction('paint','readonly'), q=tx.objectStore('paint').openCursor();
+    q.onsuccess=()=>{ const c=q.result; if(!c) return; if(String(c.key).startsWith('paint:')) out[c.key]=enc(c.value); c.continue(); };
+    tx.oncomplete=()=>res(out); tx.onerror=tx.onabort=()=>rej(tx.error||new Error('讀不到畫'));
+  });
+  db.close();
+  let ui=null; try{ ui=JSON.parse(localStorage.getItem(UI_KEY)||'null'); }catch(e){}
+  const at=Date.now();
+  return {app:BK_APP, v:1, at, page:PAGE_VERSION, quiz:{...snapshot(), backupAt:at, backupMark:totalPainted()}, ui, paint};
+}
+const pad=n=>String(n).padStart(2,'0');
+const fmtDate=t=>{ const d=new Date(t); return d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate()+' '+pad(d.getHours())+':'+pad(d.getMinutes()); };
+function renderBackup(){
+  let s='還沒備份過';
+  if(backupAt){
+    const days=Math.floor((Date.now()-backupAt)/864e5);
+    s='上次：'+(days<1?'今天 ':days+' 天前，')+fmtDate(backupAt).split(' ')[days<1?1:0];
+  }
+  $('vw-bk-when').textContent=s;
+}
+async function downloadBackup(){
+  if(stale){ toast('另一個分頁也開著這頁，請先重新載入'); return; }
+  const btn=$('vw-bk-save'); btn.disabled=true;
+  try{
+    const data=await makeBackup();
+    const d=new Date(data.at);
+    const name='單字水彩備份-'+d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+'.json';
+    const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+    let shared=false;
+    // 手機：用分享選單（iPhone 可以「儲存到檔案」）；不支援就直接下載
+    try{
+      const file=new File([blob],name,{type:'application/json'});
+      if(matchMedia('(pointer:coarse)').matches && navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title:'單字水彩備份'}); shared=true;
+      }
+    }catch(e){ if(e && e.name==='AbortError') return; }
+    if(!shared){
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+    }
+    backupAt=data.at; backupMark=data.quiz.backupMark; reminded=false; save(); renderBackup();
+    toast('備份檔（'+Math.max(1,Math.round(blob.size/1024))+' KB）要存在找得到的地方。沒看到下載的話，請改用 Safari 或 Chrome 開這頁', 6000);
+  }catch(e){ toast('備份失敗：'+(e&&e.message||e), 5000); }
+  finally{ btn.disabled=false; }
+}
+function showDialog(html){ const dlg=$('dialog'); dlg.querySelector('.card').innerHTML=html; dlg.hidden=false; }
+function summary(q){
+  const n=q&&q.unlocked?Object.values(q.unlocked).reduce((s,l)=>s+(Array.isArray(l)?l.length:0),0):0;
+  return '可塗 '+((q&&q.credits)|0)+' 塊、塗過 '+n+' 塊';
+}
+async function pickBackup(f){
+  let data=null;
+  try{ data=JSON.parse(await f.text()); }catch(e){}
+  if(!data || data.app!==BK_APP || data.v!==1 || !data.quiz || typeof data.quiz!=='object' || !data.paint || typeof data.paint!=='object'){
+    toast('這不是單字水彩的備份檔，請選「單字水彩備份-….json」', 4500); return;
+  }
+  if(Object.values(data.paint).some(r=>r&&r.gz) && typeof DecompressionStream==='undefined'){
+    toast('這個瀏覽器太舊，沒辦法還原這份備份。請換新版的 Safari 或 Chrome', 5000); return;
+  }
+  showDialog('<h2>從備份檔還原？</h2>'
+    +'<p>這份備份存於 '+fmtDate(data.at)+'：'+summary(data.quiz)+'。</p>'
+    +'<p>還原會<b>取代</b>這台裝置上現在的進度（現在：'+summary(snapshot())+'），單字紀錄也會換成備份裡的。</p>'
+    +'<div class="dlg-actions"><button type="button" class="quiet" data-close>取消</button>'
+    +'<button type="button" class="primary" id="vw-do-restore">還原</button></div>');
+  $('vw-do-restore').onclick=e=>{ e.currentTarget.disabled=true; restore(data); };
+}
+async function restore(data){
+  // 先擋住引擎與答題層的存檔，免得 reload 前把現在的進度寫回去
+  window.__vwHold=true; stale=true;
+  try{
+    const recs=Object.entries(data.paint).filter(([k])=>k.startsWith('paint:')).map(([k,v])=>[k,dec(v)]);
+    const db=await idb();
+    await new Promise((res,rej)=>{
+      const tx=db.transaction('paint','readwrite'), st=tx.objectStore('paint'), q=st.getAllKeys();
+      q.onsuccess=()=>{
+        q.result.filter(k=>String(k).startsWith('paint:')).forEach(k=>st.delete(k));
+        recs.forEach(([k,v])=>st.put(v,k));
+      };
+      tx.oncomplete=res; tx.onerror=tx.onabort=()=>rej(tx.error||new Error('寫不進資料庫'));
+    });
+    db.close();
+    localStorage.setItem(SAVE_KEY, JSON.stringify(data.quiz));
+    if(data.ui && typeof data.ui==='object') localStorage.setItem(UI_KEY, JSON.stringify(data.ui));
+  }catch(e){
+    window.__vwHold=false; stale=false;
+    $('dialog').hidden=true;
+    toast('還原失敗：'+(e&&e.message||e)+'（原本的進度沒有動）', 5000); return;
+  }
+  try{ sessionStorage.setItem('vocab-watercolor.restored','1'); }catch(e){}
+  location.reload();
+}
+$('vw-bk-save').onclick=downloadBackup;
+$('vw-bk-load').onclick=()=>$('vw-bk-file').click();
+$('vw-bk-file').onchange=e=>{ const f=e.target.files&&e.target.files[0]; e.target.value=''; if(f) pickBackup(f); };
+window.__vwBackup={make:makeBackup, restore};   // 測試用：在 console 匯出／還原，不經過下載
+
 /* ================= start ================= */
 $('q-ver').textContent='版本 '+PAGE_VERSION;
 $('vw-ver').textContent='版本 '+PAGE_VERSION+'。';
@@ -428,4 +624,11 @@ else if(resumed==='next'){ $('q-quiz').hidden=false; nextQuestion(); }
 else openPick();
 setTab(tab);
 renderCredits(false);
+renderBackup();
+try{
+  if(sessionStorage.getItem('vocab-watercolor.restored')){
+    sessionStorage.removeItem('vocab-watercolor.restored');
+    setTimeout(()=>toast('已從備份檔還原', 3500), 1800);
+  }
+}catch(e){}
 })();

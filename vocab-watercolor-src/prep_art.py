@@ -9,8 +9,9 @@
 例：  python -I prep_art.py vw-fruit 水果籃.jfif
 新圖的 id 也要加進 build.py 的 ART 清單（並在瀏覽器量實際塊數）。
 
-目前 art/ 裡的 5 張（2026-10-14，Gemini 生成）：
-  vw-tools 畫具桌、vw-desk 書桌窗景、vw-vase 花瓶靜物、vw-fruit 水果籃、vw-starry 星夜
+目前 art/ 裡的 7 張（2026-10-14，Gemini 生成）：
+  vw-tools 畫具桌、vw-desk 書桌窗景、vw-vase 花瓶靜物、vw-fruit 水果籃、vw-starry 星夜、
+  vw-village 山間小鎮、vw-lotus 荷花池
 """
 import os
 from PIL import Image

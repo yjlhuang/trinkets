@@ -45,7 +45,7 @@
         </div>
         <button type="button" class="q-next q-go" id="q-go">開始</button>
         <div class="q-fine">
-          <span>選擇題答對可以塗 1 塊新區塊，拼字答對 2 塊。塗過的區塊之後怎麼疊色都不用再花。連續答對兩次，就算這個字「熟了」。紀錄存在這台裝置上。</span>
+          <span>選擇題答對可以塗 1 塊新區塊，拼字答對 2 塊。塗過的區塊之後怎麼疊色都不用再花。連續答對兩次，就算這個字「熟了」。紀錄存在這台裝置的瀏覽器裡，記得偶爾到「調色」下載備份檔。</span>
           <button type="button" class="q-ghost q-small" id="q-wipe">清除單字紀錄</button>
         </div>
         <p class="q-ver" id="q-ver"></p>
@@ -100,6 +100,14 @@
         <button type="button" id="redo" aria-label="重做"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m12.5 5 4 4-4 4"/><path d="M16 9H8a4.5 4.5 0 0 0 0 9h2"/></svg>重做</button>
         <button type="button" class="primary" id="save">存成圖片</button>
         <button type="button" class="quiet" id="reset">重新開始</button>
+      </div>
+      <div class="vw-backup">
+        <p class="vw-bk-head"><b>進度備份</b><span id="vw-bk-when"></span></p>
+        <div class="vw-bk-btns">
+          <button type="button" id="vw-bk-save">下載備份檔</button>
+          <button type="button" id="vw-bk-load">從備份檔還原</button>
+        </div>
+        <input type="file" id="vw-bk-file" accept=".json,application/json" hidden>
       </div>
       <p class="credit">水彩模擬引擎改寫自 <a href="https://github.com/msurguy/watercolor-playground" target="_blank" rel="noopener">watercolor-playground</a>（Maksim Surguy，MIT 授權）。<span id="sync">作品會自動保存在這台裝置的瀏覽器中。</span> <span id="vw-ver"></span></p>
     </div>
