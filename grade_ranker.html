@@ -79,7 +79,7 @@ h1{
   border-bottom:1px dashed var(--ink-soft);
   background:transparent;
   color:var(--ink);
-  width:9em;
+  width:5em;
   padding:0 2px;
 }
 #className:focus{ outline:none; border-bottom-color:var(--red); }
@@ -216,7 +216,7 @@ button.copy-btn.copied{ background:var(--ok); }
   <div class="margin-rule"></div>
   <header>
     <div class="eyebrow">Grade Ledger · 成績登記簿</div>
-    <h1><input id="className" placeholder="三年二班" value="三年二班"><span class="fixed">成績排序表</span></h1>
+    <h1><input id="className" placeholder="三年二" value=""><span class="fixed">班成績排序表</span></h1>
   </header>
 
   <div class="controls">
@@ -286,17 +286,20 @@ function parseScores(text){
 }
 
 function bandOf(score){
-  if(score <= 10) return { low: 0, high: 10, label: '0-10' };
-  const high = Math.ceil(score / 10) * 10;
-  const low = high - 9;
+  if(score >= 90) return { low: 90, high: 100, label: '90-100' };
+  const low = Math.max(0, Math.floor(score / 10) * 10);
+  const high = low + 9;
   return { low, high, label: `${low}-${high}` };
 }
 
-const BAND_ORDER = ['91-100','81-90','71-80','61-70','51-60','41-50','31-40','21-30','11-20','0-10'];
+const BAND_ORDER = ['90-100','80-89','70-79','60-69','50-59','40-49','30-39','20-29','10-19','0-9'];
 
 function render(){
-  const names = parseNames(nameInput.value);
   const scores = parseScores(scoreInput.value);
+  const noNames = nameInput.value.trim() === '';
+  const names = noNames
+    ? scores.map((_, i) => ({ seat: String(i + 1), name: '' }))
+    : parseNames(nameInput.value);
 
   if(names.length === 0 && scores.length === 0){
     outputEl.innerHTML = '<p class="empty-note">貼上座號姓名與成績後，會自動排序並統計。</p>';
@@ -355,7 +358,7 @@ function render(){
     return `<tr>
       <td class="rank">${rankCell}</td>
       <td>${s.seat}</td>
-      <td>${s.name}</td>
+      ${noNames ? '' : `<td>${s.name}</td>`}
       <td class="score">${s.score}</td>
       <td>${bandOf(s.score).label}</td>
     </tr>`;
@@ -372,7 +375,9 @@ function render(){
     </div>`;
   }).join('');
 
-  const className = classNameInput.value.trim() || '本班';
+  const cls = classNameInput.value.trim().replace(/班$/, '');
+  const className = cls ? cls + '班' : '本班';
+  const bandTitle = cls ? `${cls}班級距人數` : '級距人數';
   const copyText = `${className}，` +
     BAND_ORDER.filter(b => bandCounts[b] > 0).map(b => `${b}：${bandCounts[b]}人`).join('、') +
     `，全班平均：${avgStr}`;
@@ -381,12 +386,13 @@ function render(){
     <div class="panel-title">排序結果（共 ${students.length} 人）</div>
     <div class="results">
       <table>
-        <thead><tr><th>名次</th><th>座號</th><th>姓名</th><th>成績</th><th>級距</th></tr></thead>
+        <thead><tr><th>名次</th><th>座號</th>${noNames ? '' : '<th>姓名</th>'}<th>成績</th><th>級距</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <div class="summary-box">
-        <h3>級距人數</h3>
+        <h3 id="bandTitle">${bandTitle}</h3>
         ${bandRows}
+        <button class="copy-btn" id="dlBtn" style="margin-top:12px">下載級距圖</button>
         <div class="avg-line">全班平均：${avgStr}</div>
         <div class="copy-block">
           <div class="copy-output" id="copyOutput">${copyText}</div>
@@ -395,6 +401,11 @@ function render(){
       </div>
     </div>
   `;
+
+  document.getElementById('dlBtn').addEventListener('click', () => {
+    const rowsData = BAND_ORDER.filter(b => bandCounts[b] > 0).map(b => [b, bandCounts[b]]);
+    downloadBandImage(bandTitle, rowsData, maxCount);
+  });
 
   document.getElementById('copyBtn').addEventListener('click', () => {
     const text = document.getElementById('copyOutput').textContent;
@@ -411,6 +422,41 @@ function render(){
       btn.classList.add('copied');
       setTimeout(() => { btn.textContent = '一鍵複製'; btn.classList.remove('copied'); }, 1500);
     });
+  });
+}
+
+function downloadBandImage(title, rowsData, maxCount){
+  const W = 520, pad = 28, rowH = 34, titleH = 64;
+  const H = titleH + rowsData.length * rowH + pad;
+  const scale = 2;
+  const c = document.createElement('canvas');
+  c.width = W * scale; c.height = H * scale;
+  const g = c.getContext('2d');
+  g.scale(scale, scale);
+  g.fillStyle = '#FFFDF8'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#1F2A44';
+  g.font = '700 22px "Noto Serif TC", serif';
+  g.textBaseline = 'middle';
+  g.fillText(title, pad, 34);
+  g.fillStyle = '#1F2A44'; g.fillRect(pad, 52, W - pad * 2, 1.5);
+  const labelW = 74, countW = 50;
+  const trackX = pad + labelW, trackW = W - pad * 2 - labelW - countW;
+  rowsData.forEach(([label, count], i) => {
+    const y = titleH + i * rowH + rowH / 2;
+    g.font = '500 15px "Roboto Mono", monospace';
+    g.fillStyle = '#5B6780'; g.textAlign = 'left';
+    g.fillText(label, pad, y);
+    g.fillStyle = '#EFE9D8'; g.fillRect(trackX, y - 7, trackW, 14);
+    g.fillStyle = '#7C8FAE'; g.fillRect(trackX, y - 7, trackW * count / maxCount, 14);
+    g.fillStyle = '#1F2A44'; g.textAlign = 'right';
+    g.fillText(count + '人', W - pad, y);
+  });
+  c.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = title + '.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   });
 }
 
