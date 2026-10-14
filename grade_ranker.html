@@ -235,8 +235,9 @@ button.copy-btn.copied{ background:var(--ok); }
 1 王小明
 2 陳美玲
 王小華
-（若不寫座號，會依行數自動編號）"></textarea>
-        <div class="hint">座號 姓名（可只寫姓名，自動依順序編座號）</div>
+（若不寫座號，會依行數自動編號）
+（空一行＝該座號已轉出/休學，後面不遞補）"></textarea>
+        <div class="hint">座號 姓名（可只寫姓名，自動依順序編座號；空白行＝轉出/休學，座號不遞補）</div>
       </div>
       <div>
         <textarea id="scoreInput" placeholder="每行一筆，順序需對應左邊：
@@ -268,8 +269,17 @@ btnAsc.addEventListener('click', () => { sortDir='asc'; btnAsc.classList.add('ac
 
 [nameInput, scoreInput, classNameInput].forEach(el => el.addEventListener('input', render));
 
+// 空白行＝該座號已轉出/休學：保留位置（後面座號不遞補），但不列入統計。
+// 只去掉結尾多餘的空行。
+function splitLines(text){
+  const lines = text.split('\n').map(l => l.trim());
+  while(lines.length && lines[lines.length - 1] === '') lines.pop();
+  return lines;
+}
+
 function parseNames(text){
-  return text.split('\n').map(l => l.trim()).filter(l => l.length > 0).map((line, idx) => {
+  return splitLines(text).map((line, idx) => {
+    if(line === '') return { vacant: true, seat: String(idx + 1), name: '' };
     const parts = line.split(/\s+/);
     if(parts.length > 1 && /^\d+$/.test(parts[0])){
       return { seat: parts[0], name: parts.slice(1).join(' ') };
@@ -279,7 +289,8 @@ function parseNames(text){
 }
 
 function parseScores(text){
-  return text.split('\n').map(l => l.trim()).filter(l => l.length > 0).map(l => {
+  return splitLines(text).map(l => {
+    if(l === '') return null;
     const v = parseFloat(l);
     return isNaN(v) ? null : v;
   });
@@ -317,7 +328,7 @@ function render(){
   const n = Math.min(names.length, scores.length);
   let students = [];
   for(let i = 0; i < n; i++){
-    if(scores[i] === null) continue;
+    if(names[i].vacant || scores[i] === null) continue;
     students.push({ seat: names[i].seat, name: names[i].name, score: scores[i] });
   }
 
