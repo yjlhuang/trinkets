@@ -35,8 +35,9 @@ ART = [
 
 
 def read(p):
+    # 一律轉成 LF：git 在 Windows 上 checkout 可能把檔案變成 CRLF，錨點都是用 LF 寫的
     with open(p, encoding="utf-8", newline="") as f:
-        return f.read()
+        return f.read().replace("\r\n", "\n")
 
 
 def once(text, old, new, what):
@@ -47,7 +48,7 @@ def once(text, old, new, what):
 
 
 def units_js():
-    t = read(ONE_DROP).replace("\r\n", "\n")
+    t = read(ONE_DROP)
     a = t.index("const UNITS = [\n") + len("const UNITS = ")
     b = t.index("\n];\n", a) + len("\n]")
     block = t[a:b]
@@ -68,8 +69,6 @@ def art_js():
 
 def main():
     t = read(SRC)
-    if "\r\n" in t:
-        sys.exit("watercolor.html 是 CRLF，這支腳本預期 LF")
 
     # ---- head ----
     t = once(t, "<title>秋牡丹・水彩塗色</title>", "<title>單字水彩</title>", "title")
