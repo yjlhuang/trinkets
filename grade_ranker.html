@@ -111,6 +111,16 @@ h1 .fixed{ white-space:nowrap; }
 main{
   padding-left:64px;
 }
+.mini-btn{
+  font-family:'Noto Sans TC',sans-serif; font-size:12px;
+  padding:5px 10px; background:transparent; color:var(--ink-soft);
+  border:1px solid var(--ink-soft); border-radius:3px; cursor:pointer;
+}
+.mini-btn:hover{ color:var(--red); border-color:var(--red); }
+.toggle button .dot{ font-size:10px; opacity:.6; margin-left:4px; }
+.dl-row{ display:flex; gap:8px; margin-bottom:8px; }
+.dl-row button.copy-btn{ margin-top:0; background:var(--ink); }
+.rank-col{ min-width:0; }
 
 .panel-title{
   font-family:'Roboto Mono', monospace;
@@ -220,6 +230,12 @@ button.copy-btn.copied{ background:var(--ok); }
   </header>
 
   <div class="controls">
+    暫存班級：
+    <div class="toggle" id="slotTabs"></div>
+    <button class="mini-btn" id="clearSlotBtn" title="清空目前這個暫存格">清空此格</button>
+    <span class="hint" style="margin:0">自動存在這台電腦的瀏覽器裡</span>
+  </div>
+  <div class="controls">
     排序：
     <div class="toggle">
       <button id="btnDesc" class="active">高 → 低</button>
@@ -264,10 +280,75 @@ const btnAsc = document.getElementById('btnAsc');
 
 let sortDir = 'desc';
 
-btnDesc.addEventListener('click', () => { sortDir='desc'; btnDesc.classList.add('active'); btnAsc.classList.remove('active'); render(); });
-btnAsc.addEventListener('click', () => { sortDir='asc'; btnAsc.classList.add('active'); btnDesc.classList.remove('active'); render(); });
+function syncSortBtns(){
+  btnDesc.classList.toggle('active', sortDir === 'desc');
+  btnAsc.classList.toggle('active', sortDir === 'asc');
+}
+btnDesc.addEventListener('click', () => { sortDir='desc'; syncSortBtns(); saveStore(); render(); });
+btnAsc.addEventListener('click', () => { sortDir='asc'; syncSortBtns(); saveStore(); render(); });
 
-[nameInput, scoreInput, classNameInput].forEach(el => el.addEventListener('input', render));
+// ---- 三個班暫存（localStorage）----
+// 唯一寫入者：slots[activeSlot] 由輸入框 input 事件寫入；切換時先存再載入。
+const STORE_KEY = 'gradeRanker.slots.v1';
+const SLOT_COUNT = 3;
+let slots = Array.from({length: SLOT_COUNT}, () => ({ cls:'', names:'', scores:'' }));
+let activeSlot = 0;
+const slotTabs = document.getElementById('slotTabs');
+
+function loadStore(){
+  try{
+    const d = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+    if(d && Array.isArray(d.slots)){
+      for(let i = 0; i < SLOT_COUNT; i++){
+        if(d.slots[i]) slots[i] = Object.assign(slots[i], d.slots[i]);
+      }
+      if(d.active >= 0 && d.active < SLOT_COUNT) activeSlot = d.active;
+      if(d.sortDir === 'asc') sortDir = 'asc';
+    }
+  }catch(e){}
+}
+function saveStore(){
+  slots[activeSlot] = { cls: classNameInput.value, names: nameInput.value, scores: scoreInput.value };
+  try{
+    localStorage.setItem(STORE_KEY, JSON.stringify({ slots, active: activeSlot, sortDir }));
+  }catch(e){}
+}
+function slotHasData(s){ return !!(s.names.trim() || s.scores.trim() || s.cls.trim()); }
+function applySlotToInputs(){
+  const s = slots[activeSlot];
+  classNameInput.value = s.cls; nameInput.value = s.names; scoreInput.value = s.scores;
+}
+function renderTabs(){
+  slotTabs.innerHTML = '';
+  slots.forEach((s, i) => {
+    const b = document.createElement('button');
+    const label = s.cls.trim() ? s.cls.trim() : `班級 ${i + 1}`;
+    b.textContent = label;
+    if(slotHasData(s) && i !== activeSlot){
+      const dot = document.createElement('span'); dot.className = 'dot'; dot.textContent = '●'; b.appendChild(dot);
+    }
+    if(i === activeSlot) b.classList.add('active');
+    b.addEventListener('click', () => {
+      if(i === activeSlot) return;
+      saveStore();            // 先存目前這格
+      activeSlot = i;         // 再切換 model
+      applySlotToInputs();
+      saveStore();
+      renderTabs(); render();
+    });
+    slotTabs.appendChild(b);
+  });
+}
+document.getElementById('clearSlotBtn').addEventListener('click', () => {
+  const s = slots[activeSlot];
+  if(slotHasData(s) && !confirm('確定清空這一格的資料？')) return;
+  slots[activeSlot] = { cls:'', names:'', scores:'' };
+  applySlotToInputs(); saveStore(); renderTabs(); render();
+});
+
+[nameInput, scoreInput, classNameInput].forEach(el => el.addEventListener('input', () => {
+  saveStore(); renderTabs(); render();
+}));
 
 // 空白行＝該座號已轉出/休學：保留位置（後面座號不遞補），但不列入統計。
 // 只去掉結尾多餘的空行。
@@ -396,10 +477,16 @@ function render(){
   outputEl.innerHTML = `
     <div class="panel-title">排序結果（共 ${students.length} 人）</div>
     <div class="results">
+      <div class="rank-col">
+      <div class="dl-row">
+        <button class="copy-btn" id="dlRankImgBtn">下載排名圖片</button>
+        <button class="copy-btn" id="dlRankTxtBtn">下載排名文字檔</button>
+      </div>
       <table>
         <thead><tr><th>名次</th><th>座號</th>${noNames ? '' : '<th>姓名</th>'}<th>成績</th><th>級距</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
+      </div>
       <div class="summary-box">
         <h3 id="bandTitle">${bandTitle}</h3>
         ${bandRows}
@@ -415,7 +502,19 @@ function render(){
 
   document.getElementById('dlBtn').addEventListener('click', () => {
     const rowsData = BAND_ORDER.filter(b => bandCounts[b] > 0).map(b => [b, bandCounts[b]]);
-    downloadBandImage(bandTitle, rowsData, maxCount);
+    downloadBandImage(bandTitle, rowsData, maxCount, avgStr);
+  });
+
+  const rankTitle = (cls ? cls + '班' : '') + '成績排名';
+  document.getElementById('dlRankImgBtn').addEventListener('click', () => {
+    downloadRankImage(rankTitle, displayList, noNames, avgStr);
+  });
+  document.getElementById('dlRankTxtBtn').addEventListener('click', () => {
+    const head = ['名次', '座號'].concat(noNames ? [] : ['姓名'], ['成績']).join('\t');
+    const lines = displayList.map(s =>
+      [s.rank, s.seat].concat(noNames ? [] : [s.name], [s.score]).join('\t'));
+    const text = rankTitle + '\n' + head + '\n' + lines.join('\n') + '\n' + `全班平均：${avgStr}` + '\n';
+    downloadBlob(new Blob(['﻿' + text], { type: 'text/plain;charset=utf-8' }), rankTitle + '.txt');
   });
 
   document.getElementById('copyBtn').addEventListener('click', () => {
@@ -436,9 +535,63 @@ function render(){
   });
 }
 
-function downloadBandImage(title, rowsData, maxCount){
-  const W = 520, pad = 28, rowH = 34, titleH = 64;
-  const H = titleH + rowsData.length * rowH + pad;
+function downloadBlob(blob, filename){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function downloadRankImage(title, list, noNames, avgStr){
+  const pad = 28, rowH = 32, titleH = 64, headH = 34, footH = 52;
+  const cols = noNames
+    ? [['名次', 0], ['座號', 90], ['成績', 190]]
+    : [['名次', 0], ['座號', 90], ['姓名', 190], ['成績', 330]];
+  const W = noNames ? 360 : 470;
+  const H = titleH + headH + list.length * rowH + footH;
+  const scale = 2;
+  const c = document.createElement('canvas');
+  c.width = W * scale; c.height = H * scale;
+  const g = c.getContext('2d');
+  g.scale(scale, scale);
+  g.fillStyle = '#FFFDF8'; g.fillRect(0, 0, W, H);
+  g.textBaseline = 'middle'; g.textAlign = 'left';
+  g.fillStyle = '#1F2A44';
+  g.font = '700 22px "Noto Serif TC", serif';
+  g.fillText(title, pad, 34);
+  g.fillRect(pad, 52, W - pad * 2, 1.5);
+  g.font = '700 13px "Noto Sans TC", sans-serif';
+  g.fillStyle = '#5B6780';
+  cols.forEach(([label, x]) => g.fillText(label, pad + x, titleH + headH / 2));
+  g.fillStyle = '#1F2A44'; g.fillRect(pad, titleH + headH - 1, W - pad * 2, 1.5);
+  const medal = { 1:'#B8902E', 2:'#8A8F98', 3:'#A5673A' };
+  list.forEach((s, i) => {
+    const y = titleH + headH + i * rowH + rowH / 2;
+    if(i % 2 === 1){ g.fillStyle = '#F6F1E4'; g.fillRect(pad, y - rowH / 2, W - pad * 2, rowH); }
+    g.font = '500 15px "Roboto Mono", "Noto Sans TC", monospace';
+    g.fillStyle = medal[s.rank] || '#1F2A44';
+    g.font = (medal[s.rank] ? '700 ' : '500 ') + '15px "Roboto Mono", "Noto Sans TC", monospace';
+    g.fillText(String(s.rank), pad + cols[0][1], y);
+    g.fillStyle = '#1F2A44'; g.font = '500 15px "Roboto Mono", "Noto Sans TC", monospace';
+    g.fillText(String(s.seat), pad + cols[1][1], y);
+    if(!noNames){
+      g.font = '500 15px "Noto Sans TC", sans-serif';
+      g.fillText(s.name, pad + cols[2][1], y);
+    }
+    g.font = '700 15px "Roboto Mono", monospace';
+    g.fillText(String(s.score), pad + cols[cols.length - 1][1], y);
+  });
+  const fy = titleH + headH + list.length * rowH + footH / 2;
+  g.fillStyle = '#1F2A44'; g.fillRect(pad, fy - footH / 2 + 4, W - pad * 2, 1);
+  g.font = '700 15px "Roboto Mono", "Noto Sans TC", monospace';
+  g.fillText(`全班平均：${avgStr}`, pad, fy + 4);
+  c.toBlob(blob => downloadBlob(blob, title + '.png'));
+}
+
+function downloadBandImage(title, rowsData, maxCount, avgStr){
+  const W = 520, pad = 28, rowH = 34, titleH = 64, footH = 44;
+  const H = titleH + rowsData.length * rowH + footH + pad / 2;
   const scale = 2;
   const c = document.createElement('canvas');
   c.width = W * scale; c.height = H * scale;
@@ -462,15 +615,18 @@ function downloadBandImage(title, rowsData, maxCount){
     g.fillStyle = '#1F2A44'; g.textAlign = 'right';
     g.fillText(count + '人', W - pad, y);
   });
-  c.toBlob(blob => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = title + '.png';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  });
+  const ay = titleH + rowsData.length * rowH + footH / 2;
+  g.fillStyle = '#1F2A44'; g.fillRect(pad, ay - footH / 2 + 4, W - pad * 2, 1);
+  g.textAlign = 'left';
+  g.font = '700 16px "Roboto Mono", "Noto Sans TC", monospace';
+  g.fillText(`全班平均：${avgStr}`, pad, ay + 4);
+  c.toBlob(blob => downloadBlob(blob, title + '.png'));
 }
 
+loadStore();
+applySlotToInputs();
+syncSortBtns();
+renderTabs();
 render();
 </script>
 </body>
