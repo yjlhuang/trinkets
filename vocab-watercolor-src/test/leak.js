@@ -5,6 +5,7 @@
 // 用法：node leak.js new   （或 old：拿同樣的點測舊圖，當對照組）  BASE=http://… 可換網址；ONLY=vw-vase-v2 只測一張
 const { chromium } = require('playwright');
 const fs = require('fs');
+const { samePage } = require('./same_page');
 const points = JSON.parse(fs.readFileSync(__dirname + '/points.json', 'utf8'));
 const which = process.argv[2] || 'new';            // new | old
 const base = (process.env.BASE || 'http://localhost:8765') + '/' + which + '/vocab-watercolor.html';
@@ -46,6 +47,8 @@ async function tap(page, x, y) {
   else await page.evaluate(([x, y]) => window.__aw.act(x, y), [cx, cy]);   // UI covers this spot: same handler the tap calls
   tapMode[onPaper ? 'mouse' : 'act']++;
   await page.waitForTimeout(250);
+  // 點到連結跳走了就整個停下，不要在別的頁面上繼續點
+  if (!samePage(page.url(), base)) throw new Error(`點擊後網址變成 ${page.url()}（應該是 ${base}），停止測試`);
 }
 (async () => {
   const browser = await chromium.launch();

@@ -9,6 +9,7 @@ build.py 的 regions 仍以瀏覽器量的為準：__aw.regions.regions.filter(r
 
 「邊緣白條」警告：某一邊最外圈有 1～15px 完全沒有線、往內才開始有線，
 通常是轉檔時補了白邊（prep_art.py 舊做法），碰到那一邊的區塊會經由白條連成一塊。
+有警告時結束碼是 1。vw-fruit 有白條警告，但白條沒有連起任何區塊（塊數不變），刻意保留原樣。
 """
 import os
 import sys

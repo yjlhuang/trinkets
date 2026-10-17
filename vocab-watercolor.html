@@ -513,7 +513,8 @@ window.__VW_ART=[{"id":"vw-tools-v2","name":"畫具桌","latin":"入門 · 約 5
    - done[畫作 id]（整張塗完）：只有 gate() 解鎖最後一塊、或載入時發現已經塗完，才會設成 true。
    - 畫面上的顏色歸水彩引擎管（自己存在 IndexedDB），平常不碰；只有「從備份檔還原」會整批換掉，
      而且換之前先設 window.__vwHold 擋住引擎的自動存檔。引擎的復原只動顏色，不退顏料。
-   引擎在使用者用「上色」點到一個區塊時，先問 window.__vwGate(畫作 id, 區塊編號)，回傳 false 就不上色。 */
+   引擎在使用者用「上色」點到一個區塊時，先問 window.__vwGate(畫作 id, 區塊編號)，回傳 false 就不上色。
+   unlocked / done / IndexedDB 都以畫作 id 為 key，線稿一改區塊編號就變，所以改線稿要用新 id（舊版標 legacy，見檔案最後一段與 README.md）。 */
 (() => {
 const PAGE_VERSION = '2026-10-17a';
 const REWARD = { e2c: 1, c2e: 1, spell: 2 };

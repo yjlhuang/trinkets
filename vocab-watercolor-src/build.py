@@ -6,6 +6,7 @@ watercolor.html 是打包壓縮過的單行程式，沒有原始碼，所以不�
 
 用法：python -I build.py
 改了 panel.html / vocab.css / vocab.js / 圖，或改了 one-drop.html 的單字，都重跑一次。
+換圖、加圖的流程與存檔相容規則見 README.md。
 只讀 trinkets 裡的檔案（watercolor.html、one-drop.html、這個資料夾），換電腦也能重建。
 """
 import base64

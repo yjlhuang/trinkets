@@ -13,6 +13,7 @@
 例：  python -I prep_art.py vw-tools-v2 art-src/vw-tools-v2.jpg
 新圖的 id 也要加進 build.py 的 ART 清單；做完用 check_art.py 檢查區塊，並在瀏覽器量實際塊數。
 已經有學生塗過的圖不要用同一個 id 覆蓋（區塊編號會整個變掉），要給新 id、舊的在 build.py 標 legacy。
+完整流程見 README.md。
 
 目前 art/ 裡的圖：
   2026-10-14 第一版（Gemini 生成，舊的縮進去補白邊做法）：
