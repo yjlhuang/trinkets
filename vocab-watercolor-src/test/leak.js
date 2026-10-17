@@ -46,6 +46,8 @@ async function tap(page, x, y) {
   else await page.evaluate(([x, y]) => window.__aw.act(x, y), [cx, cy]);   // UI covers this spot: same handler the tap calls
   tapMode[onPaper ? 'mouse' : 'act']++;
   await page.waitForTimeout(250);
+  // 點到連結跳走了就整個停下，不要在別的頁面上繼續點
+  if (page.url() !== base) throw new Error(`點擊後網址變成 ${page.url()}（應該是 ${base}），停止測試`);
 }
 (async () => {
   const browser = await chromium.launch();
