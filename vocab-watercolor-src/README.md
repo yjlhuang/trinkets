@@ -69,6 +69,7 @@ python -I pick_points.py points.json    # 挑「相鄰、被線隔開」的兩�
 node leak.js new                        # 點一塊上色，隔壁那塊必須沒顏色
 node leak.js old                        # 對照組：舊圖同樣位置
 node compat.js                          # 舊存檔、選單顯示、備份還原
+node --test same_page.test.js           # leak.js 的「點擊後網址檢查」本身（不用開伺服器）
 ```
 
 2026-10-17 改版（issue #1、PR #2）在雲端 Chromium 141 的結果：
