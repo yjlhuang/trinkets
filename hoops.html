@@ -1,0 +1,1824 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>文法投籃機・ENGLISH HOOPS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Lexend:wght@500;700&family=Noto+Sans+TC:wght@500;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#efe6f7; --panel:rgba(255,252,246,.95); --ink:#1b1440; --muted:#5d5480;
+  --line:rgba(27,20,64,.16); --lamp:#d99a00; --neon:#e8246a; --cyan:#0a9fb4; --cab:#c8232c; --ok:#14935a;
+  --shadow:0 12px 36px rgba(27,20,64,.28);
+  color-scheme:light; box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e0a24; --panel:rgba(27,20,64,.93); --ink:#fff4dc; --muted:#b8afd9;
+    --line:rgba(255,255,255,.16); --lamp:#ffc935; --neon:#ff3d7f; --cyan:#39d4e8; --cab:#ef4049; --ok:#3ddc8c;
+    --shadow:0 12px 36px rgba(0,0,0,.5); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e0a24; --panel:rgba(27,20,64,.93); --ink:#fff4dc; --muted:#b8afd9;
+  --line:rgba(255,255,255,.16); --lamp:#ffc935; --neon:#ff3d7f; --cyan:#39d4e8; --cab:#ef4049; --ok:#3ddc8c;
+  --shadow:0 12px 36px rgba(0,0,0,.5); color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);overflow:hidden;
+  font-family:"Noto Sans TC",system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#app{position:relative;height:100%;overflow:hidden;background:#140e30}
+#stage{position:absolute;left:0;right:0;bottom:0;top:var(--hud,0px)}
+#stage canvas{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+
+.top{position:absolute;top:10px;left:10px;right:10px;display:grid;grid-template-columns:auto 1fr auto;grid-template-areas:"score q time";gap:10px;align-items:start;pointer-events:none}
+@media (max-width:700px){.top{grid-template-columns:1fr;grid-template-areas:"q"}.chip{display:none}.qcard{padding:8px 14px 10px}.sent{min-height:2.7em}}
+#scoreChip{grid-area:score;justify-self:start}
+#timeChip{grid-area:time;justify-self:end}
+.chip{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:6px 16px 8px;box-shadow:var(--shadow);text-align:center;min-width:88px}
+.chip span{display:block;font-size:12px;color:var(--muted);font-weight:500}
+.chip b{display:block;font-family:Bungee,"Arial Black",Impact,sans-serif;font-weight:400;font-size:28px;line-height:1.1}
+#scoreChip b{color:var(--cab)}
+#timeChip b{color:var(--cyan)}
+#timeChip.hurry b{color:var(--neon)}
+#timeChip.paused b{opacity:.45}
+
+.qcard{grid-area:q;justify-self:center;width:min(100%,820px);background:var(--panel);border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:10px 18px 12px;text-align:center;opacity:0;transition:opacity .25s}
+.qcard.on{opacity:1}
+.qnum{font-size:12px;color:var(--muted);font-weight:500}
+.sent{margin:2px 0 4px;font-family:Lexend,"Segoe UI",Arial,sans-serif;font-weight:500;font-size:clamp(18px,2.5vw,30px);line-height:1.35}
+.blank{display:inline-block;min-width:4.2em;padding:0 .25em;margin:0 .1em;border-bottom:3px solid var(--lamp);color:var(--lamp);font-weight:700;transition:color .2s,border-color .2s}
+.blank.ok{color:var(--ok);border-color:var(--ok)}
+.qzh{margin:0;color:var(--muted);font-weight:500;font-size:clamp(13px,1.5vw,16px)}
+
+.hint{position:absolute;left:50%;top:calc(var(--hud,0px) + 12px);transform:translateX(-50%);pointer-events:none;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:8px 18px;font-weight:900;box-shadow:var(--shadow);font-size:15px;white-space:nowrap;transition:opacity .3s}
+.hint.hide{opacity:0}
+
+#meter{position:absolute;right:18px;top:55%;transform:translateY(-50%);width:16px;height:min(38vh,300px);border-radius:10px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow);opacity:0;transition:opacity .15s;pointer-events:none;overflow:hidden}
+#meter.on{opacity:1}
+#meter .sweet{position:absolute;left:0;right:0;background:color-mix(in srgb,var(--lamp) 45%,transparent);border-top:2px solid var(--lamp);border-bottom:2px solid var(--lamp)}
+#meter .fill{position:absolute;left:3px;right:3px;bottom:3px;border-radius:7px;background:var(--cab);height:0}
+
+.pop{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);pointer-events:none;text-align:center;font-family:Bungee,"Arial Black",Impact,sans-serif;font-size:clamp(30px,6vw,56px);color:#ffc935;-webkit-text-stroke:2px #1b1440;paint-order:stroke fill;text-shadow:0 4px 0 #1b1440,0 0 24px rgba(255,201,53,.6);animation:pop 1.3s cubic-bezier(.2,.9,.3,1.2) forwards;white-space:nowrap}
+.pop.bad{color:#ff7aa8}
+.pop.lv{top:28%;color:#39d4e8;font-size:clamp(38px,8vw,76px);animation-duration:2s;text-shadow:0 4px 0 #1b1440,0 0 30px rgba(57,212,232,.7)}
+#fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.endlv{margin:6px 0 0;font-weight:900;font-size:18px;color:var(--cyan)}
+.pick{margin:0 0 8px;font-weight:900}
+.pick.howto{margin:2px 0 6px;font-size:14px;color:var(--muted)}
+.card ul.rules{margin:0;font-size:14px;line-height:1.6}
+/* 開始按鈕固定在卡片底部：就算說明很長要捲動，也一直看得到 */
+.startbar{position:sticky;bottom:-20px;margin:16px -24px -20px;padding:12px 24px 20px;background:var(--panel);border-top:1px solid var(--line);z-index:1}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn.mode{margin-top:0;line-height:1.2}
+.btn.mode small{display:block;font-size:13px;font-weight:500;opacity:.88;margin-top:6px}
+.btn.mode.adv{background:#2a1f6b;box-shadow:0 5px 0 #120c38}
+.btn.mode.adv:active{box-shadow:0 2px 0 #120c38}
+.btn.mode.mix{grid-column:1 / -1;background:#0b7f8f;box-shadow:0 5px 0 #054650}
+.btn.mode.mix:active{box-shadow:0 2px 0 #054650}
+.pop small{display:block;font-family:"Noto Sans TC",sans-serif;font-weight:900;font-size:clamp(14px,2vw,20px);-webkit-text-stroke:0;color:#fff4dc;text-shadow:0 2px 0 #1b1440,0 0 8px #1b1440;white-space:normal;max-width:80vw;margin-top:4px}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,-30%) scale(.6)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}75%{opacity:1;transform:translate(-50%,-58%) scale(1)}100%{opacity:0;transform:translate(-50%,-75%) scale(.96)}}
+
+.overlay{position:absolute;inset:0;display:grid;place-items:center;padding:20px;background:rgba(14,10,36,.5);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);transition:opacity .25s}
+.overlay.hide{opacity:0;pointer-events:none}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);max-width:480px;width:100%;padding:24px 24px 20px;text-align:left;max-height:calc(100% - 20px);overflow:auto;-webkit-user-select:text;user-select:text}
+.card h1{margin:0;font-family:Bungee,"Arial Black",Impact,sans-serif;font-weight:400;font-size:clamp(30px,8vw,40px);line-height:1;color:var(--cab)}
+.card .zh{margin:6px 0 14px;font-weight:900;font-size:18px}
+.card ul{margin:0 0 18px;padding-left:1.1em;line-height:1.7;color:var(--muted);font-weight:500}
+.card ul strong{color:var(--ink)}
+.card .big{font-family:Bungee,"Arial Black",Impact,sans-serif;font-size:60px;line-height:1;color:var(--cab);margin:6px 0 4px}
+.card .meta{color:var(--muted);font-weight:500;margin:0 0 16px}
+.btn{appearance:none;border:0;border-radius:14px;background:var(--cab);color:#fff;font:900 18px/1 "Noto Sans TC",sans-serif;padding:15px 18px;width:100%;cursor:pointer;box-shadow:0 5px 0 #7d1118;margin-top:6px}
+.btn:active{transform:translateY(3px);box-shadow:0 2px 0 #7d1118}
+.btn:focus-visible{outline:3px solid var(--lamp);outline-offset:3px}
+
+.fb h2{margin:0 0 10px;font-size:22px;font-weight:900}
+.fb .en{font-family:Lexend,"Segoe UI",Arial,sans-serif;font-size:20px;line-height:1.45;margin:0 0 12px}
+.fb .en s{color:var(--neon);text-decoration-thickness:2px}
+.fb .en b{color:var(--ok)}
+.why{border-left:4px solid var(--neon);padding:4px 0 4px 12px;margin:0 0 14px;line-height:1.65;font-weight:500}
+.why .lab{display:block;font-size:13px;color:var(--muted)}
+.rule{background:color-mix(in srgb,var(--lamp) 14%,transparent);border-radius:12px;padding:10px 12px;line-height:1.65;font-weight:500;margin-bottom:6px}
+.tag{display:inline-block;background:var(--lamp);color:#1b1440;font-weight:900;font-size:13px;border-radius:999px;padding:2px 10px;margin-bottom:4px}
+.review{margin:0 0 14px}
+.review h3{margin:14px 0 6px;font-size:16px;font-weight:900}
+.review h3 .n{color:var(--neon)}
+.review p{margin:0 0 6px;font-size:14px;line-height:1.5;color:var(--muted)}
+.review p .e{font-family:Lexend,"Segoe UI",Arial,sans-serif;color:var(--ink)}
+.review p s{color:var(--neon)}
+.review p b{color:var(--ok)}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 2px var(--line)}
+.btn.ghost:active{transform:translateY(1px);box-shadow:inset 0 0 0 2px var(--line)}
+.card.rev{max-width:680px;display:flex;flex-direction:column;overflow:hidden;padding-bottom:16px}
+.revh{margin:0;font-size:22px;font-weight:900}
+.revlist{overflow:auto;flex:1;min-height:0;margin:0 -6px;padding:0 6px}
+.ri{border:1px solid var(--line);border-left:5px solid var(--ok);border-radius:14px;padding:10px 14px;margin-bottom:10px}
+.ri.bad{border-left-color:var(--neon)}
+.ri.skip{border-left-color:var(--muted)}
+.rh{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.rh .no{font-family:Bungee,"Arial Black",Impact,sans-serif;font-size:18px;color:var(--muted)}
+.rh .tag{margin:0}
+.rh .st{margin-left:auto;font-size:13px;font-weight:900;color:var(--ok)}
+.ri.bad .st{color:var(--neon)}
+.ri.skip .st{color:var(--muted)}
+.ri .en{font-family:Lexend,"Segoe UI",Arial,sans-serif;font-size:18px;line-height:1.45;margin:2px 0}
+.ri .en b{color:var(--ok)}
+.rzh{margin:0 0 6px;color:var(--muted);font-size:14px;font-weight:500}
+.ex{margin:4px 0 0;font-size:14px;line-height:1.6;font-weight:500}
+.ex b{font-family:Lexend,"Segoe UI",Arial,sans-serif;color:var(--ok)}
+.ex s{font-family:Lexend,"Segoe UI",Arial,sans-serif;color:var(--neon)}
+.revbtns{display:flex;gap:10px;margin-top:10px}
+.revbtns .btn{margin-top:0}
+@media (prefers-reduced-motion:reduce){.pop{animation-duration:.01s}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage"></div>
+
+  <div class="top">
+    <div class="chip" id="scoreChip"><span>分數</span><b id="hudScore">0</b></div>
+    <div class="qcard" id="qcard">
+      <div class="qnum" id="qnum">第 1 題</div>
+      <p class="sent" id="sent"></p>
+      <p class="qzh" id="qzh"></p>
+    </div>
+    <div class="chip" id="timeChip"><span>時間</span><b id="hudTime">120</b></div>
+  </div>
+  <div id="meter"><div class="sweet"></div><div class="fill"></div></div>
+  <div class="hint hide" id="hint">點答案球讓它到中間，↑ 往上滑出手</div>
+
+  <div class="overlay" id="startOv">
+    <div class="card">
+      <h1>ENGLISH HOOPS</h1>
+      <p class="zh">文法投籃機：把對的動詞投進籃框</p>
+      <p class="pick howto">怎麼玩</p>
+      <ul class="rules">
+        <li>上面有一個缺了動詞的句子，下面三顆球各是一個答案</li>
+        <li><strong>點一下你選的球，它會跑到正中間</strong>，再往上滑出手。也可以按住它直接往上滑。滑越長越大力</li>
+        <li>投進對的球才得分。投進錯的球會跳出解說，<strong>這時時間會暫停</strong></li>
+        <li>沒投進就再投一次，答案不會換</li>
+        <li>基礎 120 秒，進階和混合 150 秒。答對越多等級越高，每題分數也越高；升到 Lv3 籃框會開始動</li>
+        <li>連續答對 3 題以上，每題多 1 分</li>
+      </ul>
+      <div class="startbar">
+        <p class="pick">選一個難度，馬上開始 ▶</p>
+        <div class="modes">
+          <button class="btn mode" data-mode="basic">▶ 基礎<small></small></button>
+          <button class="btn mode adv" data-mode="adv">▶ 進階・學測型<small></small></button>
+          <button class="btn mode mix" data-mode="mix">▶ 混合：基礎＋進階一起考<small></small></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay hide" id="fbOv"><div class="card fb" id="fbCard"></div></div>
+
+  <div class="overlay hide" id="endOv">
+    <div class="card">
+      <p class="zh" style="margin:0">時間到！</p>
+      <p class="endlv" id="endLvl"></p>
+      <div class="big" id="endScore">0</div>
+      <p class="meta" id="endMeta"></p>
+      <div class="review" id="review"></div>
+      <button class="btn ghost" id="revBtn">複習這一輪的題目</button>
+      <button class="btn" id="againBtn">再玩一次</button>
+      <button class="btn ghost" id="modeBtn">換難度</button>
+    </div>
+  </div>
+
+  <div class="overlay hide" id="revOv">
+    <div class="card rev">
+      <h2 class="revh">複習這一輪</h2>
+      <p class="meta" id="revSub"></p>
+      <div class="revlist" id="revList"></div>
+      <div class="revbtns"><button class="btn ghost" id="revBack">回到成績</button><button class="btn" id="revAgain">再玩一次</button></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* =========================================================
+   題庫：老師可以直接改這裡
+   s：句子，___ 是空格　zh：中文意思　tag：觀念
+   a：[正確答案, 為什麼對]　w：[[錯誤選項, 為什麼錯], …]（兩個）
+   ========================================================= */
+const CONCEPTS = {
+  AUX: { name:'助動詞帶路', rule:'看到 do／does／did → 後面接原形。看到 be → 後面接 V-ing（或 p.p.）。看到 have → 後面接 p.p.' },
+  S:   { name:'單數主詞，動詞 +s', rule:'主詞是「一個」（he、she、一個人、whoever、anyone、一件事）而且是現在式 → 動詞加 s。如果前面已經有 does，s 就被 does 扛走了，後面回原形。' },
+  ING: { name:'V-ing 坐不上動詞位子', rule:'每個子句都要有一個真正的動詞坐在「動詞位子」上。V-ing 自己坐不上去，要 be 扶著（are playing）。動詞位子已經有人坐了，V-ing 才能拿來形容名詞（the girl sitting there）。' },
+  T:   { name:'時間詞說了算', rule:'看到 yesterday、last night → 過去式。看到 since、for ＋一段時間 → have ＋ p.p.。看到 every day、usually → 現在式。' },
+  /* 進階題用 */
+  AGR: { name:'找真正的主詞', rule:'主詞很長時，先找真正的老大：the number of → 單數；a number of（＝many）→ 複數；one of → 單數；not only A but also B、neither A nor B → 看靠近動詞的 B；along with、as well as 那一段不算主詞。' },
+  PART:{ name:'沒有連接詞，只能一個動詞', rule:'動詞位子已經有人坐了，或兩個動作中間沒有連接詞 → 另一個動詞只能變成 V-ing 或 p.p.。自己做的 → V-ing；「被」做的 → p.p.。' },
+  PASS:{ name:'被動：be ＋ p.p.', rule:'主詞是「被」做的那一方（書被寫、腳踏車被偷）→ be ＋ p.p.。時態照樣看時間詞：will be ＋ p.p.、was ＋ p.p.、have been ＋ p.p.。' },
+  TL:  { name:'時間線前後順序', rule:'兩件過去的事，比較早的用 had ＋ p.p.。if、when、as soon as 講未來 → 用現在式代替。since 後面放「那個時間點」→ 過去式。主要動詞是過去（told、said）→ 後面跟著退一格。' },
+  INV: { name:'否定詞開頭要倒裝', rule:'Never、Not until、Seldom、Hardly、Little、Under no circumstances 這類否定詞放句首（Only…、Not only、So ＋形容詞 也一樣）→ 助動詞或 be 搬到主詞前面，像問句。搬出來的助動詞照樣帶路：did → 原形；have → p.p.；原句是 be 就搬 be。' },
+  HPP: { name:'have p.p. 還是 be p.p.？', rule:'先問：主詞是「去做」的人，還是「被做」的那一方？去做 → 主動（後面通常有受詞）；被做 → be ＋ p.p.。再問：有沒有「已經、一直到現在」？有 → have ＋ p.p.。兩個都是 → have been ＋ p.p.。happen、work 這種後面不接受詞的動詞，不能用被動。' },
+  CL:  { name:'拆子句找主要動詞', rule:'先把 who、which、that、what、why、whether、where 開頭的子句框起來，它們有自己的動詞。剩下的骨架才是主要句子，主要動詞要跟骨架裡的主詞配。兩個句子只能用一個連接詞：because 不配 so，although 不配 but。' },
+  CONJ:{ name:'兩個句子要一個連接詞', rule:'兩個完整句子（各有主詞＋動詞）中間只用逗號不行，要加 and、but、so、because、although、who、which 其中一個。however、therefore 是副詞，不算連接詞。逗號後面補充說明人或事 → who、which，不能用 that。不想加連接詞 → 拿掉其中一邊的主詞，動詞改成 V-ing 或 p.p.。' }
+};
+const QUESTIONS = [
+  { s:'Whoever says things like that ___ the whole story.', zh:'會說那種話的人，並不了解來龍去脈。', tag:'AUX',
+    a:['doesn’t know','know 是一般動詞，要否定就找 does 來帶路，後面回原形。'],
+    w:[['isn’t know','看到 isn’t → be 後面不能直接接原形 know。know 是一般動詞，否定要用 doesn’t know。'],
+       ['hasn’t know','看到 hasn’t → have 後面要接 p.p.（known）。而且這句講的是現在「不了解」→ 用 doesn’t know。']] },
+  { s:'Whoever ___ the most points wins the game.', zh:'得最多分的人贏。', tag:'S',
+    a:['gets','whoever 當主詞，算「一個人」→ 現在式 +s。'],
+    w:[['get','看到 whoever → 算單數主詞，現在式要加 s → gets。'],
+       ['getting','V-ing 坐不上動詞位子。whoever 後面要有真正的動詞 → gets。']] },
+  { s:'Students who ___ their phones in class will lose points.', zh:'上課滑手機的學生會被扣分。', tag:'ING',
+    a:['use','who 後面的小句子要有自己的動詞；students 是複數，不加 s。'],
+    w:[['using','看到 who → 後面要給它一個真正的動詞。V-ing 自己坐不上動詞位子 → use。'],
+       ['uses','往前找 who 在講誰 → students（複數）→ 不加 s → use。']] },
+  { s:'My sister ___ to music every night.', zh:'我妹每天晚上都聽音樂。', tag:'S',
+    a:['listens','my sister 是一個人，every night 是習慣 → 現在式 +s。'],
+    w:[['listen','看到 my sister（單數）＋ every night（現在的習慣）→ 動詞加 s → listens。'],
+       ['listening','句子沒有 be，V-ing 坐不上動詞位子 → listens。']] },
+  { s:'He ___ like horror movies.', zh:'他不喜歡恐怖片。', tag:'AUX',
+    a:['doesn’t','like 是一般動詞，否定找 does 帶路；主詞 he 是單數。'],
+    w:[['isn’t','like 是一般動詞，不是 be 的範圍 → 否定要找 do／does → doesn’t。'],
+       ['don’t','主詞 he 是單數 → 用 doesn’t，不用 don’t。']] },
+  { s:'She doesn’t ___ his name.', zh:'她不記得他的名字。', tag:'AUX',
+    a:['remember','前面有 doesn’t，s 已經被 does 扛走 → 後面回原形。'],
+    w:[['remembers','看到 doesn’t → s 已經在 does 身上了，後面回原形 remember。'],
+       ['remembering','看到 doesn’t → 後面接原形，不接 V-ing。']] },
+  { s:'The kids ___ in the park right now.', zh:'孩子們現在正在公園玩。', tag:'ING',
+    a:['are playing','right now 正在做 → be ＋ V-ing；kids 是複數 → are。'],
+    w:[['playing','少了 be，V-ing 自己坐不上動詞位子 → are playing。'],
+       ['is playing','the kids 是複數 → be 要用 are。']] },
+  { s:'Anyone who ___ late has to stay after class.', zh:'遲到的人放學要留下來。', tag:'S',
+    a:['comes','who 在講 anyone，anyone 算單數 → 現在式 +s。'],
+    w:[['come','往前找 who 在講誰 → anyone（單數）→ comes。'],
+       ['coming','看到 who → 後面要有真正的動詞。V-ing 坐不上去 → comes。']] },
+  { s:'I ___ my report last night.', zh:'我昨晚把報告寫完了。', tag:'T',
+    a:['finished','看到 last night → 過去式。'],
+    w:[['finish','看到 last night → 事情發生在過去 → finished。'],
+       ['have finished','看到 last night（很明確的過去時間）→ 不能配現在完成式 → finished。']] },
+  { s:'We ___ in Taichung since 2018.', zh:'我們從 2018 年就住在台中了。', tag:'T',
+    a:['have lived','看到 since → 從過去一路到現在 → have ＋ p.p.。'],
+    w:[['live','看到 since → 從 2018 一路到現在 → have lived。'],
+       ['are live','be 後面不能接原形 live。看到 since → have lived。']] },
+  { s:'Yesterday Amy ___ to school by bike.', zh:'艾咪昨天騎腳踏車上學。', tag:'T',
+    a:['rode','看到 yesterday → 過去式。ride 的過去式是 rode。'],
+    w:[['rides','看到 yesterday → 過去式 → rode。'],
+       ['riding','V-ing 坐不上動詞位子，而且 yesterday 要過去式 → rode。']] },
+  { s:'Did you ___ the news?', zh:'你有聽到那個消息嗎？', tag:'AUX',
+    a:['hear','did 已經說了「過去」→ 後面回原形。'],
+    w:[['heard','看到 did → 過去已經被 did 扛走了，後面回原形 hear。'],
+       ['hearing','看到 did → 後面接原形，不接 V-ing。']] },
+  { s:'The man who ___ next door is a nurse.', zh:'住隔壁的那個男生是護理師。', tag:'ING',
+    a:['lives','who 後面要有自己的動詞；the man 是單數 → +s。'],
+    w:[['living','看到 who → 要給它真正的動詞。V-ing 坐不上去 → lives。'],
+       ['live','往前找 who 在講誰 → the man（單數）→ lives。']] },
+  { s:'Playing video games ___ me relax.', zh:'打電動讓我放鬆。', tag:'S',
+    a:['helps','V-ing 開頭當主詞，算「一件事」→ 單數 → +s。'],
+    w:[['help','主詞是 playing video games 這「一件事」→ 單數 → helps。'],
+       ['helping','主詞已經有了，還缺真正的動詞 → helps。']] },
+  { s:'Each of the students ___ a laptop.', zh:'每個學生都有一台筆電。', tag:'S',
+    a:['has','主詞是 each（每一個）→ 單數 → has。'],
+    w:[['have','真正的主詞是 each，不是 students → 單數 → has。'],
+       ['having','V-ing 坐不上動詞位子 → has。']] },
+  { s:'They ___ seen that movie before.', zh:'他們以前沒看過那部電影。', tag:'AUX',
+    a:['haven’t','看到 seen（p.p.）→ 前面找 have 帶路。'],
+    w:[['don’t','看到 seen 是 p.p. → 前面要 have，不是 do → haven’t。'],
+       ['aren’t','aren’t seen 是「沒有被看見」，意思不對。「沒看過」→ haven’t seen。']] },
+  { s:'He ___ a game when the teacher walked in.', zh:'老師走進來的時候，他正在打電動。', tag:'T',
+    a:['was playing','老師走進來那一刻，他「正在」玩；walked 是過去 → was ＋ V-ing。'],
+    w:[['playing','少了 be，V-ing 坐不上動詞位子 → was playing。'],
+       ['is playing','看到 walked（過去）→ be 也要過去 → was playing。']] },
+  { s:'Nobody ___ what will happen next.', zh:'沒有人知道接下來會怎樣。', tag:'S',
+    a:['knows','nobody 算單數 → 現在式 +s。'],
+    w:[['know','nobody 雖然意思是「沒有人」，文法上算單數 → knows。'],
+       ['knowing','V-ing 坐不上動詞位子 → knows。']] },
+  { s:'Ben ___ English very well.', zh:'Ben 英文說得很好。', tag:'AUX',
+    a:['speaks','一般的事實 → 現在式；Ben 是單數 → +s。'],
+    w:[['is speak','看到 is → be 後面不能接原形 speak。要嘛 speaks，要嘛 is speaking。'],
+       ['speak','Ben 是一個人 → 現在式加 s → speaks。']] },
+  { s:'The girl ___ by the window is my cousin.', zh:'坐在窗邊的那個女生是我表妹。', tag:'ING',
+    a:['sitting','動詞位子已經被 is 坐走了，sitting by the window 只是在形容 girl。'],
+    w:[['sits','句子已經有 is 在動詞位子上了，再放 sits 會變兩個動詞 → sitting。'],
+       ['is sitting','一個子句只能有一個動詞位子，is 已經在後面了 → sitting（或改成 who is sitting）。']] },
+  { s:'People ___ such comments online should think twice.', zh:'在網路上留這種言的人應該三思。', tag:'ING',
+    a:['posting','動詞位子是 should think，posting such comments 只是在形容 people。'],
+    w:[['post','動詞位子已經是 should think 了，post 再坐上去就兩個動詞 → posting（或 people who post）。'],
+       ['posts','動詞位子已經有人坐了，而且 people 是複數 → posting。']] },
+  { s:'People who ___ such comments online should think twice.', zh:'在網路上留這種言的人應該三思。', tag:'ING',
+    a:['post','有 who 就要給它一個真正的動詞；people 是複數 → 不加 s。'],
+    w:[['posting','看到 who → 後面要有真正的動詞。V-ing 坐不上去 → post。'],
+       ['posts','往前找 who 在講誰 → people（複數）→ post。']] },
+  { s:'My dad ___ coffee every morning.', zh:'我爸每天早上都喝咖啡。', tag:'T',
+    a:['drinks','every morning 是習慣 → 現在簡單式；my dad 單數 → +s。'],
+    w:[['is drinking','看到 every morning → 講的是習慣，不是「現在正在」→ drinks。'],
+       ['drink','my dad 是一個人 → 現在式加 s → drinks。']] },
+
+  /* ---------- 第二批：助動詞帶路 ---------- */
+  { s:'My phone ___ working right now.', zh:'我的手機現在壞了，不能用。', tag:'AUX',
+    a:['isn’t','看到 working（V-ing）→ 前面要 be 帶路 → isn’t working。'],
+    w:[['doesn’t','看到 working（V-ing）→ 前面要 be，不是 do → isn’t。'],
+       ['hasn’t','看到 working（V-ing）→ 前面要 be。has 後面要接 p.p. → isn’t。']] },
+  { s:'Have you ___ your homework yet?', zh:'你功課寫完了沒？', tag:'AUX',
+    a:['finished','看到 have → 後面接 p.p.。'],
+    w:[['finish','看到 have → 後面要 p.p. → finished。'],
+       ['finishing','看到 have → 後面接 p.p.，不接 V-ing → finished。']] },
+  { s:'Does your brother ___ in Taipei?', zh:'你哥住在台北嗎？', tag:'AUX',
+    a:['live','前面有 does，s 已經被 does 扛走 → 後面回原形。'],
+    w:[['lives','看到 does → s 已經在 does 身上了 → 回原形 live。'],
+       ['living','看到 does → 後面接原形，不接 V-ing → live。']] },
+  { s:'I ___ understand the question.', zh:'我看不懂這一題。', tag:'AUX',
+    a:['don’t','understand 是一般動詞，否定找 do 帶路；主詞是 I → don’t。'],
+    w:[['am not','understand 是一般動詞，不歸 be 管 → 否定要找 do → don’t。'],
+       ['doesn’t','主詞是 I，不是第三人稱單數 → don’t。']] },
+  { s:'We ___ never been to Japan.', zh:'我們從來沒去過日本。', tag:'AUX',
+    a:['have','看到 been（p.p.）→ 前面找 have 帶路。'],
+    w:[['are','看到 been 是 p.p. → 前面要 have，不是 be → have never been。'],
+       ['do','do 後面要接原形；been 是 p.p. → have。']] },
+  { s:'She is ___ dinner now.', zh:'她現在正在煮晚餐。', tag:'AUX',
+    a:['cooking','看到 is → 後面接 V-ing。'],
+    w:[['cook','看到 is → be 後面不能接原形 → cooking。'],
+       ['cooks','看到 is → 後面接 V-ing，不是加 s 的動詞 → cooking。']] },
+  { s:'He didn’t ___ to the party last night.', zh:'他昨晚沒有來派對。', tag:'AUX',
+    a:['come','didn’t 已經扛了「過去」→ 後面回原形。'],
+    w:[['came','看到 didn’t → 過去已經被 did 扛走了 → 回原形 come。'],
+       ['comes','看到 didn’t → 後面接原形，不加 s → come。']] },
+  { s:'Why ___ you angry?', zh:'你為什麼生氣？', tag:'AUX',
+    a:['are','angry 是形容詞，句子裡沒有一般動詞 → 用 be。'],
+    w:[['do','angry 是形容詞，不是動詞 → 要用 be → are。'],
+       ['does','angry 不是動詞 → 要用 be；主詞 you → are。']] },
+  { s:'The kids ___ like vegetables.', zh:'孩子們不喜歡吃青菜。', tag:'AUX',
+    a:['don’t','like 是一般動詞，否定找 do；kids 是複數 → don’t。'],
+    w:[['aren’t','like 是一般動詞，不歸 be 管 → don’t。'],
+       ['doesn’t','the kids 是複數 → don’t，不是 doesn’t。']] },
+  { s:'It ___ rain much here in winter.', zh:'這裡冬天不太下雨。', tag:'AUX',
+    a:['doesn’t','rain 在這裡是一般動詞 → 否定找 does；主詞 it 單數。'],
+    w:[['isn’t','看到後面是原形 rain → 前面要 does，不是 be → doesn’t rain。'],
+       ['don’t','主詞 it 是單數 → doesn’t。']] },
+  { s:'I have never ___ sushi.', zh:'我從來沒吃過壽司。', tag:'AUX',
+    a:['eaten','看到 have → 後面接 p.p.；eat 的 p.p. 是 eaten。'],
+    w:[['ate','看到 have → 後面要 p.p.，ate 是過去式 → eaten。'],
+       ['eat','看到 have → 後面要 p.p. → eaten。']] },
+
+  /* ---------- 第二批：單數主詞，動詞 +s ---------- */
+  { s:'Everyone in my class ___ a smartphone.', zh:'我們班每個人都有手機。', tag:'S',
+    a:['has','everyone 文法上算單數 → has。'],
+    w:[['have','everyone 看起來是很多人，但文法上算單數 → has。'],
+       ['having','V-ing 坐不上動詞位子 → has。']] },
+  { s:'The news ___ good today.', zh:'今天的消息是好消息。', tag:'S',
+    a:['is','news 是不可數名詞 → 算單數；today 是現在 → is。'],
+    w:[['are','news 雖然有 s，但它是不可數名詞 → 算單數 → is。'],
+       ['were','看到 today → 現在式；news 算單數 → is。']] },
+  { s:'My best friend ___ in Kaohsiung.', zh:'我最好的朋友住在高雄。', tag:'S',
+    a:['lives','my best friend 是一個人 → 現在式 +s。'],
+    w:[['live','my best friend 是一個人 → lives。'],
+       ['living','V-ing 坐不上動詞位子 → lives。']] },
+  { s:'Learning English ___ time.', zh:'學英文需要時間。', tag:'S',
+    a:['takes','V-ing 開頭當主詞，算「一件事」→ 單數 → +s。'],
+    w:[['take','主詞是 learning English 這「一件事」→ 單數 → takes。'],
+       ['taking','主詞已經有了，還缺真正的動詞 → takes。']] },
+  { s:'One of my classmates ___ three languages.', zh:'我有一個同學會說三種語言。', tag:'S',
+    a:['speaks','真正的主詞是 one（一個）→ 單數 → +s。'],
+    w:[['speak','真正的主詞是 one，不是 classmates → speaks。'],
+       ['speaking','V-ing 坐不上動詞位子 → speaks。']] },
+  { s:'What he said ___ true.', zh:'他說的是真的。', tag:'S',
+    a:['is','what he said 整串是「一件事」→ 單數 → is。'],
+    w:[['are','主詞是 what he said 這「一件事」→ 單數 → is。'],
+       ['being','V-ing 坐不上動詞位子 → is。']] },
+  { s:'The teacher always ___ us homework on Fridays.', zh:'老師每個星期五都會出功課給我們。', tag:'S',
+    a:['gives','the teacher 單數，always 是習慣 → 現在式 +s。'],
+    w:[['give','the teacher 是一個人 → gives。'],
+       ['giving','V-ing 坐不上動詞位子 → gives。']] },
+  { s:'Somebody ___ at the door.', zh:'有人在敲門。', tag:'S',
+    a:['is knocking','somebody 算單數 → is；正在敲 → be ＋ V-ing。'],
+    w:[['are knocking','somebody 算單數 → is knocking。'],
+       ['knocking','少了 be，V-ing 坐不上動詞位子 → is knocking。']] },
+  { s:'Tom and Jerry ___ in the same class.', zh:'湯姆和傑瑞同班。', tag:'S',
+    a:['are','A and B 是兩個人 → 複數 → are。'],
+    w:[['is','看到 and 把兩個人連起來 → 複數 → are。'],
+       ['being','V-ing 坐不上動詞位子 → are。']] },
+  { s:'My parents ___ in Taichung.', zh:'我爸媽住在台中。', tag:'S',
+    a:['live','my parents 是兩個人 → 複數，不加 s。'],
+    w:[['lives','my parents 是複數 → 不加 s → live。'],
+       ['living','V-ing 坐不上動詞位子 → live。']] },
+
+  /* ---------- 第二批：V-ing 坐不上動詞位子 ---------- */
+  { s:'Look! The baby ___.', zh:'你看！寶寶在睡覺。', tag:'ING',
+    a:['is sleeping','正在睡 → be ＋ V-ing。'],
+    w:[['sleeping','少了 be，V-ing 坐不上動詞位子 → is sleeping。'],
+       ['is sleep','be 後面不能接原形 → is sleeping。']] },
+  { s:'Anyone who ___ to join the club can sign up here.', zh:'想加入社團的人可以在這裡報名。', tag:'ING',
+    a:['wants','who 後面要有自己的動詞；anyone 單數 → +s。'],
+    w:[['wanting','看到 who → 後面要有真正的動詞。V-ing 坐不上去 → wants。'],
+       ['want','往前找 who 在講誰 → anyone（單數）→ wants。']] },
+  { s:'The boy ___ a red cap is my brother.', zh:'戴紅帽子的那個男生是我弟。', tag:'ING',
+    a:['wearing','動詞位子已經被 is 坐走了，wearing a red cap 只是在形容 boy。'],
+    w:[['wears','句子已經有 is 坐在動詞位子上，再放 wears 會變兩個動詞 → wearing。'],
+       ['is wearing','一個子句只能有一個動詞位子，is 已經在後面了 → wearing（或 who is wearing）。']] },
+  { s:'The girl who ___ next to me always helps me.', zh:'坐我旁邊的女生總是會幫我。', tag:'ING',
+    a:['sits','who 後面要有自己的動詞；the girl 單數 → +s。'],
+    w:[['sitting','看到 who → 要給它真正的動詞。V-ing 坐不上去 → sits。'],
+       ['sit','往前找 who 在講誰 → the girl（單數）→ sits。']] },
+  { s:'We ___ for the bus when it started to rain.', zh:'開始下雨的時候，我們正在等公車。', tag:'ING',
+    a:['were waiting','下雨那一刻「正在」等；started 是過去；we 複數 → were ＋ V-ing。'],
+    w:[['waiting','少了 be，V-ing 坐不上動詞位子 → were waiting。'],
+       ['was waiting','主詞 we 是複數 → were。']] },
+  { s:'Students ___ late will not be allowed in.', zh:'遲到的學生不能進場。', tag:'ING',
+    a:['arriving','動詞位子是 will not be allowed，arriving late 只是在形容 students。'],
+    w:[['arrive','動詞位子已經是 will not be allowed 了，arrive 再坐上去就兩個動詞 → arriving（或 students who arrive）。'],
+       ['arrives','動詞位子已經有人坐了，而且 students 是複數 → arriving。']] },
+  { s:'People who ___ in big cities often feel stressed.', zh:'住在大城市的人常常覺得壓力大。', tag:'ING',
+    a:['live','who 後面要有自己的動詞；people 複數 → 不加 s。'],
+    w:[['living','看到 who → 後面要有真正的動詞。V-ing 坐不上去 → live。'],
+       ['lives','往前找 who 在講誰 → people（複數）→ live。']] },
+  { s:'My mom ___ on the phone right now.', zh:'我媽現在正在講電話。', tag:'ING',
+    a:['is talking','right now 正在 → be ＋ V-ing。'],
+    w:[['talking','少了 be，V-ing 坐不上動詞位子 → is talking。'],
+       ['talks','看到 right now → 講的是「現在正在」，不是習慣 → is talking。']] },
+  { s:'Whoever ___ the most books this month will get a prize.', zh:'這個月讀最多書的人會得獎。', tag:'ING',
+    a:['reads','whoever 後面要有自己的動詞；whoever 算單數 → +s。'],
+    w:[['reading','看到 whoever → 後面要有真正的動詞。V-ing 坐不上去 → reads。'],
+       ['is read','is read 是「被讀」，意思不對。whoever 單數 → reads。']] },
+
+  /* ---------- 第二批：時間詞說了算 ---------- */
+  { s:'We ___ a test tomorrow.', zh:'我們明天要考試。', tag:'T',
+    a:['will have','看到 tomorrow → 未來。'],
+    w:[['had','看到 tomorrow → 還沒發生 → will have。'],
+       ['have had','看到 tomorrow → 未來，不能用現在完成式 → will have。']] },
+  { s:'Next week my cousin ___ visit us.', zh:'我表哥下禮拜會來找我們。', tag:'T',
+    a:['will','看到 next week → 未來 → will ＋ 原形。'],
+    w:[['is','is 後面不能直接接原形 visit；next week → will visit。'],
+       ['was','看到 next week → 未來，不是過去 → will。']] },
+  { s:'She ___ in Tainan for three years.', zh:'她已經在台南住三年了。', tag:'T',
+    a:['has lived','看到 for ＋一段時間，一直到現在 → has ＋ p.p.。'],
+    w:[['lives','看到 for three years → 從過去一路到現在 → has lived。'],
+       ['have lived','主詞 she 是單數 → has。']] },
+  { s:'Last summer we ___ to Kenting.', zh:'去年夏天我們去了墾丁。', tag:'T',
+    a:['went','看到 last summer → 過去式。'],
+    w:[['go','看到 last summer → 過去 → went。'],
+       ['have gone','看到 last summer（明確的過去時間）→ 不能用現在完成式 → went。']] },
+  { s:'He usually ___ to school, but today he is taking the bus.', zh:'他平常走路上學，但今天搭公車。', tag:'T',
+    a:['walks','看到 usually → 習慣 → 現在簡單式；he 單數 → +s。'],
+    w:[['is walking','看到 usually → 講的是習慣，不是「現在正在」→ walks。'],
+       ['walked','後面是 is taking（現在）→ 這句在講現在的習慣 → walks。']] },
+  { s:'When I got home, my sister ___ TV.', zh:'我回到家的時候，我妹正在看電視。', tag:'T',
+    a:['was watching','我到家那一刻她「正在」看；got 是過去 → was ＋ V-ing。'],
+    w:[['is watching','看到 got（過去）→ be 也要過去 → was watching。'],
+       ['watching','少了 be，V-ing 坐不上動詞位子 → was watching。']] },
+  { s:'They ___ each other since elementary school.', zh:'他們從國小就認識了。', tag:'T',
+    a:['have known','看到 since → 從那時一路到現在 → have ＋ p.p.。'],
+    w:[['know','看到 since → 要用 have known。'],
+       ['are know','be 後面不能接原形 know；看到 since → have known。']] },
+  { s:'Two days ago, the teacher ___ us a quiz.', zh:'兩天前老師給我們小考。', tag:'T',
+    a:['gave','看到 ago → 過去式。'],
+    w:[['gives','看到 two days ago → 過去 → gave。'],
+       ['has given','看到 ago（明確的過去時間）→ 不能用現在完成式 → gave。']] },
+  { s:'Water ___ at 100°C.', zh:'水在攝氏 100 度沸騰。', tag:'T',
+    a:['boils','永遠成立的事實 → 現在簡單式；water 不可數 → +s。'],
+    w:[['is boiling','這句講的是永遠成立的事實，不是「現在正在」→ boils。'],
+       ['boiled','事實不分過去現在，一律用現在簡單式 → boils。']] },
+  { s:'I ___ to music when my phone rang.', zh:'手機響的時候，我正在聽音樂。', tag:'T',
+    a:['was listening','手機響那一刻「正在」聽；rang 是過去 → was ＋ V-ing。'],
+    w:[['am listening','看到 rang（過去）→ be 也要過去 → was listening。'],
+       ['listening','少了 be，V-ing 坐不上動詞位子 → was listening。']] },
+
+  /* ---------- 第三批：ago 這種基本時態、who 和分詞對照、連接詞 ---------- */
+  { s:'Tom ___ his wallet two days ago.', zh:'湯姆兩天前弄丟了錢包。', tag:'T',
+    a:['lost','看到 ago → 過去式；lose 的過去式是 lost。'],
+    w:[['loses','看到 two days ago → 過去 → lost。'],
+       ['has lost','看到 ago（明確的過去時間）→ 不能用現在完成式 → lost。']] },
+  { s:'We ___ that movie last weekend.', zh:'我們上週末看了那部電影。', tag:'T',
+    a:['saw','看到 last weekend → 過去式；see 的過去式是 saw。'],
+    w:[['see','看到 last weekend → 過去 → saw。'],
+       ['have seen','看到 last weekend（明確的過去時間）→ 不能用現在完成式 → saw。']] },
+  { s:'She ___ a bad cold a week ago, but she is fine now.', zh:'她一個禮拜前重感冒，但現在好了。', tag:'T',
+    a:['had','看到 a week ago → 過去式。'],
+    w:[['has','看到 a week ago → 過去 → had。後面 is fine now 才是現在。'],
+       ['has had','看到 ago（明確的過去時間）→ 不能用現在完成式 → had。']] },
+  { s:'The boy who ___ the guitar is my classmate.', zh:'彈吉他的那個男生是我同學。', tag:'ING',
+    a:['plays','who 後面要有自己的動詞；the boy 單數 → +s。'],
+    w:[['playing','看到 who → 後面要真正的動詞。V-ing 坐不上去 → plays。'],
+       ['play','往前找 who 在講誰 → the boy（單數）→ plays。']] },
+  { s:'The boy ___ the guitar is my classmate.', zh:'彈吉他的那個男生是我同學。', tag:'ING',
+    a:['playing','沒有 who，動詞位子又已經給了 is → playing the guitar 只是在形容 the boy。'],
+    w:[['plays','句子已經有 is 坐在動詞位子上，再放 plays 會變兩個動詞 → playing（或 who plays）。'],
+       ['is playing','一個子句只能一個動詞位子，is 已經在後面了 → playing。']] },
+  { s:'The woman who ___ to my mom is our new neighbor.', zh:'正在跟我媽說話的那位女生是我們的新鄰居。', tag:'ING',
+    a:['is talking','who 後面要有自己的動詞；正在說 → is ＋ V-ing。'],
+    w:[['talking','看到 who → 後面要真正的動詞。V-ing 要 be 扶著 → is talking。'],
+       ['talk','往前找 who 在講誰 → the woman（單數）；正在說 → is talking。']] },
+  { s:'The woman ___ to my mom is our new neighbor.', zh:'正在跟我媽說話的那位女生是我們的新鄰居。', tag:'ING',
+    a:['talking','沒有 who，動詞位子是後面的 is → talking to my mom 只是在形容 the woman。'],
+    w:[['is talking','後面已經有 is 了，一個子句只能一個動詞位子 → talking（或 who is talking）。'],
+       ['talks','動詞位子已經被 is 坐走了 → talking。']] },
+  { s:'Look at the dog ___ in the yard.', zh:'你看那隻在院子裡跑的狗。', tag:'ING',
+    a:['running','動詞位子是 Look，running in the yard 在形容 the dog。'],
+    w:[['runs','句子已經有 Look 當動詞了，再放 runs 會變兩個動詞 → running。'],
+       ['is running','動詞位子已經有人坐了 → running（或 that is running）。']] },
+  { s:'It was raining, ___ we stayed home.', zh:'外面在下雨，所以我們待在家。', tag:'CONJ',
+    a:['so','兩個完整句子要一個連接詞；後面是結果 → so。'],
+    w:[['because','because 後面要接「原因」。待在家是結果 → so。'],
+       ['therefore','therefore 是副詞不是連接詞，不能只用逗號連兩個句子 → so。']] },
+  { s:'I called you, ___ you didn’t answer.', zh:'我打給你，但你沒接。', tag:'CONJ',
+    a:['but','兩個完整句子要一個連接詞；意思轉折 → but。'],
+    w:[['however','however 是副詞不是連接詞，不能只用逗號連兩個句子 → but。'],
+       ['so','「打給你」和「你沒接」是轉折，不是因果 → but。']] }
+];
+
+/* =========================================================
+   進階・學測型：句子更長、主詞藏更深、加上被動、分詞、時間線、倒裝
+   ========================================================= */
+const QUESTIONS_ADV = [
+  /* 找真正的主詞 */
+  { s:'The number of students who choose to study abroad ___ increasing every year.', zh:'選擇出國念書的學生人數每年都在增加。', tag:'AGR',
+    a:['is','真正的主詞是 the number（人數）→ 單數 → is。'],
+    w:[['are','主詞是 the number（人數），students 只是在說「誰的」人數 → 單數 → is。'],
+       ['being','V-ing 坐不上動詞位子 → is。']] },
+  { s:'A number of teenagers ___ addicted to their smartphones these days.', zh:'現在有許多青少年對手機上癮。', tag:'AGR',
+    a:['are','a number of ＝ many，真正的主詞是 teenagers → 複數 → are。'],
+    w:[['is','看到 a number of → 意思是「許多」，主詞是 teenagers → are。'],
+       ['being','V-ing 坐不上動詞位子 → are。']] },
+  { s:'Each of the proposals that the committee received last month ___ carefully reviewed.', zh:'委員會上個月收到的每一份提案都被仔細審查過了。', tag:'AGR',
+    a:['was','主詞是 each（每一份）→ 單數；上個月的事 → was。'],
+    w:[['were','中間那一大段都不是主詞，老大是 each → 單數 → was。'],
+       ['being','V-ing 坐不上動詞位子 → was。']] },
+  { s:'Not only the students but also their teacher ___ excited about the trip.', zh:'不只學生，連老師都很期待這趟旅行。', tag:'AGR',
+    a:['is','not only A but also B → 動詞看靠近的 B（their teacher，單數）→ is。'],
+    w:[['are','看到 not only… but also → 動詞跟著靠近的 their teacher（單數）→ is。'],
+       ['be','be 原形不能直接坐上動詞位子 → is。']] },
+  { s:'Neither my parents nor my brother ___ how to use this app.', zh:'我爸媽和我哥都不會用這個 app。', tag:'AGR',
+    a:['knows','neither A nor B → 動詞看靠近的 B（my brother，單數）→ knows。'],
+    w:[['know','看到 neither… nor → 動詞跟著靠近的 my brother（單數）→ knows。'],
+       ['knowing','V-ing 坐不上動詞位子 → knows。']] },
+  { s:'The book on the desk, along with those magazines, ___ to my sister.', zh:'桌上那本書，連同那些雜誌，都是我姊的。', tag:'AGR',
+    a:['belongs','along with 那段只是補充，主詞是 the book → 單數 → +s。'],
+    w:[['belong','兩個逗號中間的 along with… 不算主詞，老大是 the book → belongs。'],
+       ['belonging','V-ing 坐不上動詞位子 → belongs。']] },
+  { s:'Spending too much time on social media ___ people feel lonely.', zh:'花太多時間在社群媒體上，會讓人覺得孤單。', tag:'AGR',
+    a:['makes','主詞是 spending… 這「一件事」→ 單數 → makes。'],
+    w:[['make','主詞是 spending too much time… 這一件事，不是 social media → makes。'],
+       ['making','主詞已經有了，還缺真正的動詞 → makes。']] },
+  { s:'One of the reasons why many students fail the test ___ that they don’t manage their time well.', zh:'很多學生考不好的原因之一，是他們不會管理時間。', tag:'AGR',
+    a:['is','真正的主詞是 one（之一）→ 單數 → is。'],
+    w:[['are','主詞是 one，reasons 和 students 都只是在說明是哪一個 → is。'],
+       ['being','V-ing 坐不上動詞位子 → is。']] },
+
+  /* V-ing 坐不上動詞位子（長句版） */
+  { s:'Anyone who ___ to apply for the scholarship must submit the form by Friday.', zh:'想申請獎學金的人，必須在星期五前交表。', tag:'ING',
+    a:['wishes','who 後面要有自己的動詞；anyone 單數 → +es。'],
+    w:[['wishing','看到 who → 後面要有真正的動詞。V-ing 坐不上去 → wishes。'],
+       ['wish','往前找 who 在講誰 → anyone（單數）→ wishes。']] },
+  { s:'The man ___ in front of the store was arrested by the police.', zh:'站在店門口的那個男人被警察逮捕了。', tag:'ING',
+    a:['standing','動詞位子是 was arrested，standing in front of the store 只是在形容 the man。'],
+    w:[['stood','動詞位子已經是 was arrested 了，stood 再坐上去就兩個動詞 → standing。'],
+       ['was standing','一個子句只能一個動詞位子 → standing（或 who was standing）。']] },
+  { s:'Students who ___ late three times will have to meet the principal.', zh:'遲到三次的學生要去見校長。', tag:'ING',
+    a:['are','who 後面要有自己的動詞；students 複數 → are。'],
+    w:[['being','看到 who → 要給它真正的動詞。V-ing 坐不上去 → are。'],
+       ['is','往前找 who 在講誰 → students（複數）→ are。']] },
+  { s:'There are many people ___ for the bus at the station.', zh:'車站有很多人在等公車。', tag:'ING',
+    a:['waiting','there are 已經坐了動詞位子，waiting for the bus 在形容 people。'],
+    w:[['wait','動詞位子已經被 are 坐走了 → waiting。'],
+       ['are waiting','一句只能一個動詞位子 → waiting（或 who are waiting）。']] },
+
+  /* 沒有連接詞，只能一個動詞（分詞） */
+  { s:'The girl ___ by the dog was taken to the hospital.', zh:'被狗咬的女孩被送到了醫院。', tag:'PART',
+    a:['bitten','女孩是「被」咬 → p.p.；動詞位子是 was taken。'],
+    w:[['biting','看到 by the dog → 女孩是「被」咬的 → bitten。biting 變成她去咬人。'],
+       ['bit','動詞位子已經是 was taken 了；而且是被咬 → bitten。']] },
+  { s:'Most of the products ___ in this factory are sold overseas.', zh:'這間工廠生產的產品大多外銷。', tag:'PART',
+    a:['made','產品是「被」製造 → p.p.；動詞位子是 are sold。'],
+    w:[['making','產品不會自己做東西，是「被」做出來 → made。'],
+       ['are made','動詞位子已經是後面的 are sold → made（或 that are made）。']] },
+  { s:'___ the news, she burst into tears.', zh:'一聽到消息，她就哭了出來。', tag:'PART',
+    a:['Hearing','逗號前後沒有連接詞；她自己聽到 → 主動 → V-ing。'],
+    w:[['Heard','她是自己去聽，不是「被」聽 → Hearing。'],
+       ['She heard','逗號不能直接連兩個完整的句子 → Hearing（或 When she heard…）。']] },
+  { s:'___ from the top of the mountain, the city looks beautiful.', zh:'從山頂看過去，這座城市很美。', tag:'PART',
+    a:['Seen','逗號後面的主詞是 the city，城市是「被」看 → p.p.。'],
+    w:[['Seeing','抓逗號後面的主詞 → the city，城市不會自己看，是被看 → Seen。'],
+       ['It is seen','逗號前後沒有連接詞，不能兩個完整句子 → Seen。']] },
+  { s:'___ tired, I went to bed early last night.', zh:'因為很累，我昨晚很早就睡了。', tag:'PART',
+    a:['Feeling','逗號前後沒有連接詞；我自己覺得累 → 主動 → V-ing。'],
+    w:[['Felt','動詞位子給了後面的 went，前面沒有連接詞 → 只能 Feeling。'],
+       ['I felt','逗號不能直接連兩個完整句子 → Feeling（或 Because I felt…）。']] },
+  { s:'___ in simple English, the book is easy for beginners.', zh:'這本書用簡單的英文寫成，很適合初學者。', tag:'PART',
+    a:['Written','主詞是 the book，書是「被」寫 → p.p.。'],
+    w:[['Writing','抓逗號後面的主詞 → the book，書不會自己寫，是被寫 → Written。'],
+       ['It is written','逗號前後沒有連接詞，不能兩個完整句子 → Written。']] },
+  { s:'The students sat in the classroom, ___ for the teacher to arrive.', zh:'學生們坐在教室裡，等老師來。', tag:'PART',
+    a:['waiting','動詞位子給了 sat，逗號後面沒有連接詞 → V-ing。'],
+    w:[['waited','動詞位子已經是 sat 了，又沒有 and 之類的連接詞 → waiting。'],
+       ['were waiting','一句只能一個動詞位子，又沒有連接詞 → waiting。']] },
+
+  /* 被動 */
+  { s:'The new library ___ next year.', zh:'新圖書館明年會蓋好。', tag:'PASS',
+    a:['will be built','圖書館是「被」蓋 → be ＋ p.p.；next year → will。'],
+    w:[['will build','圖書館不會自己蓋房子，是被蓋 → will be built。'],
+       ['is built','看到 next year → 未來 → will be built。']] },
+  { s:'English ___ in many countries around the world.', zh:'世界上很多國家都說英文。', tag:'PASS',
+    a:['is spoken','英文是「被」說 → be ＋ p.p.。'],
+    w:[['speaks','英文不會自己說話，是被人說 → is spoken。'],
+       ['is speaking','is speaking 是「正在說」，英文不會說話 → is spoken。']] },
+  { s:'My bike ___ last night, so I had to walk to school.', zh:'我的腳踏車昨晚被偷了，所以我只好走路上學。', tag:'PASS',
+    a:['was stolen','腳踏車是「被」偷 → be ＋ p.p.；last night → was。'],
+    w:[['stole','腳踏車不會自己偷東西，是被偷 → was stolen。'],
+       ['was stealing','腳踏車不會「正在偷」，是被偷 → was stolen。']] },
+  { s:'The results of the exam ___ announced yet.', zh:'考試結果還沒公布。', tag:'PASS',
+    a:['haven’t been','結果是「被」公布 → been ＋ p.p.；yet → 完成式。'],
+    w:[['haven’t','haven’t announced 是「結果去公布」，意思不對 → haven’t been announced。'],
+       ['didn’t','didn’t 後面要接原形；而且是被公布 → haven’t been。']] },
+
+  /* 時間線前後順序 */
+  { s:'When the manager arrived, the problem ___ .', zh:'經理到的時候，問題已經被解決了。', tag:'TL',
+    a:['had been solved','問題比經理到更早解決 → had；問題是被解決 → been solved。'],
+    w:[['has been solved','arrived 是過去，比它更早的事 → had，不是 has。'],
+       ['had solved','問題不會自己解決，是被解決 → had been solved。']] },
+  { s:'By the time we got to the theater, the movie ___ .', zh:'我們到電影院的時候，電影已經開始了。', tag:'TL',
+    a:['had started','電影比我們到更早開始，兩件都是過去 → 比較早的用 had ＋ p.p.。'],
+    w:[['has started','got 是過去，比它更早的事 → had started。'],
+       ['starts','got 是過去，電影在那之前就開始 → had started。']] },
+  { s:'If it ___ tomorrow, the game will be canceled.', zh:'如果明天下雨，比賽會取消。', tag:'TL',
+    a:['rains','if 子句講未來，用現在式代替；it 單數 → +s。'],
+    w:[['will rain','看到 if → 講未來也用現在式，will 留給後面那句 → rains。'],
+       ['rained','看到 tomorrow → 未來；if 子句用現在式 → rains。']] },
+  { s:'I ___ English for six years, but I still find grammar confusing.', zh:'我學英文六年了，但還是覺得文法很亂。', tag:'TL',
+    a:['have studied','for six years 一路到現在 → have ＋ p.p.。'],
+    w:[['study','看到 for six years → 從過去一路到現在 → have studied。'],
+       ['has studied','主詞是 I → have，不是 has。']] },
+  { s:'As soon as the bell ___ , the students rushed out of the classroom.', zh:'鐘聲一響，學生就衝出教室。', tag:'TL',
+    a:['rang','後面 rushed 是過去 → 鐘響也是過去 → rang。'],
+    w:[['rings','看到 rushed（過去）→ 整件事發生在過去 → rang。'],
+       ['ringing','as soon as 後面要有真正的動詞 → rang。']] },
+  { s:'She told me that she ___ to Japan the following week.', zh:'她跟我說她下一個禮拜要去日本。', tag:'TL',
+    a:['would go','told 是過去 → 後面的 will 跟著退一格 → would。'],
+    w:[['will go','看到 told（過去）→ will 要退一格變 would。'],
+       ['goes','看到 told 和 the following week → 過去說的未來 → would go。']] },
+  { s:'Since he ___ to Taipei, he has made many new friends.', zh:'自從他搬到台北，他交了很多新朋友。', tag:'TL',
+    a:['moved','since 後面放「那個時間點」→ 過去式。'],
+    w:[['has moved','since 後面是起點，那一次搬家已經過去了 → moved。'],
+       ['moves','since 後面是過去的時間點 → moved。']] },
+
+  /* 否定詞開頭要倒裝 */
+  { s:'Not until I got home ___ that I had lost my wallet.', zh:'直到回到家，我才發現錢包不見了。', tag:'INV',
+    a:['did I realize','Not until 放句首 → 倒裝；did 搬到前面，後面回原形。'],
+    w:[['I realized','看到 Not until 放句首 → 要倒裝 → did I realize。'],
+       ['did I realized','did 已經扛了過去，後面回原形 → did I realize。']] },
+  { s:'Never ___ such a beautiful sunset.', zh:'我從來沒看過這麼美的夕陽。', tag:'INV',
+    a:['have I seen','Never 放句首 → 倒裝；have 搬到前面，後面接 p.p.。'],
+    w:[['I have seen','看到 Never 放句首 → 要倒裝 → have I seen。'],
+       ['have I saw','have 後面要 p.p.，saw 是過去式 → have I seen。']] },
+
+  /* ---------- 第二批：have p.p. 還是 be p.p.？ ---------- */
+  { s:'The old bridge ___ by the government since 2020.', zh:'這座舊橋從 2020 年起就被政府封閉了。', tag:'HPP',
+    a:['has been closed','橋是「被」關的 → be ＋ p.p.；since 一路到現在 → has been closed。'],
+    w:[['has closed','橋不會自己去關東西，是被關；而且有 by the government → has been closed。'],
+       ['is closed','看到 since 2020 → 從過去一路到現在 → has been closed。']] },
+  { s:'The government ___ new regulations to reduce plastic waste.', zh:'政府已經實施新規定來減少塑膠垃圾。', tag:'HPP',
+    a:['has implemented','政府是「去做」的人，後面有受詞 new regulations → 主動 has implemented。'],
+    w:[['has been implemented','政府不是被實施的，是去實施規定的人；後面還有受詞 → has implemented。'],
+       ['is implemented','政府是去做的人 → 主動；「已經」做了 → has implemented。']] },
+  { s:'The water in this area ___ by chemicals from the factory.', zh:'這一帶的水已經被工廠的化學物質污染了。', tag:'HPP',
+    a:['has been contaminated','水是「被」污染的 → be ＋ p.p.；已經 → has been。'],
+    w:[['has contaminated','has contaminated 是「水去污染別的東西」。看到 by chemicals → 水是被污染 → has been contaminated。'],
+       ['is contaminating','水不是去污染的一方 → 被動 → has been contaminated。']] },
+  { s:'The factory ___ the river for years.', zh:'這間工廠多年來一直污染這條河。', tag:'HPP',
+    a:['has polluted','工廠是「去污染」的人，後面有受詞 the river；for years → has ＋ p.p.。'],
+    w:[['has been polluted','工廠不是被污染，是去污染河川；後面還有受詞 → has polluted。'],
+       ['is polluted','工廠是去做的人 → 主動；for years → has polluted。']] },
+  { s:'Our teacher ___ the exam papers, so we will get our scores tomorrow.', zh:'老師已經改完考卷了，所以我們明天會拿到成績。', tag:'HPP',
+    a:['has graded','老師是去改的人，後面有受詞 the exam papers；已經改完 → has graded。'],
+    w:[['has been graded','老師不是被改的，是去改考卷的人 → has graded。'],
+       ['is graded','老師是去做的人 → 主動；已經做完 → has graded。']] },
+  { s:'The exam papers ___ , so we will get our scores tomorrow.', zh:'考卷已經改好了，所以我們明天會拿到成績。', tag:'HPP',
+    a:['have been graded','考卷是「被」改的 → be ＋ p.p.；已經 → have been graded。'],
+    w:[['have graded','考卷不會自己改東西，而且後面沒有受詞 → 被動 have been graded。'],
+       ['are grading','考卷不會「正在改」別人 → have been graded。']] },
+  { s:'Dozens of people ___ in the accident.', zh:'幾十個人在這場意外中受傷。', tag:'HPP',
+    a:['were injured','人是「被」弄傷的 → be ＋ p.p.；意外已經過去 → were。'],
+    w:[['injured','injure 是「弄傷別人」。人是被弄傷的 → were injured。'],
+       ['have injured','have injured 是「他們去弄傷別人」，意思不對 → were injured。']] },
+  { s:'Many endangered species ___ by illegal hunting.', zh:'很多瀕危物種一直受到非法獵捕的威脅。', tag:'HPP',
+    a:['have been threatened','物種是「被」威脅的 → be ＋ p.p.；一直到現在 → have been。'],
+    w:[['have threatened','看到 by illegal hunting → 物種是被威脅，不是去威脅別人 → have been threatened。'],
+       ['are threatening','物種不是去威脅的一方 → have been threatened。']] },
+  { s:'She ___ for this company since she graduated.', zh:'她畢業後就一直在這家公司工作。', tag:'HPP',
+    a:['has worked','她自己在工作；since 一路到現在 → has ＋ p.p.。'],
+    w:[['has been worked','work 後面不接受詞，沒有「被工作」這種事 → has worked。'],
+       ['is worked','沒有「被工作」；看到 since → has worked。']] },
+  { s:'The accident ___ last night.', zh:'意外發生在昨晚。', tag:'HPP',
+    a:['happened','happen 是事情自己發生，不能被動；last night → 過去式。'],
+    w:[['was happened','happen 後面不接受詞，不能用被動 → happened。'],
+       ['has happened','看到 last night（明確的過去）→ 不能用現在完成式 → happened。']] },
+  { s:'The problem ___ to the manager, but nothing has been done yet.', zh:'這個問題已經反映給經理了，但還沒有任何處理。', tag:'HPP',
+    a:['has been reported','問題是「被」回報的 → be ＋ p.p.；已經 → has been。'],
+    w:[['has reported','has reported 是「問題去回報別人」，意思不對 → has been reported。'],
+       ['reported','問題不會自己回報 → 被動；後面 nothing has been done yet 是完成式 → has been reported。']] },
+  { s:'The students ___ the project before the deadline.', zh:'學生們在截止日前就已經完成專題了。', tag:'HPP',
+    a:['had finished','學生是去做的人，後面有受詞 the project → 主動；在截止日前就做完 → had ＋ p.p.。'],
+    w:[['had been finished','學生不是被完成的，是去完成專題的人 → had finished。'],
+       ['were finished','學生是去做的人，後面有受詞 → 主動 had finished。']] },
+  { s:'My phone ___ , so I can’t call you right now.', zh:'我的手機被偷了，所以我現在沒辦法打給你。', tag:'HPP',
+    a:['has been stolen','手機是「被」偷的 → be ＋ p.p.；影響到現在 → has been。'],
+    w:[['has stolen','has stolen 是「手機去偷東西」→ 手機是被偷 → has been stolen。'],
+       ['is stealing','手機不會「正在偷」→ has been stolen。']] },
+  { s:'The concert ___ because of the heavy rain.', zh:'演唱會因為大雨被取消了。', tag:'HPP',
+    a:['was canceled','演唱會是「被」取消的 → be ＋ p.p.。'],
+    w:[['canceled','演唱會不會自己去取消別的東西 → was canceled。'],
+       ['has canceled','has canceled 是「演唱會去取消」，意思不對 → was canceled。']] },
+
+  /* ---------- 第二批：被動（各種時態） ---------- */
+  { s:'This medicine should ___ after meals.', zh:'這個藥應該飯後吃。', tag:'PASS',
+    a:['be taken','藥是「被」吃的 → should ＋ be ＋ p.p.。'],
+    w:[['take','藥不會自己吃東西，是被吃 → should be taken。'],
+       ['be taking','be taking 是「正在吃」，藥不會吃 → be taken。']] },
+  { s:'A new shopping mall ___ near my house right now.', zh:'我家附近現在正在蓋新的購物中心。', tag:'PASS',
+    a:['is being built','購物中心是「被」蓋；right now 正在 → is being ＋ p.p.。'],
+    w:[['is building','購物中心不會自己蓋房子，是正在被蓋 → is being built。'],
+       ['has built','購物中心是被蓋；right now 正在 → is being built。']] },
+  { s:'The suspect ___ by the police yesterday.', zh:'嫌犯昨天被警方逮捕。', tag:'PASS',
+    a:['was arrested','嫌犯是「被」抓的；yesterday → was ＋ p.p.。'],
+    w:[['arrested','看到 by the police → 嫌犯是被抓 → was arrested。'],
+       ['has been arrested','看到 yesterday（明確的過去）→ was arrested。']] },
+  { s:'All the applications must ___ by the end of this month.', zh:'所有申請都必須在月底前送出。', tag:'PASS',
+    a:['be submitted','申請表是「被」交的 → must ＋ be ＋ p.p.。'],
+    w:[['submit','申請表不會自己交，是被交 → must be submitted。'],
+       ['submitted','must 後面要接原形；被動要補 be → be submitted。']] },
+  { s:'The building ___ in 1920 and is now a museum.', zh:'這棟建築蓋於 1920 年，現在是博物館。', tag:'PASS',
+    a:['was built','建築是「被」蓋的；in 1920 → was ＋ p.p.。'],
+    w:[['built','建築不會自己蓋房子 → was built。'],
+       ['has been built','看到 in 1920（明確的過去）→ was built。']] },
+  { s:'Plastic bags ___ for free in many supermarkets in Taiwan.', zh:'台灣很多超市已經不再免費提供塑膠袋。', tag:'PASS',
+    a:['are no longer provided','塑膠袋是「被」提供的 → be ＋ p.p.。'],
+    w:[['no longer provide','塑膠袋不會去提供東西，是被提供 → are no longer provided。'],
+       ['are no longer providing','塑膠袋不會「正在提供」→ are no longer provided。']] },
+  { s:'The students were made ___ the classroom after school.', zh:'學生放學後被要求打掃教室。', tag:'PASS',
+    a:['to clean','make 主動時接原形，變成被動 be made 後要把 to 補回來 → to clean。'],
+    w:[['clean','主動是 make them clean；變成被動 were made → 要用 to clean。'],
+       ['cleaning','be made 後面接 to V → to clean。']] },
+  { s:'The winner of the contest will ___ next Monday.', zh:'比賽得主下週一會公布。', tag:'PASS',
+    a:['be announced','得主是「被」公布的 → will ＋ be ＋ p.p.。'],
+    w:[['announce','得主不是去公布的人，是被公布 → will be announced。'],
+       ['announced','will 後面要接原形；被動要補 be → be announced。']] },
+
+  /* ---------- 第二批：倒裝 ---------- */
+  { s:'Seldom ___ late for school.', zh:'他很少上學遲到。', tag:'INV',
+    a:['is he','原句是 he is late；Seldom 放句首 → 把 is 搬到前面。'],
+    w:[['he is','看到 Seldom 放句首 → 要倒裝 → is he。'],
+       ['does he','late 是形容詞，原句用的是 be → 搬 is，不是 does。']] },
+  { s:'Only after the teacher explained it again ___ the grammar rule.', zh:'老師又解釋一次之後，我才懂這個文法規則。', tag:'INV',
+    a:['did I understand','Only after… 放句首 → 倒裝；did 搬到前面，後面回原形。'],
+    w:[['I understood','看到 Only after… 放句首 → 要倒裝 → did I understand。'],
+       ['did I understood','did 已經扛了過去，後面回原形 → did I understand。']] },
+  { s:'Hardly ___ home when it started to rain.', zh:'我一到家就開始下雨了。', tag:'INV',
+    a:['had I arrived','Hardly 放句首 → 倒裝；到家比下雨早一點 → had I ＋ p.p.。'],
+    w:[['I had arrived','看到 Hardly 放句首 → 要倒裝 → had I arrived。'],
+       ['had I arrive','had 後面要 p.p. → had I arrived。']] },
+  { s:'Not only ___ English, but she also speaks Japanese.', zh:'她不只會說英文，還會說日文。', tag:'INV',
+    a:['does she speak','Not only 放句首 → 倒裝；does 搬到前面，後面回原形。'],
+    w:[['she speaks','看到 Not only 放句首 → 要倒裝 → does she speak。'],
+       ['does she speaks','does 已經扛了 s，後面回原形 → does she speak。']] },
+  { s:'Little ___ that his friends were planning a surprise party.', zh:'他完全不知道朋友們在計畫驚喜派對。', tag:'INV',
+    a:['did he know','Little 放句首（意思是「幾乎不」）→ 倒裝 → did he know。'],
+    w:[['he knew','看到 Little 放句首 → 要倒裝 → did he know。'],
+       ['did he knew','did 已經扛了過去，後面回原形 → did he know。']] },
+  { s:'Under no circumstances ___ your password with others.', zh:'無論如何都不應該把密碼告訴別人。', tag:'INV',
+    a:['should you share','Under no circumstances 放句首 → 倒裝；should 搬到前面，後面接原形。'],
+    w:[['you should share','看到 Under no circumstances 放句首 → 要倒裝 → should you share。'],
+       ['should you sharing','should 後面接原形 → should you share。']] },
+  { s:'Rarely ___ such a talented student.', zh:'我很少遇到這麼有天分的學生。', tag:'INV',
+    a:['have I met','Rarely 放句首 → 倒裝；have 搬到前面，後面接 p.p.。'],
+    w:[['I have met','看到 Rarely 放句首 → 要倒裝 → have I met。'],
+       ['have I meet','have 後面要 p.p. → have I met。']] },
+  { s:'So difficult ___ that few students could finish it.', zh:'這份考卷難到幾乎沒有學生寫得完。', tag:'INV',
+    a:['was the exam','So ＋形容詞放句首 → 倒裝；原句是 the exam was difficult → 搬 was。'],
+    w:[['the exam was','看到 So difficult 放句首 → 要倒裝 → was the exam。'],
+       ['did the exam','difficult 是形容詞，原句用 be → 搬 was，不是 did。']] },
+
+  /* ---------- 拆子句找主要動詞 ---------- */
+  { s:'The scientist who discovered that the virus can survive in cold water ___ a prize last year.', zh:'發現這種病毒能在冷水中存活的那位科學家，去年得了獎。', tag:'CL',
+    a:['won','框掉 who… cold water → 骨架是 The scientist ___ a prize last year → 要過去式的真動詞。'],
+    w:[['winning','框掉 who 子句後，骨架還缺真正的動詞。V-ing 坐不上去 → won。'],
+       ['to win','to V 不能當主要動詞；last year → won。']] },
+  { s:'What the students need most before the exam ___ enough sleep.', zh:'考試前學生最需要的是充足的睡眠。', tag:'CL',
+    a:['is','what 子句整個當主詞，算「一件事」→ is。'],
+    w:[['are','主詞是 what the students need most 這整個子句，不是 students → is。'],
+       ['being','骨架缺真正的動詞。V-ing 坐不上去 → is。']] },
+  { s:'The reason why so many young people are reluctant to get married ___ complicated.', zh:'那麼多年輕人不願意結婚的原因很複雜。', tag:'CL',
+    a:['is','框掉 why… married → 骨架是 The reason ___ complicated → 單數 → is。'],
+    w:[['are','are 是 why 子句裡 young people 的動詞。骨架的主詞是 the reason → is。'],
+       ['being','骨架缺真正的動詞。V-ing 坐不上去 → is。']] },
+  { s:'Whether the plan will succeed ___ on how much support it receives.', zh:'這個計畫能不能成功，取決於它得到多少支持。', tag:'CL',
+    a:['depends','whether 子句整個當主詞，算「一件事」→ depends。'],
+    w:[['depend','主詞是 whether the plan will succeed 這一件事 → 單數 → depends。'],
+       ['depending','骨架缺真正的動詞。V-ing 坐不上去 → depends。']] },
+  { s:'The documents that you asked me to send to the manager ___ on your desk.', zh:'你叫我寄給經理的文件在你桌上。', tag:'CL',
+    a:['are','框掉 that… manager → 骨架是 The documents ___ on your desk → 複數 → are。'],
+    w:[['is','緊鄰的 the manager 是子句裡的，骨架主詞是 the documents → are。'],
+       ['being','骨架缺真正的動詞。V-ing 坐不上去 → are。']] },
+  { s:'People who constantly compare themselves with others ___ to feel anxious.', zh:'經常拿自己跟別人比較的人，容易感到焦慮。', tag:'CL',
+    a:['tend','框掉 who… others → 骨架是 People ___ to feel anxious → 複數 → tend。'],
+    w:[['tends','others 是子句裡的受詞，骨架主詞是 people（複數）→ tend。'],
+       ['tending','骨架缺真正的動詞。V-ing 坐不上去 → tend。']] },
+  { s:'The fact that he apologized several times ___ his teacher’s mind.', zh:'他道歉好幾次這件事，並沒有改變老師的想法。', tag:'CL',
+    a:['didn’t change','框掉 that… times → 骨架是 The fact ___ his teacher’s mind → 要真正的動詞。'],
+    w:[['not changing','框掉 that 子句後，骨架還缺真正的動詞。V-ing 坐不上去 → didn’t change。'],
+       ['didn’t changed','did 已經扛了過去，後面回原形 → didn’t change。']] },
+  { s:'Anyone who has ever lived abroad ___ how hard it is to adapt to a new culture.', zh:'在國外住過的人都知道，適應新文化有多難。', tag:'CL',
+    a:['knows','框掉 who… abroad → 骨架是 Anyone ___ how hard… → 單數 → knows。'],
+    w:[['know','骨架主詞是 anyone → 單數 → knows。'],
+       ['knowing','骨架缺真正的動詞。V-ing 坐不上去 → knows。']] },
+  { s:'The house where my grandparents used to live ___ last year.', zh:'我祖父母以前住的房子，去年被整修過了。', tag:'CL',
+    a:['was renovated','框掉 where… live → 骨架是 The house ___ last year；房子是被整修 → was renovated。'],
+    w:[['renovated','房子不會自己去整修別的東西，是被整修 → was renovated。'],
+       ['renovating','框掉 where 子句後，骨架還缺真正的動詞 → was renovated。']] },
+  { s:'Most of the money that was donated after the earthquake ___ used to rebuild schools.', zh:'地震後捐出的錢，大部分被用來重建學校。', tag:'CL',
+    a:['was','框掉 that… earthquake → 骨架是 Most of the money ___ used；most of 看後面的 money（不可數）→ was。'],
+    w:[['were','most of 後面是 money（不可數）→ 單數 → was。'],
+       ['being','骨架缺真正的動詞。V-ing 坐不上去 → was。']] },
+  { s:'Although the restaurant is expensive, it ___ crowded every weekend.', zh:'雖然那家餐廳很貴，每個週末還是擠滿人。', tag:'CL',
+    a:['is','前面已經有 although 帶一個子句，後面只要一個完整句子 → it is crowded。'],
+    w:[['but is','although 和 but 不能一起用，兩個句子只能一個連接詞 → is。'],
+       ['being','逗號後面的句子需要真正的動詞 → is。']] },
+  { s:'Because the bus was late, ___ the first class.', zh:'因為公車誤點，我錯過了第一堂課。', tag:'CL',
+    a:['I missed','because 帶一個子句，逗號後面要一個完整句子：主詞＋動詞。'],
+    w:[['so I missed','because 和 so 不能一起用，兩個句子只能一個連接詞 → I missed。'],
+       ['missing','逗號後面要完整句子（主詞＋動詞）→ I missed。']] },
+  { s:'The students, most of whom ___ from rural areas, quickly adapted to city life.', zh:'這些學生大多來自鄉下，很快就適應了都市生活。', tag:'CL',
+    a:['come','most of whom 引導的子句也要自己的動詞；whom 指 students（複數）→ come。'],
+    w:[['comes','most of whom 指的是很多學生 → 複數 → come。'],
+       ['coming','逗號中間的 most of whom… 是子句，要有真正的動詞 → come。']] },
+  { s:'It is said that the new policy ___ more harm than good.', zh:'據說這項新政策弊大於利。', tag:'CL',
+    a:['does','that 子句裡的主詞是 the new policy（單數）→ does。'],
+    w:[['do','that 子句的主詞是 the new policy → 單數 → does。'],
+       ['doing','that 子句也要自己的真動詞。V-ing 坐不上去 → does。']] },
+
+  /* ---------- 第三批：who 子句 vs 分詞（成對練） ---------- */
+  { s:'Students who ___ to join the summer camp should register online.', zh:'想參加夏令營的學生應該上網報名。', tag:'ING',
+    a:['wish','who 後面要有自己的動詞；students 複數 → 不加 es。'],
+    w:[['wishing','看到 who → 後面要真正的動詞。V-ing 坐不上去 → wish。'],
+       ['wishes','往前找 who 在講誰 → students（複數）→ wish。']] },
+  { s:'Students ___ to join the summer camp should register online.', zh:'想參加夏令營的學生應該上網報名。', tag:'ING',
+    a:['wishing','沒有 who，動詞位子是 should register → wishing… 只是在形容 students。'],
+    w:[['wish','動詞位子已經是 should register 了，wish 再坐上去就兩個動詞 → wishing（或 who wish）。'],
+       ['who wishing','有 who 就要給它真正的動詞（who wish）；不用 who 就直接 wishing。兩個混在一起不行。']] },
+  { s:'The man who ___ the company last year is now in charge of the project.', zh:'去年加入公司的那個人，現在負責這個計畫。', tag:'CL',
+    a:['joined','who 子句自己要有動詞；last year → 過去式。主要動詞是後面的 is。'],
+    w:[['joining','看到 who → 後面要真正的動詞。V-ing 坐不上去 → joined。'],
+       ['has joined','看到 last year（明確的過去）→ 不能用現在完成式 → joined。']] },
+  { s:'The problems ___ by the new policy are more serious than expected.', zh:'新政策造成的問題比預期的嚴重。', tag:'PART',
+    a:['caused','問題是「被」政策造成的 → p.p.；動詞位子是後面的 are。'],
+    w:[['causing','看到 by the new policy → 問題是被造成的 → caused。causing 變成問題去造成別的東西。'],
+       ['are caused','動詞位子已經是後面的 are → caused（或 that are caused）。']] },
+  { s:'Anyone ___ cheating during the exam will get a zero.', zh:'考試作弊被抓到的人，會得零分。', tag:'PART',
+    a:['caught','是「被」抓到 → p.p.；動詞位子是 will get。'],
+    w:[['catching','作弊的人是被抓，不是去抓人 → caught。'],
+       ['is caught','動詞位子已經是 will get → caught（或 who is caught）。']] },
+  { s:'Most people ___ in this neighborhood have lived here for decades.', zh:'住在這一帶的人，大多已經住了幾十年。', tag:'ING',
+    a:['living','動詞位子是 have lived，living in this neighborhood 在形容 people。'],
+    w:[['live','動詞位子已經是 have lived 了 → living（或 who live）。'],
+       ['are living','一個子句只能一個動詞位子 → living。']] },
+  { s:'The students who were chosen to represent our school ___ very nervous.', zh:'被選出來代表學校的學生們非常緊張。', tag:'CL',
+    a:['felt','框掉 who… school → 骨架是 The students ___ very nervous → 要真正的動詞。'],
+    w:[['feeling','框掉 who 子句後，骨架還缺真正的動詞。V-ing 坐不上去 → felt。'],
+       ['were felt','學生是自己覺得緊張，不是「被感覺」→ felt。']] },
+
+  /* ---------- 第三批：拆子句，陷阱是 V-ing ---------- */
+  { s:'The documents that you asked me to send to the manager ___ on the desk.', zh:'你叫我寄給經理的文件就放在桌上。', tag:'CL',
+    a:['are lying','框掉 that… manager → 骨架是 The documents ___ on the desk → 要真正的動詞；複數 → are lying。'],
+    w:[['lying','框掉 that 子句後，骨架還缺真正的動詞。V-ing 要 be 扶著 → are lying。'],
+       ['is lying','the manager 是子句裡的，骨架主詞是 the documents → are lying。']] },
+  { s:'What surprised me most ___ that nobody complained.', zh:'最讓我驚訝的是，沒有人抱怨。', tag:'CL',
+    a:['was','surprised 是 what 子句自己的動詞；整個 what 子句當主詞，還缺主要動詞 → was。'],
+    w:[['being','框掉 what… most → 骨架缺真正的動詞。V-ing 坐不上去 → was。'],
+       ['were','what 子句當主詞算「一件事」→ was。']] },
+  { s:'The idea that students should wear uniforms every day ___ by many parents.', zh:'學生每天都該穿制服這個想法，得到很多家長支持。', tag:'CL',
+    a:['is supported','框掉 that… every day → 骨架是 The idea ___ by many parents；想法是被支持 → is supported。'],
+    w:[['supporting','骨架缺真正的動詞；而且想法是被支持 → is supported。'],
+       ['supports','看到 by many parents → 想法是被支持的一方 → is supported。']] },
+  { s:'Whoever ___ the most creative design will receive a scholarship.', zh:'交出最有創意設計的人，會獲得獎學金。', tag:'CL',
+    a:['submits','whoever 子句自己要有動詞；whoever 算單數 → +s。主要動詞是 will receive。'],
+    w:[['submitting','看到 whoever → 後面要真正的動詞。V-ing 坐不上去 → submits。'],
+       ['to submit','to V 不能當 whoever 子句的動詞 → submits。']] },
+  { s:'I can’t remember where I ___ my keys.', zh:'我想不起來我把鑰匙放哪了。', tag:'CL',
+    a:['put','where 子句要有自己的主詞＋動詞：I put。'],
+    w:[['putting','where 後面要完整的「主詞＋動詞」。V-ing 坐不上去 → put。'],
+       ['to put','where I to put 不是句子。where 後面要真正的動詞 → put。']] },
+  { s:'Do you know why the meeting ___ ?', zh:'你知道會議為什麼被取消嗎？', tag:'CL',
+    a:['was canceled','間接問句不倒裝：主詞在前、動詞在後；會議是被取消 → was canceled。'],
+    w:[['was it canceled','放在 Do you know 後面的 why 子句不倒裝，而且主詞已經是 the meeting → was canceled。'],
+       ['canceling','why 子句要有真正的動詞；而且會議是被取消 → was canceled。']] },
+
+  /* ---------- 第三批：兩個句子要一個連接詞、沒主詞就用分詞 ---------- */
+  { s:'The typhoon was approaching, ___ all classes were suspended.', zh:'颱風逼近，所以全部停課。', tag:'CONJ',
+    a:['so','兩個完整句子要一個連接詞；後面是結果 → so。'],
+    w:[['therefore','therefore 是副詞，不能只用逗號連兩個句子（要寫成 ; therefore,）→ so。'],
+       ['because','because 後面要接原因。停課是結果 → so。']] },
+  { s:'He studied hard for months; ___, he failed the exam.', zh:'他苦讀了好幾個月，然而還是沒考過。', tag:'CONJ',
+    a:['however','分號後面接副詞 however，再加逗號。'],
+    w:[['but','but 前面不放分號、後面不加逗號。這個位置要 however。'],
+       ['although','although 要直接接子句，不接逗號；而且它放在「雖然」那一句 → however。']] },
+  { s:'Many students stay up late, ___ is bad for their health.', zh:'很多學生熬夜，這對健康不好。', tag:'CONJ',
+    a:['which','逗號後面補充說明前面那件事 → which，它同時當連接詞。'],
+    w:[['it','逗號不能直接連兩個完整句子 → which。'],
+       ['that','逗號後面的補充說明不能用 that → which。']] },
+  { s:'My sister, ___ lives in Canada, is coming home next month.', zh:'我姊住在加拿大，她下個月要回家。', tag:'CONJ',
+    a:['who','逗號中間補充說明人 → who。主要動詞是 is coming。'],
+    w:[['that','逗號後面的補充說明不能用 that → who。'],
+       ['she','放 she 會變成兩個句子又沒有連接詞 → who。']] },
+  { s:'There were many people at the party, ___ I didn’t know.', zh:'派對上有很多人，大部分我都不認識。', tag:'CONJ',
+    a:['most of whom','逗號連兩個句子要連接詞 → whom 兼當連接詞；介系詞 of 後面用 whom。'],
+    w:[['most of them','them 不是連接詞，這樣兩個句子只用逗號連 → most of whom。'],
+       ['most of who','介系詞 of 後面要用 whom → most of whom。']] },
+  { s:'___ he was exhausted, he kept working.', zh:'雖然他累壞了，還是繼續工作。', tag:'CONJ',
+    a:['Although','後面是完整句子 he was exhausted → 要連接詞 although。'],
+    w:[['Despite','despite 是介系詞，後面接名詞或 V-ing，不能接完整句子 → Although。'],
+       ['But','but 不能放在第一個句子前面 → Although。']] },
+  { s:'___ the door, she found a package on the floor.', zh:'她一打開門，就發現地上有個包裹。', tag:'PART',
+    a:['Opening','逗號前沒有主詞也沒有連接詞；她自己開門 → V-ing。'],
+    w:[['She opened','逗號不能直接連兩個完整句子 → Opening（或 When she opened）。'],
+       ['Opened','她是自己去開門，不是被開 → Opening。']] },
+  { s:'___ by the loud noise, the baby started to cry.', zh:'被巨大的聲響嚇到，寶寶開始哭。', tag:'PART',
+    a:['Frightened','寶寶是「被」嚇到 → p.p.；逗號前沒有主詞和連接詞 → 分詞。'],
+    w:[['Frightening','看到 by the loud noise → 寶寶是被嚇到 → Frightened。'],
+       ['The baby was frightened','逗號前後沒有連接詞，不能兩個完整句子 → Frightened。']] },
+  { s:'The bus broke down on the highway, ___ many passengers late for work.', zh:'公車在高速公路上拋錨，害很多乘客上班遲到。', tag:'PART',
+    a:['making','動詞位子已經是 broke down，逗號後沒有連接詞 → V-ing 說明造成的結果。'],
+    w:[['made','動詞位子已經是 broke down 了，又沒有連接詞 → making。'],
+       ['it made','逗號不能直接連兩個完整句子 → making（或 , which made）。']] },
+  { s:'She sat by the window, ___ out at the rain.', zh:'她坐在窗邊，望著外面的雨。', tag:'PART',
+    a:['looking','動詞位子給了 sat，逗號後沒有主詞和連接詞 → V-ing。'],
+    w:[['looked','動詞位子已經是 sat 了，又沒有 and 之類的連接詞 → looking。'],
+       ['she looked','逗號不能直接連兩個完整句子 → looking。']] },
+
+  /* ---------- 第三批：沒有 already 的完成式線索 ---------- */
+  { s:'This is the first time I ___ snow.', zh:'這是我第一次看到雪。', tag:'TL',
+    a:['have seen','This is the first time… → 後面用現在完成式。'],
+    w:[['saw','看到 This is the first time → 後面接 have ＋ p.p. → have seen。'],
+       ['see','看到 This is the first time → 後面接 have ＋ p.p. → have seen。']] },
+  { s:'Over the past decade, the number of foreign workers in Taiwan ___ significantly.', zh:'過去十年來，在台灣的外籍移工人數大幅增加。', tag:'TL',
+    a:['has increased','over the past decade 是「過去十年一路到現在」→ 完成式；the number 單數 → has。'],
+    w:[['increases','看到 over the past decade → 從過去一路到現在 → has increased。'],
+       ['have increased','主詞是 the number（單數），不是 workers → has。']] },
+  { s:'In recent years, more and more people ___ interested in online shopping.', zh:'近幾年來，越來越多人對網購有興趣。', tag:'TL',
+    a:['have become','in recent years（近幾年來）→ 完成式；people 複數 → have。'],
+    w:[['become','看到 in recent years → 一路到現在 → have become。'],
+       ['has become','主詞 people 是複數 → have become。']] },
+  { s:'So far, only three students ___ the application form.', zh:'到目前為止，只有三個學生交了申請表。', tag:'TL',
+    a:['have handed in','so far（到目前為止）→ 完成式；學生是去交的人 → 主動。'],
+    w:[['hand in','看到 so far → 到現在為止 → have handed in。'],
+       ['have been handed in','學生是去交的人，後面有受詞 the form → 主動 have handed in。']] },
+  { s:'By the end of next year, she ___ in this company for ten years.', zh:'到明年年底，她就在這家公司工作滿十年了。', tag:'TL',
+    a:['will have worked','by ＋未來的時間點，到那時「已經」做滿 → will have ＋ p.p.。'],
+    w:[['has worked','看到 by the end of next year → 終點在未來 → will have worked。'],
+       ['will be worked','work 不能被動 → will have worked。']] },
+  { s:'I ___ him since we were in elementary school, so I know he wouldn’t lie.', zh:'我從國小就認識他了，所以我知道他不會說謊。', tag:'TL',
+    a:['have known','since 從那時一路到現在 → have ＋ p.p.。'],
+    w:[['know','看到 since → 從過去一路到現在 → have known。'],
+       ['knew','看到 since 且現在還認識 → have known。']] },
+  { s:'It has been five years since I last ___ my grandparents.', zh:'我上次見到祖父母已經是五年前的事了。', tag:'TL',
+    a:['saw','since 後面放「那個時間點」→ 過去式。完成式已經在前面 It has been。'],
+    w:[['have seen','since 後面是過去的那一次 → saw。'],
+       ['see','since 後面是過去的時間點 → saw。']] },
+  { s:'When I arrived at the station, I realized that I ___ my ticket at home.', zh:'到了車站，我才發現車票忘在家裡了。', tag:'TL',
+    a:['had left','「忘在家裡」比「到車站、發現」更早 → had ＋ p.p.。'],
+    w:[['have left','arrived、realized 都是過去，比它們更早的事 → had left。'],
+       ['was left','我不是被留下的，是我把票留在家 → had left。']] },
+  { s:'Since the new MRT line opened, traffic in the city ___ a lot.', zh:'自從新捷運線開通後，市區交通改善了很多。', tag:'TL',
+    a:['has improved','since 子句是起點，主要句子講「從那時到現在」→ has ＋ p.p.。'],
+    w:[['improves','看到 since → 從過去一路到現在 → has improved。'],
+       ['improving','主要句子缺真正的動詞。V-ing 坐不上去 → has improved。']] }
+];
+
+/* ---------- constants ---------- */
+const BALL_R = 0.115;
+const FLOOR_Y = 0.78, SLOPE = 0.11;
+const HALF_W = 0.62, FRONT_Z = 0.45, BACK_Z = -2.64, ROOF_Y = 3.1;
+const BOARD = { z:-2.55, halfW:0.45, y0:1.85, y1:2.55 };
+const RIM = { R:0.21, tube:0.014, y:1.95, z:-2.32 };
+const SPAWN = new THREE.Vector3(0, 0.98, 0.22);
+const TRAY_X = [-0.36, 0, 0.36];
+const PILL = ['#39d4e8', '#ff8fb6', '#ffc935'];
+const ANGLE = 55 * Math.PI / 180;
+const V_MIN = 4.4, V_RANGE = 3.4;
+const SWEET = [0.42, 0.57];
+const GAME_TIME = 120;
+/* 等級：need = 這一輪累積答對幾題；amp／spd = 籃框左右移動的幅度與速度 */
+const LEVELS = [
+  { need:0,  name:'板凳球員', amp:0,    spd:0 },
+  { need:3,  name:'先發球員', amp:0,    spd:0 },
+  { need:6,  name:'得分後衛', amp:0.14, spd:1.0 },
+  { need:10, name:'王牌射手', amp:0.22, spd:1.25 },
+  { need:15, name:'文法 MVP', amp:0.28, spd:1.5 }
+];
+const levelOf = n => { let l = 0; LEVELS.forEach((L, i) => { if (n >= L.need) l = i; }); return l; };
+
+const G = { state:'idle', score:0, time:GAME_TIME, combo:0, right:0, wrong:0, shots:0, phase:1, lv:0, amp:0, hx:0, mt:0, best:0,
+  q:null, opts:[], qn:0, deck:[], pending:null, busy:false, sel:-1, mistakes:[], history:[] };
+try { G.best = +localStorage.getItem('hoops-grammar-best') || 0; } catch(e){}
+window.hoop = { questions:QUESTIONS, concepts:CONCEPTS, get state(){ return { ...G }; } };
+
+/* ---------- renderer ---------- */
+const stage = $('#stage');
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+stage.appendChild(renderer.domElement);
+const cv = renderer.domElement;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x140e30);
+scene.fog = new THREE.Fog(0x140e30, 6, 14);
+const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 60);
+const LOOK = new THREE.Vector3(0, 1.66, -2.2);
+function resize(){
+  const w = stage.clientWidth, h = stage.clientHeight, a = w / h;
+  renderer.setSize(w, h, false);
+  camera.aspect = a;
+  // frame the tray balls (with labels) at the bottom and the scoreboard at the top, on any screen shape
+  const EY = 1.6; let Z = 1.25, v = 1, pitch = 0;
+  for (; Z < 4; Z += 0.05){
+    const lo = Math.atan2(0.84 - EY, Z - 0.22), hi = Math.atan2(3.06 - EY, Z + 2.64);
+    v = (hi - lo) * 1.05; pitch = (hi + lo) / 2;
+    if (2*Math.atan(Math.tan(v/2)*a) >= 2*Math.atan(0.56/(Z - 0.22))) break;
+  }
+  camera.fov = v * 180 / Math.PI;
+  camera.position.set(0, EY, Z);
+  camera.lookAt(0, EY + Math.tan(pitch)*10, Z - 10); camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+/* keep the 3D view below the question card so nothing covers the hoop */
+function syncHud(){
+  const r = $('.top').getBoundingClientRect(), ar = $('#app').getBoundingClientRect();
+  document.documentElement.style.setProperty('--hud', Math.ceil(r.bottom - ar.top + 8) + 'px');
+  resize();
+}
+if (window.ResizeObserver) new ResizeObserver(syncHud).observe($('.top'));
+window.addEventListener('resize', syncHud);
+
+/* ---------- textures ---------- */
+function canvasTex(w, h, draw){
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const x = c.getContext('2d'); draw(x, w, h);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
+  t.userData = { canvas:c, ctx:x }; return t;
+}
+/* basketball: seams are computed on the real sphere, then unwrapped,
+   so the lines stay smooth and evenly thick instead of bending at the poles.
+   Layout of a real ball: two great circles crossing at right angles,
+   plus one curved seam on each side (a small circle around ±x). */
+const BALL_SEAM = { half:0.026, curveR:0.92 };
+function ballSeamDist(px, py, pz){
+  const d1 = Math.abs(Math.asin(Math.max(-1, Math.min(1, px))));          // great circle x = 0
+  const d2 = Math.abs(Math.asin(Math.max(-1, Math.min(1, py))));          // great circle y = 0
+  // curved seams around ±x: radius bends with the angle so they read as “( )” like a real ball
+  const c2 = (py*py - pz*pz)/(py*py + pz*pz + 1e-9), rr = BALL_SEAM.curveR - 0.24*c2;
+  const d3 = Math.abs(Math.acos(Math.max(-1, Math.min(1, Math.abs(px)))) - rr);
+  return Math.min(d1, d2, d3);
+}
+function makeBallTextures(){
+  const W = 1024, H = 512;
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const b = document.createElement('canvas'); b.width = W; b.height = H;
+  const x = c.getContext('2d'), y = b.getContext('2d');
+  const img = x.createImageData(W, H), bmp = y.createImageData(W, H);
+  const d = img.data, e = bmp.data;
+  const hash = (i, j) => { const s = Math.sin(i*127.1 + j*311.7)*43758.5453; return s - Math.floor(s); };
+  const smooth = (a, b, t) => { t = Math.max(0, Math.min(1, (t - a)/(b - a))); return t*t*(3 - 2*t); };
+  for (let j=0; j<H; j++){
+    const th = (j + 0.5)/H*Math.PI, st = Math.sin(th), ct = Math.cos(th);
+    for (let i=0; i<W; i++){
+      const ph = (i + 0.5)/W*Math.PI*2;
+      const px = -Math.cos(ph)*st, py = ct, pz = Math.sin(ph)*st;
+      const dist = ballSeamDist(px, py, pz);
+      const aa = 0.004 + 0.004*(1 - st);                 // a little softer near the texture poles
+      const line = 1 - smooth(BALL_SEAM.half - aa, BALL_SEAM.half + aa, dist);
+      const groove = 1 - smooth(BALL_SEAM.half, BALL_SEAM.half*2.6, dist);  // soft shadow beside the seam
+      // pebbled leather: two scales of noise
+      const n1 = hash(Math.floor(i/2), Math.floor(j/2)), n2 = hash(Math.floor(i/7), Math.floor(j/7));
+      const peb = (n1 - 0.5)*0.10 + (n2 - 0.5)*0.06;
+      let r = 222, g = 96, bl = 34;                     // leather orange
+      const k = 1 + peb - groove*0.18;
+      r *= k; g *= k; bl *= k;
+      r = r*(1 - line) + 28*line; g = g*(1 - line) + 16*line; bl = bl*(1 - line) + 12*line;
+      const o = (j*W + i)*4;
+      d[o] = Math.max(0, Math.min(255, r)); d[o+1] = Math.max(0, Math.min(255, g)); d[o+2] = Math.max(0, Math.min(255, bl)); d[o+3] = 255;
+      const hgt = 200 - line*150 - groove*40;            // seams sit lower than the leather
+      e[o] = e[o+1] = e[o+2] = hgt; e[o+3] = 255;
+    }
+  }
+  x.putImageData(img, 0, 0); y.putImageData(bmp, 0, 0);
+  const map = new THREE.CanvasTexture(c); map.encoding = THREE.sRGBEncoding; map.anisotropy = 8;
+  const bump = new THREE.CanvasTexture(b); bump.anisotropy = 8;
+  return { map, bump };
+}
+const BALL_TEX = makeBallTextures();
+const ballTex = BALL_TEX.map;
+const floorTex = canvasTex(256, 512, (x,w,h) => {
+  x.fillStyle = '#2b1f52'; x.fillRect(0,0,w,h);
+  x.strokeStyle = 'rgba(255,255,255,.07)'; x.lineWidth = 2;
+  for (let y=0;y<h;y+=16){ x.beginPath(); x.moveTo(0,y); x.lineTo(w,y); x.stroke(); }
+  x.fillStyle = 'rgba(255,201,53,.45)';
+  for (let y=50;y<h;y+=150){ x.beginPath(); x.moveTo(w/2-56,y); x.lineTo(w/2,y+42); x.lineTo(w/2+56,y); x.lineTo(w/2+56,y+24); x.lineTo(w/2,y+66); x.lineTo(w/2-56,y+24); x.closePath(); x.fill(); }
+});
+const boardTex = canvasTex(512, 384, (x,w,h) => {
+  x.fillStyle = 'rgba(236,246,255,.92)'; x.fillRect(0,0,w,h);
+  x.strokeStyle = '#c8232c'; x.lineWidth = 16; x.strokeRect(10,10,w-20,h-20);
+  x.lineWidth = 10; x.strokeRect(w/2-92, h-196, 184, 136);
+});
+const backTex = canvasTex(256, 512, (x,w,h) => {
+  x.fillStyle = '#1b1440'; x.fillRect(0,0,w,h); x.fillStyle = 'rgba(57,212,232,.12)';
+  for (let y=8;y<h;y+=20) for (let X=8;X<w;X+=20){ x.beginPath(); x.arc(X,y,3,0,7); x.fill(); }
+});
+const sbTex = canvasTex(512, 200, ()=>{});
+function drawBoard(){
+  const { ctx:x, canvas:c } = sbTex.userData, w = c.width, h = c.height;
+  x.shadowBlur = 0; x.fillStyle = '#07051a'; x.fillRect(0,0,w,h);
+  x.strokeStyle = '#ffc935'; x.lineWidth = 6; x.strokeRect(3,3,w-6,h-6);
+  x.textAlign = 'center'; x.font = '22px Bungee, "Arial Black", sans-serif'; x.fillStyle = '#b8afd9';
+  x.fillText('SCORE', 140, 44); x.fillText('TIME', 382, 44);
+  x.font = '84px Bungee, "Arial Black", sans-serif';
+  x.fillStyle = '#ff7a1a'; x.shadowColor = '#ff7a1a'; x.shadowBlur = 20;
+  x.fillText(String(G.score).padStart(3,'0'), 140, 138);
+  const tc = G.time <= 10 ? '#ff3d7f' : '#39d4e8'; x.fillStyle = tc; x.shadowColor = tc;
+  x.fillText(String(Math.ceil(G.time)).padStart(3,'0'), 382, 138); x.shadowBlur = 0;
+  if (G.state !== 'idle'){ x.font = '20px Bungee, "Arial Black", sans-serif'; x.fillStyle = '#ffc935'; x.fillText('LEVEL ' + (G.lv+1) + (LEVELS[G.lv].amp ? '   MOVING HOOP' : ''), w/2, 182); }
+  sbTex.needsUpdate = true;
+}
+const marqTex = canvasTex(1024, 180, ()=>{});
+function drawMarquee(){
+  const { ctx:x, canvas:c } = marqTex.userData, w = c.width, h = c.height;
+  const g = x.createLinearGradient(0,0,w,0); g.addColorStop(0,'#c8232c'); g.addColorStop(.5,'#e8246a'); g.addColorStop(1,'#c8232c');
+  x.fillStyle = g; x.fillRect(0,0,w,h); x.fillStyle = 'rgba(255,255,255,.9)';
+  for (let X=14; X<w; X+=28){ x.beginPath(); x.arc(X,12,5,0,7); x.fill(); x.beginPath(); x.arc(X,h-12,5,0,7); x.fill(); }
+  x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = '78px Bungee, "Arial Black", sans-serif';
+  x.lineWidth = 10; x.strokeStyle = '#1b1440'; x.strokeText('ENGLISH HOOPS', w/2, h/2+4);
+  x.fillStyle = '#ffc935'; x.fillText('ENGLISH HOOPS', w/2, h/2+4); marqTex.needsUpdate = true;
+}
+function makeLabel(text, color){
+  const c = document.createElement('canvas'); c.width = 512; c.height = 128;
+  const x = c.getContext('2d');
+  let fs = 66; x.font = `700 ${fs}px Lexend, "Segoe UI", Arial, sans-serif`;
+  while (x.measureText(text).width > 440 && fs > 30){ fs -= 2; x.font = `700 ${fs}px Lexend, "Segoe UI", Arial, sans-serif`; }
+  const tw = x.measureText(text).width, pw = Math.min(500, tw + 56);
+  x.fillStyle = 'rgba(27,20,64,.55)'; rr(x, (512-pw)/2, 14, pw, 106, 50); x.fill();
+  x.fillStyle = color; rr(x, (512-pw)/2, 8, pw, 104, 50); x.fill();
+  x.lineWidth = 5; x.strokeStyle = '#1b1440'; x.stroke();
+  x.fillStyle = '#1b1440'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, 256, 62);
+  const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4;
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map:t, depthTest:false, transparent:true, toneMapped:false }));
+  s.scale.set(0.34, 0.085, 1); s.renderOrder = 10; return s;
+}
+function rr(x, X, Y, w, h, r){ x.beginPath(); x.moveTo(X+r,Y); x.arcTo(X+w,Y,X+w,Y+h,r); x.arcTo(X+w,Y+h,X,Y+h,r); x.arcTo(X,Y+h,X,Y,r); x.arcTo(X,Y,X+w,Y,r); x.closePath(); }
+function dropLabel(s){ if (!s) return; scene.remove(s); s.material.map.dispose(); s.material.dispose(); }
+
+/* ---------- machine ---------- */
+const std = o => new THREE.MeshStandardMaterial(o);
+const cabMat = std({ color:0xa81d26, roughness:.55, metalness:.15 });
+const darkMat = std({ color:0x231a4a, roughness:.8 });
+const chromeMat = std({ color:0xd9d9e6, roughness:.25, metalness:.85 });
+const room = new THREE.Mesh(new THREE.PlaneGeometry(40,40), std({ color:0x0d0a22, roughness:1 }));
+room.rotation.x = -Math.PI/2; room.receiveShadow = true; scene.add(room);
+const base = new THREE.Mesh(new THREE.BoxGeometry(1.44, FLOOR_Y, 3.2), cabMat); base.position.set(0, FLOOR_Y/2, -1.05); scene.add(base);
+const rampLen = Math.hypot(-BACK_Z, -BACK_Z*SLOPE);
+const ramp = new THREE.Mesh(new THREE.PlaneGeometry(HALF_W*2, rampLen), std({ map:floorTex, roughness:.9 }));
+ramp.rotation.x = -Math.PI/2 + Math.atan(SLOPE); ramp.position.set(0, FLOOR_Y + (-BACK_Z/2)*SLOPE, BACK_Z/2); ramp.receiveShadow = true; scene.add(ramp);
+const tray = new THREE.Mesh(new THREE.PlaneGeometry(HALF_W*2, FRONT_Z), darkMat);
+tray.rotation.x = -Math.PI/2; tray.position.set(0, FLOOR_Y+0.001, FRONT_Z/2); tray.receiveShadow = true; scene.add(tray);
+const lip = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.14, 0.06), cabMat); lip.position.set(0, FLOOR_Y+0.06, FRONT_Z+0.03); scene.add(lip);
+for (const s of [-1,1]){
+  const side = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.15, 3.2), cabMat); side.position.set(s*0.68, 0.575, -1.05); scene.add(side);
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(3.08, ROOF_Y-1.15),
+    new THREE.MeshPhysicalMaterial({ color:0xbfe9ff, transparent:true, opacity:.1, roughness:.05, side:THREE.DoubleSide, depthWrite:false }));
+  glass.rotation.y = s*Math.PI/2; glass.position.set(s*0.64, (ROOF_Y+1.15)/2, -1.09); scene.add(glass);
+  for (const z of [FRONT_Z+0.05, BACK_Z-0.02]){ const post = new THREE.Mesh(new THREE.BoxGeometry(0.07, ROOF_Y-1.15, 0.07), chromeMat); post.position.set(s*0.67, (ROOF_Y+1.15)/2, z); scene.add(post); }
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 3.2), chromeMat); rail.position.set(s*0.67, ROOF_Y, -1.08); scene.add(rail);
+}
+const leds = [], baseLed = [new THREE.Color(0x39d4e8), new THREE.Color(0xff3d7f)];
+for (const s of [-1,1]){ const l = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.025, 3.18), new THREE.MeshBasicMaterial({ color: s<0 ? 0x39d4e8 : 0xff3d7f })); l.position.set(s*0.63, 1.16, -1.05); scene.add(l); leds.push(l); }
+const ledFront = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.025, 0.025), new THREE.MeshBasicMaterial({ color:0xffc935 })); ledFront.position.set(0, FLOOR_Y+0.14, FRONT_Z+0.065); scene.add(ledFront);
+const back = new THREE.Mesh(new THREE.PlaneGeometry(1.32, ROOF_Y-0.9), std({ map:backTex, roughness:.9 })); back.position.set(0, (ROOF_Y+0.9)/2, BACK_Z-0.01); scene.add(back);
+const sb = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.39), new THREE.MeshBasicMaterial({ map:sbTex, toneMapped:false })); sb.position.set(0, 2.83, BACK_Z+0.005); scene.add(sb);
+const marq = new THREE.Mesh(new THREE.BoxGeometry(1.44, 0.26, 0.06), [cabMat, cabMat, cabMat, cabMat, new THREE.MeshBasicMaterial({ map:marqTex, toneMapped:false }), cabMat]);
+marq.position.set(0, ROOF_Y+0.14, FRONT_Z+0.05); scene.add(marq);
+
+/* hoop: group moves sideways; rimG pivots at the bracket so the rim can flex */
+const hoopG = new THREE.Group(); scene.add(hoopG);
+const board = new THREE.Mesh(new THREE.BoxGeometry(BOARD.halfW*2, BOARD.y1-BOARD.y0, 0.025), std({ map:boardTex, transparent:true, opacity:.94, roughness:.15 }));
+board.position.set(0, (BOARD.y0+BOARD.y1)/2, BOARD.z-0.0125); hoopG.add(board);
+const rimG = new THREE.Group(); rimG.position.set(0, RIM.y, BOARD.z); hoopG.add(rimG);
+const RZ = RIM.z - BOARD.z;
+const rimMat = std({ color:0xff5a1f, roughness:.4, metalness:.5, emissive:0x3a0d00 });
+const rim = new THREE.Mesh(new THREE.TorusGeometry(RIM.R, RIM.tube, 10, 48), rimMat);
+rim.rotation.x = Math.PI/2; rim.position.set(0, 0, RZ); rim.castShadow = true; rimG.add(rim);
+const bracket = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.05), rimMat); bracket.position.set(0, 0, 0.012); rimG.add(bracket);
+
+/* ---------- net: rings on springs ---------- */
+const NS = 16, NK = 7, NH = 0.34;
+const ringR = [], ringY = [];
+for (let k=0;k<=NK;k++){ const t = k/NK; ringR.push(RIM.R*(0.97 - 0.4*Math.pow(t,0.85))); ringY.push(-NH*t); }
+const NN = ringR.map(() => ({ ox:0, oz:0, vx:0, vz:0, b:0, vb:0, sy:0, vy:0 }));
+const netPos = new Float32Array((NK+1)*NS*3);
+const netIdx = [];
+for (let k=0;k<NK;k++) for (let i=0;i<NS;i++){ const a = k*NS+i; netIdx.push(a, (k+1)*NS+i, a, (k+1)*NS+((i-1+NS)%NS)); }
+const netGeo = new THREE.BufferGeometry();
+netGeo.setAttribute('position', new THREE.BufferAttribute(netPos, 3)); netGeo.setIndex(netIdx);
+const net = new THREE.LineSegments(netGeo, new THREE.LineBasicMaterial({ color:0xffffff, transparent:true, opacity:.85 }));
+net.position.set(0, 0, RZ); net.frustumCulled = false; rimG.add(net);
+const rimFlex = { ax:0, vax:0, az:0, vaz:0 };
+
+function netTouch(b){
+  const lx = b.p.x - G.hx, ly = b.p.y - RIM.y, lz = b.p.z - RIM.z;
+  // only a ball that is actually inside the net stretches it
+  if (ly > 0.08 || ly < -NH - BALL_R || Math.hypot(lx, lz) > RIM.R) return;
+  for (let k=1;k<=NK;k++){
+    const s = NN[k], dy = ly - (ringY[k] - s.sy);
+    if (Math.abs(dy) >= BALL_R) continue;
+    const hd = Math.hypot(lx - s.ox, lz - s.oz);
+    if (hd > ringR[k] + s.b) continue;
+    const chord = Math.sqrt(BALL_R*BALL_R - dy*dy);
+    const need = hd + chord*1.02 - (ringR[k] + s.b);
+    if (need > 0){
+      // push the ring out just enough to let the ball through (position, not a kick)
+      s.b += Math.min(need, 0.02); if (s.vb < 0) s.vb = 0;
+      s.vx += b.v.x*0.004; s.vz += b.v.z*0.004;
+      s.vy += Math.max(0, -b.v.y)*0.006;
+    }
+  }
+}
+function updateNet(dt, t){
+  const sub = 3, h = dt/sub;
+  for (let n=0;n<sub;n++){
+    for (let k=1;k<=NK;k++){
+      const s = NN[k], up = NN[k-1], dn = NN[Math.min(NK, k+1)], f = k/NK;
+      const wx = 0.007*f*Math.sin(t*1.3 + k*0.55) + 0.003*f*Math.sin(t*2.9 + k*1.1);
+      const wz = 0.005*f*Math.cos(t*1.05 + k*0.45);
+      const ax = 140*((up.ox+dn.ox)/2 - s.ox) + 30*(wx - s.ox) - 3.2*s.vx;
+      const az = 140*((up.oz+dn.oz)/2 - s.oz) + 30*(wz - s.oz) - 3.2*s.vz;
+      const ab = 150*((up.b+dn.b)/2 - s.b) - 50*s.b - 5*s.vb;
+      const ay = 70*((up.sy+dn.sy)/2 - s.sy) - 80*s.sy - 4.5*s.vy;
+      s.vx += ax*h; s.vz += az*h; s.vb += ab*h; s.vy += ay*h;
+      s.ox += s.vx*h; s.oz += s.vz*h; s.b += s.vb*h; s.sy += s.vy*h;
+      if (s.b < -0.02){ s.b = -0.02; s.vb = 0; }
+      if (s.b > 0.06){ s.b = 0.06; if (s.vb > 0) s.vb = 0; }
+      s.ox = clamp(s.ox, -0.045, 0.045); s.oz = clamp(s.oz, -0.045, 0.045);
+      if (s.sy > 0.06){ s.sy = 0.06; if (s.vy > 0) s.vy = 0; }
+      if (s.sy < -0.02){ s.sy = -0.02; if (s.vy < 0) s.vy = 0; }
+    }
+    rimFlex.vax += (-420*rimFlex.ax - 9*rimFlex.vax)*h; rimFlex.ax += rimFlex.vax*h;
+    rimFlex.vaz += (-420*rimFlex.az - 9*rimFlex.vaz)*h; rimFlex.az += rimFlex.vaz*h;
+  }
+  rimFlex.ax = clamp(rimFlex.ax, -0.06, 0.12); rimFlex.az = clamp(rimFlex.az, -0.08, 0.08);
+  rimG.rotation.x = rimFlex.ax; rimG.rotation.z = rimFlex.az;
+  let p = 0;
+  for (let k=0;k<=NK;k++){
+    const s = NN[k], f = k/NK;
+    for (let i=0;i<NS;i++){
+      const th = (i + 0.5*k)/NS*Math.PI*2;
+      const rad = ringR[k] + s.b + 0.0035*f*Math.sin(t*2.2 + th*3 + k*0.8);
+      netPos[p++] = s.ox + Math.cos(th)*rad;
+      netPos[p++] = ringY[k] - s.sy + 0.004*f*Math.sin(t*1.7 + th*2);
+      netPos[p++] = s.oz + Math.sin(th)*rad;
+    }
+  }
+  netGeo.attributes.position.needsUpdate = true;
+}
+
+/* ---------- lights ---------- */
+scene.add(new THREE.HemisphereLight(0xc9b8ff, 0x1a1240, 0.75));
+const sun = new THREE.DirectionalLight(0xfff1dc, 0.85);
+sun.position.set(1.4, 5, 1.8); sun.target.position.set(0, 1, -1.2); sun.castShadow = true; sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera, { left:-2, right:2, top:3, bottom:-3, near:1, far:12 }); scene.add(sun, sun.target);
+const spot = new THREE.SpotLight(0xffd9a0, 1.3, 5, 0.6, 0.5); spot.position.set(0, 3.0, -1.0); spot.target = rim; scene.add(spot);
+const pA = new THREE.PointLight(0x39d4e8, 0.7, 3); pA.position.set(-0.55, 1.4, -1.0); scene.add(pA);
+const pB = new THREE.PointLight(0xff3d7f, 0.7, 3); pB.position.set(0.55, 1.4, -1.0); scene.add(pB);
+
+/* ---------- balls ---------- */
+const ballGeo = new THREE.SphereGeometry(BALL_R, 48, 32);
+const ballMat = std({ map:ballTex, bumpMap:BALL_TEX.bump, bumpScale:0.5, roughness:.72 });
+const balls = [];
+const slots = [];
+
+function makeBall(x0){
+  const mesh = new THREE.Mesh(ballGeo, ballMat); mesh.castShadow = true; scene.add(mesh);
+  const b = { mesh, p:new THREE.Vector3(x0, SPAWN.y+0.12, SPAWN.z), v:new THREE.Vector3(), w:new THREE.Vector3(), age:0,
+    scored:false, rim:false, missed:false, clank:0, label:null, opt:null };
+  balls.push(b);
+  if (balls.length > 10) removeBall(balls[0]);
+  return b;
+}
+function removeBall(b){
+  if (b === G.pending) resolveMiss(b);
+  dropLabel(b.label); scene.remove(b.mesh); balls.splice(balls.indexOf(b), 1);
+}
+function clearSlots(){ for (const s of slots){ scene.remove(s.mesh); dropLabel(s.label); } slots.length = 0; }
+function buildSlots(){
+  clearSlots();
+  G.opts.forEach((o, i) => {
+    const m = new THREE.Mesh(ballGeo, ballMat); m.castShadow = true; m.rotation.set(Math.random()*6, Math.random()*6, 0);
+    m.position.set(TRAY_X[i], SPAWN.y, SPAWN.z); m.scale.setScalar(0.01); scene.add(m);
+    const l = makeLabel(o.text, PILL[i]); l.position.set(TRAY_X[i], SPAWN.y+0.2, SPAWN.z); scene.add(l);
+    slots.push({ mesh:m, label:l, opt:o, x:TRAY_X[i], tx:TRAY_X[i], cx:TRAY_X[i], alive:true, lift:0, color:PILL[i] });
+  });
+}
+
+/* ---------- physics ---------- */
+const GRAV = -9.8, nUp = new THREE.Vector3(0,1,0), nSlope = new THREE.Vector3(0,1,SLOPE).normalize();
+const t1 = new THREE.Vector3(), t2 = new THREE.Vector3();
+function stepBall(b, h){
+  const py = b.p.y;
+  b.v.y += GRAV*h; b.p.addScaledVector(b.v, h); b.age += h;
+  const n = b.p.z < 0 ? nSlope : nUp;
+  const d = n.y*(b.p.y - FLOOR_Y) + n.z*b.p.z;
+  if (d < BALL_R){
+    b.p.addScaledVector(n, BALL_R - d);
+    const vn = b.v.dot(n);
+    if (vn < 0){ const e = vn < -1.4 ? 0.5 : 0; b.v.addScaledVector(n, -(1+e)*vn); if (vn < -2) thump(-vn); }
+    t1.copy(b.v).addScaledVector(n, -b.v.dot(n)); b.v.addScaledVector(t1, -Math.min(1, 0.9*h));
+    b.w.crossVectors(n, t1).divideScalar(BALL_R);
+  }
+  const hw = HALF_W - BALL_R;
+  if (b.p.x >  hw){ b.p.x =  hw; b.v.x = -Math.abs(b.v.x)*0.6; }
+  if (b.p.x < -hw){ b.p.x = -hw; b.v.x =  Math.abs(b.v.x)*0.6; }
+  if (b.p.z > FRONT_Z - BALL_R){ b.p.z = FRONT_Z - BALL_R; b.v.z = -Math.abs(b.v.z)*0.35; }
+  if (b.p.y > ROOF_Y - BALL_R){ b.p.y = ROOF_Y - BALL_R; b.v.y = -Math.abs(b.v.y)*0.3; }
+  const hx = G.hx;
+  if (b.p.z < BOARD.z + BALL_R && Math.abs(b.p.x - hx) < BOARD.halfW + BALL_R*0.5 && b.p.y > BOARD.y0 - BALL_R*0.5 && b.p.y < BOARD.y1 + BALL_R*0.5){
+    b.p.z = BOARD.z + BALL_R;
+    if (b.v.z < 0){ const s = -b.v.z; b.v.z = s*0.58; if (s > 1){ thump(s*0.7); rimFlex.vax += s*0.15; } }
+  }
+  if (b.p.z < BACK_Z + BALL_R){ b.p.z = BACK_Z + BALL_R; b.v.z = Math.abs(b.v.z)*0.3; }
+  // rim
+  const dx = b.p.x - hx, dz = b.p.z - RIM.z, hd = Math.hypot(dx, dz) || 1e-6;
+  const qx = hx + dx/hd*RIM.R, qz = RIM.z + dz/hd*RIM.R;
+  t2.set(b.p.x - qx, b.p.y - RIM.y, b.p.z - qz);
+  const dist = t2.length(), minD = BALL_R + RIM.tube;
+  if (dist < minD && dist > 1e-6){
+    t2.divideScalar(dist); b.p.addScaledVector(t2, minD - dist);
+    const vn = b.v.dot(t2);
+    if (vn < 0){
+      b.v.addScaledVector(t2, -1.55*vn); b.v.multiplyScalar(0.93); b.rim = true;
+      const imp = Math.min(3, -vn) * Math.max(0, t2.y);
+      rimFlex.vax += imp * (qz - BOARD.z) * 9;
+      rimFlex.vaz -= imp * (qx - hx) * 9;
+      if (-vn > 0.6 && b.clank <= 0){ beep(520+Math.random()*80, .1, 'square', .05, 300); b.clank = 0.08; }
+    }
+  }
+  if (b.clank > 0) b.clank -= h;
+  if (!b.scored && py >= RIM.y && b.p.y < RIM.y && hd < RIM.R - BALL_R*0.25){ b.scored = true; if (b.opt) onMake(b); }
+  if (b.scored && b.p.y > RIM.y - 0.42 && b.p.y < RIM.y){
+    b.v.multiplyScalar(1 - 3.2*h); b.v.x += (hx - b.p.x)*22*h; b.v.z += (RIM.z - b.p.z)*22*h;
+  }
+  netTouch(b);
+  if (b === G.pending && !b.scored && !b.missed && ((b.v.y < 0 && b.p.y < RIM.y - 0.5) || b.age > 5)){ b.missed = true; resolveMiss(b); }
+}
+function collideBalls(){
+  for (let i=0;i<balls.length;i++) for (let j=i+1;j<balls.length;j++){
+    const a = balls[i], b = balls[j]; t1.subVectors(a.p, b.p); const d = t1.length();
+    if (d < BALL_R*2 && d > 1e-6){
+      t1.divideScalar(d); const push = (BALL_R*2 - d)/2;
+      a.p.addScaledVector(t1, push); b.p.addScaledVector(t1, -push);
+      const rel = a.v.dot(t1) - b.v.dot(t1);
+      if (rel < 0){ const imp = -1.7*rel/2; a.v.addScaledVector(t1, imp); b.v.addScaledVector(t1, -imp); }
+    }
+  }
+}
+
+/* ---------- questions ---------- */
+const sentEl = $('#sent'), qzhEl = $('#qzh'), qnumEl = $('#qnum'), qcard = $('#qcard');
+function shuffle(a){ for (let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; } return a; }
+function renderSentence(fill, cls){
+  const [a, b] = G.q.s.split('___');
+  sentEl.innerHTML = esc(a) + `<span class="blank ${cls||''}">${fill ? esc(fill) : '&nbsp;'}</span>` + esc(b);
+}
+/* 題目抽法：像一疊牌。整疊抽完才重新洗牌，跨回合、關掉再開都接著抽，
+   所以 63 題會先全部輪過一次才重複；重洗時最近出過的 8 題會放到最後。 */
+const DECK_KEY = 'hoops-grammar-deck';
+let deck = null, recent = [];
+function loadDeck(){
+  try {
+    const s = JSON.parse(localStorage.getItem(DECK_KEY + '-' + MODE) || 'null');
+    if (s && s.n === BANK.length && Array.isArray(s.d)){
+      deck = s.d.filter(i => Number.isInteger(i) && i >= 0 && i < BANK.length);
+      recent = (s.r || []).filter(i => Number.isInteger(i) && i >= 0 && i < BANK.length);
+    }
+  } catch(e){}
+  if (!deck) deck = [];
+}
+function saveDeck(){ try { localStorage.setItem(DECK_KEY + '-' + MODE, JSON.stringify({ n:BANK.length, d:deck, r:recent })); } catch(e){} }
+function drawQuestion(){
+  if (!deck) loadDeck();
+  if (!deck.length){
+    const fresh = shuffle(BANK.map((_, i) => i)), keep = new Set(recent);
+    deck = [...fresh.filter(i => keep.has(i)), ...fresh.filter(i => !keep.has(i))];
+  }
+  const i = deck.pop();
+  recent.push(i); if (recent.length > 8) recent.shift();
+  saveDeck(); return i;
+}
+const MODES = {
+  basic: { bank:QUESTIONS,     time:120, name:'基礎' },
+  adv:   { bank:QUESTIONS_ADV, time:150, name:'進階' },
+  mix:   { bank:QUESTIONS.concat(QUESTIONS_ADV), time:150, name:'混合' }
+};
+let MODE = 'basic', BANK = QUESTIONS;
+function setMode(m){
+  if (!MODES[m]) m = 'basic';
+  if (m !== MODE){ MODE = m; BANK = MODES[m].bank; deck = null; recent = []; }
+}
+document.querySelectorAll('.btn.mode').forEach(b => {
+  const m = MODES[b.dataset.mode];
+  b.querySelector('small').textContent = `${m.bank.length} 題・${m.time} 秒`;
+  b.addEventListener('click', () => { setMode(b.dataset.mode); start(); });
+});
+const curH = () => G.history[G.history.length-1] || {};
+function updateQnum(){
+  const nx = LEVELS[G.lv+1];
+  qnumEl.textContent = `${MODES[MODE].name}・第 ${G.qn} 題　Lv${G.lv+1} ${LEVELS[G.lv].name}` + (nx ? `　再對 ${nx.need - G.right} 題升級` : '　最高等級');
+}
+function nextQuestion(){
+  G.q = BANK[drawQuestion()]; G.qn++;
+  G.history.push({ q:G.q, picks:[], right:false, done:false });
+  G.opts = shuffle([{ text:G.q.a[0], ok:true, why:G.q.a[1] }, ...G.q.w.map(w => ({ text:w[0], ok:false, why:w[1] }))]);
+  updateQnum();
+  renderSentence(''); qzhEl.textContent = G.q.zh; qcard.classList.add('on');
+  buildSlots(); G.busy = false; G.sel = -1;
+}
+
+function onMake(b){
+  if (b !== G.pending || G.state !== 'run') return;
+  G.pending = null; G.busy = true;
+  netKick();
+  const o = b.opt;
+  if (o.ok){
+    G.combo++; G.right++; curH().right = true; curH().done = true;
+    const pts = G.lv + 2 + (G.combo >= 3 ? 1 : 0);
+    G.score += pts; flash = 1;
+    renderSentence(o.text, 'ok');
+    popup(`✓ +${pts}`, (G.combo >= 3 ? `連對 ${G.combo} 題！` : '') + o.why);
+    cheer(G.combo, !b.rim);
+    const nl = levelOf(G.right), up = nl > G.lv;
+    if (up){ G.lv = nl; setTimeout(levelUp, 650); }
+    updateHud(); updateQnum();
+    setTimeout(() => { dropLabel(b.label); b.label = null; }, 500);
+    setTimeout(() => { if (G.state === 'run') nextQuestion(); }, up ? 2300 : 1500);
+  } else {
+    G.combo = 0; G.wrong++;
+    G.mistakes.push({ q:G.q, pick:o.text }); curH().picks.push(o.text); curH().done = true;
+    tone(392, .16, 'sine', .07); tone(311, .24, 'sine', .07, .13);
+    G.state = 'feedback'; timeChip.classList.add('paused');
+    setTimeout(() => { dropLabel(b.label); b.label = null; showFeedback(o); }, 700);
+  }
+}
+function resolveMiss(b){
+  if (b !== G.pending) return;
+  G.pending = null; G.combo = 0;
+  setTimeout(() => { dropLabel(b.label); b.label = null; }, 300);
+  for (const s of slots){ if (!s.alive){ s.alive = true; s.mesh.visible = true; s.label.visible = true; s.mesh.scale.setScalar(0.01); } }
+}
+function showFeedback(o){
+  const [a, b] = G.q.s.split('___'), c = CONCEPTS[G.q.tag];
+  $('#fbCard').innerHTML = `
+    <h2>差一點！球進了，但答案不對</h2>
+    <p class="en">${esc(a)}<s>${esc(o.text)}</s> <b>${esc(G.q.a[0])}</b>${esc(b)}</p>
+    <div class="why"><span class="lab">為什麼不是 ${esc(o.text)}</span>${esc(o.why)}</div>
+    <div class="rule"><span class="tag">${esc(c.name)}</span><br>${esc(c.rule)}</div>
+    <button class="btn" id="fbBtn">懂了，下一題</button>`;
+  $('#fbOv').classList.remove('hide');
+  const btn = $('#fbBtn'); btn.focus({ preventScroll:true });
+  btn.addEventListener('click', () => {
+    $('#fbOv').classList.add('hide'); timeChip.classList.remove('paused');
+    if (G.time > 0){ G.state = 'run'; nextQuestion(); } else end();
+  });
+}
+
+/* ---------- HUD / sound ---------- */
+const hudScore = $('#hudScore'), hudTime = $('#hudTime'), timeChip = $('#timeChip');
+function updateHud(){ hudScore.textContent = G.score; hudTime.textContent = Math.ceil(G.time); timeChip.classList.toggle('hurry', G.time <= 10); drawBoard(); }
+function popup(main, sub, bad, cls){
+  const el = document.createElement('div'); el.className = 'pop' + (bad ? ' bad' : '') + (cls ? ' ' + cls : '');
+  el.innerHTML = esc(main) + (sub ? `<small>${esc(sub)}</small>` : '');
+  $('#app').appendChild(el); setTimeout(() => el.remove(), cls === 'lv' ? 2050 : 1350);
+}
+
+/* ---------- confetti ---------- */
+const fxCanvas = document.createElement('canvas'); fxCanvas.id = 'fx'; $('#app').appendChild(fxCanvas);
+const fx = fxCanvas.getContext('2d'), parts = [];
+const CONF = ['#ffc935','#ff3d7f','#39d4e8','#ff7a1a','#ffffff','#9b7bff'];
+const reduceMotion = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+function sizeFx(){ const r = $('#app').getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 2); fxCanvas.width = r.width*d; fxCanvas.height = r.height*d; fx.setTransform(d,0,0,d,0,0); }
+window.addEventListener('resize', sizeFx); sizeFx();
+function spawn(x, y, vx, vy){
+  parts.push({ x, y, vx, vy, rot:Math.random()*6, vr:(Math.random()-.5)*14, w:5+Math.random()*6, h:8+Math.random()*9,
+    c:CONF[(Math.random()*CONF.length)|0], life:2.4+Math.random()*1.4, t:0, dot:Math.random() < .2 });
+}
+function burst(x, y, n, power=1, angle=-Math.PI/2, spread=1.1){
+  if (reduceMotion) n = Math.ceil(n/4);
+  for (let i=0;i<n;i++){ const a = angle + (Math.random()-.5)*2*spread, s = (260 + Math.random()*420)*power; spawn(x, y, Math.cos(a)*s, Math.sin(a)*s); }
+}
+function rain(n){
+  if (reduceMotion) n = Math.ceil(n/4);
+  const w = fxCanvas.clientWidth;
+  for (let i=0;i<n;i++) spawn(Math.random()*w, -20 - Math.random()*160, (Math.random()-.5)*80, 60 + Math.random()*120);
+}
+function rimScreen(){
+  const v = new THREE.Vector3(G.hx, RIM.y, RIM.z).project(camera);
+  const r = cv.getBoundingClientRect(), a = $('#app').getBoundingClientRect();
+  return { x:(v.x+1)/2*r.width + r.left - a.left, y:(1-v.y)/2*r.height + r.top - a.top };
+}
+function drawFx(dt){
+  const w = fxCanvas.clientWidth, h = fxCanvas.clientHeight;
+  fx.clearRect(0, 0, w, h);
+  for (let i=parts.length-1;i>=0;i--){
+    const p = parts[i]; p.t += dt;
+    p.vy += 900*dt; p.vx *= Math.pow(0.35, dt); p.vy *= Math.pow(0.55, dt);
+    p.x += (p.vx + Math.sin(p.t*6 + p.rot)*30)*dt; p.y += p.vy*dt; p.rot += p.vr*dt;
+    if (p.t > p.life || p.y > h + 30){ parts.splice(i, 1); continue; }
+    fx.save(); fx.translate(p.x, p.y); fx.rotate(p.rot);
+    fx.globalAlpha = Math.min(1, (p.life - p.t)*2); fx.fillStyle = p.c;
+    if (p.dot){ fx.beginPath(); fx.arc(0, 0, p.w*0.45, 0, 7); fx.fill(); }
+    else { const sq = Math.abs(Math.cos(p.t*8 + p.rot)); fx.fillRect(-p.w/2, -p.h*sq/2, p.w, p.h*sq); }
+    fx.restore();
+  }
+}
+
+/* ---------- sound ---------- */
+let ac = null, masterG = null;
+function master(){
+  if (!masterG){ masterG = ac.createGain(); masterG.gain.value = 0.9; const comp = ac.createDynamicsCompressor(); masterG.connect(comp).connect(ac.destination); }
+  return masterG;
+}
+function beep(f, d, type='sine', vol=.1, slide, delay=0){
+  if (!ac) return;
+  const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + delay;
+  o.type = type; o.frequency.setValueAtTime(f, t); if (slide) o.frequency.exponentialRampToValueAtTime(slide, t+d);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t+0.008); g.gain.exponentialRampToValueAtTime(0.0001, t+d);
+  o.connect(g).connect(master()); o.start(t); o.stop(t+d+0.03);
+}
+const tone = (f, d, type, vol, delay=0) => beep(f, d, type, vol, null, delay);
+function sparkle(base, n, delay=0){ for (let i=0;i<n;i++) tone(base*(1 + Math.random()*0.6), .12, 'sine', .035, delay + i*0.035); }
+/* 答對的音效＋彩紙，分四級：一般／空心／連對 3／連對 5 */
+function cheer(combo, swish){
+  tone(988, .1, 'square', .04); tone(1319, .24, 'square', .04, .07);
+  tone(988, .1, 'sine', .08);   tone(1319, .3, 'sine', .08, .07);
+  if (swish) sparkle(1760, 5, .12);
+  if (combo >= 3) [784, 988, 1175, 1568].forEach((f, i) => tone(f, .16, 'triangle', .07, .2 + i*.06));
+  if (combo >= 5) [1568, 1976, 2349].forEach(f => tone(f, .55, 'sine', .035, .46));
+  const p = rimScreen();
+  burst(p.x, p.y, combo >= 5 ? 90 : combo >= 3 ? 60 : swish ? 40 : 26, combo >= 3 ? 1.25 : 1);
+  if (combo >= 5) rain(70);
+}
+function levelUp(){
+  const L = LEVELS[G.lv], prev = LEVELS[G.lv-1];
+  const note = L.amp && !prev.amp ? '　籃框開始動了' : (L.amp ? '　籃框動得更快了' : '');
+  popup('LEVEL UP!', `Lv${G.lv+1} ${L.name}　每題 ${G.lv+2} 分` + note, false, 'lv');
+  [523, 659, 784].forEach((f, i) => { tone(f, .14, 'square', .045, i*.1); tone(f, .14, 'triangle', .08, i*.1); });
+  [1047, 1319, 1568].forEach(f => { tone(f, .95, 'triangle', .07, .32); tone(f*2, .6, 'sine', .018, .32); });
+  sparkle(2093, 8, .35);
+  const w = fxCanvas.clientWidth, h = fxCanvas.clientHeight;
+  burst(w*0.06, h*0.8, 70, 1.4, -1.1, 0.45);
+  burst(w*0.94, h*0.8, 70, 1.4, -2.04, 0.45);
+  rain(50); flash = 1;
+  drawBoard();
+}
+let thumpCool = 0;
+function thump(s){ if (thumpCool > 0) return; thumpCool = 0.06; beep(110, .09, 'sine', Math.min(.18, s*.04), 70); }
+function netKick(){ rimFlex.vax += 0.6; }
+
+/* ---------- input ---------- */
+const meter = $('#meter'), fill = meter.querySelector('.fill'), sweet = meter.querySelector('.sweet');
+sweet.style.bottom = (SWEET[0]*100) + '%'; sweet.style.height = ((SWEET[1]-SWEET[0])*100) + '%';
+let drag = null;
+const powerOf = y => clamp((drag.y - y) / (stage.clientHeight*0.5), 0, 1);
+const pv = new THREE.Vector3();
+cv.addEventListener('pointerdown', e => {
+  if (G.state !== 'run' || G.pending || G.busy) return;
+  e.preventDefault();
+  const r = cv.getBoundingClientRect(), mx = e.clientX - r.left;
+  let best = -1, bd = 1e9;
+  slots.forEach((s, i) => { if (!s.alive) return; pv.copy(s.mesh.position).project(camera); const sx = (pv.x+1)/2*r.width; const dd = Math.abs(sx - mx); if (dd < bd){ bd = dd; best = i; } });
+  if (best < 0) return;
+  const pick = slots[best];
+  if (pick.tx !== 0){ const c = slots.find(o => o.tx === 0); if (c) c.tx = pick.tx; pick.tx = 0; beep(700, .05, 'triangle', .05); }
+  G.sel = best; drag = { x:e.clientX, y:e.clientY };
+  try { cv.setPointerCapture(e.pointerId); } catch(_){}
+  meter.classList.add('on'); fill.style.height = '0%';
+  beep(500, .04, 'triangle', .05);
+});
+cv.addEventListener('pointermove', e => { if (drag) fill.style.height = `calc(${powerOf(e.clientY)*100}% - 6px)`; });
+cv.addEventListener('pointerup', e => {
+  if (!drag) return;
+  const dy = drag.y - e.clientY, dx = e.clientX - drag.x, p = powerOf(e.clientY);
+  drag = null; meter.classList.remove('on');
+  const idx = G.sel; G.sel = -1;
+  if (dy < 25 || G.state !== 'run' || G.pending || idx < 0) return;
+  shoot(idx, p, clamp(dx / stage.clientWidth * 0.7, -0.35, 0.35));
+});
+cv.addEventListener('pointercancel', () => { drag = null; G.sel = -1; meter.classList.remove('on'); });
+
+function shoot(idx, p, adj){
+  const s = slots[idx]; if (!s || !s.alive) return;
+  s.alive = false; s.mesh.visible = false; s.label.visible = false;
+  const b = makeBall(0); // always shoot from the centre b.mesh.quaternion.copy(s.mesh.quaternion);
+  b.opt = s.opt; b.label = makeLabel(s.opt.text, s.color); scene.add(b.label);
+  const yaw = adj;
+  const v = V_MIN + p*V_RANGE, hz = v*Math.cos(ANGLE);
+  b.v.set(hz*Math.sin(yaw), v*Math.sin(ANGLE), -hz*Math.cos(yaw)); b.w.set(10, 0, 0);
+  G.pending = b; G.shots++;
+  $('#hint').classList.add('hide');
+  beep(220, .08, 'triangle', .08, 160);
+}
+
+/* ---------- flow ---------- */
+function start(){
+  if (!ac){ try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch(e){} }
+  if (ac && ac.state === 'suspended') ac.resume();
+  while (balls.length){ const b = balls.shift(); dropLabel(b.label); scene.remove(b.mesh); }
+  Object.assign(G, { state:'run', score:0, time:MODES[MODE].time, combo:0, right:0, wrong:0, shots:0, phase:1, lv:0, mt:0, qn:0, deck:[], q:null, pending:null, busy:false, mistakes:[], history:[] });
+  lastSec = G.time;
+  ['#startOv','#endOv','#fbOv','#revOv'].forEach(s => $(s).classList.add('hide'));
+  timeChip.classList.remove('paused'); $('#hint').classList.remove('hide');
+  nextQuestion(); updateHud();
+  beep(440,.12,'square',.06); setTimeout(() => beep(880,.18,'square',.06), 140);
+}
+function end(){
+  G.state = 'over'; G.time = 0; G.pending = null;
+  // time’s up: “ding-ding-ding!”, then a drum roll that leads into the results
+  tone(1047, .09, 'square', .04); tone(1047, .09, 'square', .04, .12); tone(1568, .22, 'square', .045, .24);
+  drumroll(2.1, .45);
+  // 依這一輪升到的等級決定慶祝規模；先給一個 TIME UP 的空檔，再出統計
+  const tier = G.lv;
+  popup('TIME UP!', ['再接再厲，下一輪會更好！', '手感來了！', '打得不錯！', '太強了！', '文法 MVP！全場最佳！'][tier], false, 'lv');
+  try { G.best = +localStorage.getItem('hoops-grammar-best-' + MODE) || 0; } catch(e){ G.best = 0; }
+  const newBest = G.score > G.best;
+  if (newBest){ G.best = G.score; try { localStorage.setItem('hoops-grammar-best-' + MODE, G.best); } catch(e){} }
+  $('#endScore').textContent = G.score;
+  $('#endLvl').textContent = `這一輪升到 Lv${G.lv+1}：${LEVELS[G.lv].name}`;
+  $('#endMeta').textContent = `答對 ${G.right} 題，投進錯的 ${G.wrong} 題，總共出手 ${G.shots} 次。${newBest ? '新紀錄！' : '最佳 ' + G.best + ' 分'}`;
+  const groups = {};
+  G.mistakes.forEach(m => (groups[m.q.tag] = groups[m.q.tag] || []).push(m));
+  const tags = Object.keys(groups).sort((a,b) => groups[b].length - groups[a].length);
+  $('#review').innerHTML = tags.length
+    ? '<p style="margin:0;font-weight:900;color:var(--ink)">要再看一次的觀念</p>' + tags.map(t => `<h3>${esc(CONCEPTS[t].name)} <span class="n">×${groups[t].length}</span></h3>`).join('')
+    : (G.right ? '<p style="margin:0;font-weight:900">這一輪沒有投進錯的答案，漂亮。</p>' : '');
+  $('#revBtn').style.display = G.history.length ? '' : 'none';
+  qcard.classList.remove('on'); clearSlots(); updateHud();
+  setTimeout(() => { if (G.state === 'over'){ $('#endOv').classList.remove('hide'); celebrate(tier, newBest && G.score > 0); } }, 2600);
+}
+/* 撒花分五級：Lv1 小小一陣、Lv2 多一點、Lv3 兩側彩紙砲、Lv4 再加中央爆開、Lv5 三波連發；破紀錄再加碼 */
+function celebrate(t, record){
+  const w = fxCanvas.clientWidth, h = fxCanvas.clientHeight;
+  popCannon(0, .32); fanfare(t);
+  rain([25, 55, 90, 130, 170][t]);
+  if (t >= 2){ popCannon(.06, .3); burst(w*0.06, h*0.85, 40 + t*15, 1.4, -1.1, 0.45); burst(w*0.94, h*0.85, 40 + t*15, 1.4, -2.04, 0.45); }
+  if (t >= 2) cymbal(1.32);
+  if (t >= 3){ popCannon(.6, .3); setTimeout(() => { burst(w*0.5, h*0.32, 80, 1.1); sparkle(2093, 6); }, 600); }
+  if (t >= 4){ popCannon(1.2, .32); popCannon(1.28, .3); cymbal(2.3);
+    setTimeout(() => { burst(w*0.06, h*0.85, 70, 1.5, -1.1, 0.45); burst(w*0.94, h*0.85, 70, 1.5, -2.04, 0.45); rain(100); sparkle(2637, 8); }, 1200); }
+  if (record){ const d = t >= 4 ? 3.2 : 2.4; popCannon(d, .3);
+    setTimeout(() => { burst(w*0.5, h*0.2, 60, 0.9); [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, .18, 'triangle', .06, i*.08)); }, d*1000); }
+}
+
+/* ---------- 結算音效：鼓聲、彩炮、小喇叭 ---------- */
+function noiseBuf(){
+  if (!noiseBuf.b){ const len = Math.floor(ac.sampleRate*0.8), b = ac.createBuffer(1, len, ac.sampleRate), d = b.getChannelData(0);
+    for (let i=0;i<len;i++) d[i] = Math.random()*2 - 1; noiseBuf.b = b; }
+  return noiseBuf.b;
+}
+function noiseHit(t, dur, type, freq, q, vol){
+  const s = ac.createBufferSource(); s.buffer = noiseBuf();
+  const f = ac.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+  const g = ac.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f).connect(g).connect(master()); s.start(t); s.stop(t + dur + 0.02);
+  return f;
+}
+function drumroll(dur, delay=0){
+  if (!ac) return;
+  const rate = 24, n = Math.floor(dur*rate);
+  for (let i=0;i<n;i++) noiseHit(ac.currentTime + delay + i/rate, .06, 'bandpass', 950, 0.8, 0.03 + 0.13*(i/n));
+}
+function popCannon(delay=0, vol=.3){
+  if (!ac) return;
+  const t = ac.currentTime + delay;
+  const f = noiseHit(t, .32, 'bandpass', 1900, 0.8, vol); f.frequency.exponentialRampToValueAtTime(380, t + .25);
+  beep(170, .2, 'sine', vol*0.7, 45, delay);                                   // the “thump”
+  for (let i=0;i<7;i++) tone(2400 + Math.random()*2600, .05, 'square', .014, delay + .12 + Math.random()*.4); // paper crackle
+}
+function cymbal(delay=0){ if (ac) noiseHit(ac.currentTime + delay, 1.1, 'highpass', 6000, 0.5, .09); }
+function brass(f, d, delay=0, vol=.07){
+  if (!ac) return;
+  const t = ac.currentTime + delay;
+  const o1 = ac.createOscillator(), o2 = ac.createOscillator(), lfo = ac.createOscillator(), lg = ac.createGain();
+  o1.type = o2.type = 'sawtooth'; o1.frequency.value = o2.frequency.value = f; o2.detune.value = 8;
+  lfo.frequency.value = 5.5; lg.gain.value = f*0.006; lfo.connect(lg); lg.connect(o1.frequency); lg.connect(o2.frequency);
+  const flt = ac.createBiquadFilter(); flt.type = 'lowpass'; flt.Q.value = 2;
+  flt.frequency.setValueAtTime(f*1.2, t); flt.frequency.linearRampToValueAtTime(f*5.5, t + .06); flt.frequency.exponentialRampToValueAtTime(f*2.6, t + d);
+  const g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + .035);
+  g.gain.setValueAtTime(vol*0.85, t + Math.max(.05, d - .08)); g.gain.exponentialRampToValueAtTime(0.0001, t + d + .06);
+  o1.connect(flt); o2.connect(flt); flt.connect(g).connect(master());
+  [o1, o2, lfo].forEach(o => { o.start(t); o.stop(t + d + .12); });
+}
+/* 「當當當—當！」小喇叭。等級越高：多一段上行、加和聲、加鐵片、最後一個大和弦 */
+function fanfare(tier){
+  const G4 = 392, C5 = 523, E5 = 659, G5 = 784, C6 = 1047;
+  const seq = [[G4,.11,0], [G4,.11,.14], [G4,.11,.28], [C5,.55,.42]];
+  if (tier >= 1) seq.push([E5,.14,1.0], [G5,.14,1.16], [C6,.9,1.32]);
+  seq.forEach(([f, d, t]) => brass(f, d, t));
+  if (tier >= 2) seq.forEach(([f, d, t]) => brass(f*1.26, d, t, .04));       // a third above
+  if (tier >= 3){ brass(C5, 1.0, 1.32, .045); brass(E5, 1.0, 1.32, .045); }
+  if (tier >= 4){ [[G5,.12,2.0],[G5,.12,2.14],[C6,1.4,2.3]].forEach(([f, d, t]) => brass(f, d, t, .06));
+    brass(E5, 1.4, 2.3, .045); brass(G5, 1.4, 2.3, .04); brass(C5, 1.4, 2.3, .045); }
+}
+$('#modeBtn').addEventListener('click', () => { $('#endOv').classList.add('hide'); $('#startOv').classList.remove('hide'); });
+$('#againBtn').addEventListener('click', start);
+function buildReview(){
+  const h = G.history.map((e, i) => ({ ...e, n:i+1 }));
+  const order = [...h.filter(e => e.picks.length), ...h.filter(e => !e.picks.length && e.right), ...h.filter(e => !e.picks.length && !e.right)];
+  const bad = h.filter(e => e.picks.length).length;
+  $('#revSub').textContent = `這一輪共 ${h.length} 題` + (bad ? `，投錯過的 ${bad} 題排在最前面。` : '。');
+  $('#revList').innerHTML = order.map(e => {
+    const [a, b] = e.q.s.split('___'), c = CONCEPTS[e.q.tag];
+    const st = e.picks.length ? ['bad','投錯過'] : e.right ? ['ok','一次就對'] : ['skip','沒來得及答'];
+    const wrongs = e.picks.map(p => { const w = e.q.w.find(x => x[0] === p); return `<p class="ex"><s>${esc(p)}</s>　${esc(w ? w[1] : '')}</p>`; }).join('');
+    return `<div class="ri ${st[0]}"><div class="rh"><span class="no">${e.n}</span><span class="tag">${esc(c.name)}</span><span class="st">${st[1]}</span></div>
+      <p class="en">${esc(a)}<b>${esc(e.q.a[0])}</b>${esc(b)}</p><p class="rzh">${esc(e.q.zh)}</p>
+      <p class="ex"><b>${esc(e.q.a[0])}</b>　${esc(e.q.a[1])}</p>${wrongs}</div>`;
+  }).join('');
+}
+$('#revBtn').addEventListener('click', () => { buildReview(); $('#endOv').classList.add('hide'); $('#revOv').classList.remove('hide'); $('#revList').scrollTop = 0; });
+$('#revBack').addEventListener('click', () => { $('#revOv').classList.add('hide'); $('#endOv').classList.remove('hide'); });
+$('#revAgain').addEventListener('click', start);
+
+/* ---------- loop ---------- */
+let flash = 0, last = performance.now(), clock = 0, lastSec = -1;
+const white = new THREE.Color(0xffffff);
+function tick(now){
+  const dt = Math.min(0.033, (now - last)/1000); last = now; clock += dt;
+  if (G.state === 'run'){
+    G.time -= dt;
+    const sec = Math.ceil(G.time);
+    if (sec !== lastSec){
+      lastSec = sec;
+      if (sec <= 5 && sec > 0) beep(880, .06, 'square', .05);
+      updateHud();
+    }
+    if (G.time <= 0){ if (G.pending) G.pending = null; end(); }
+  }
+  const LV = LEVELS[G.lv] || LEVELS[0];
+  G.amp += (((G.state === 'run' || G.state === 'feedback') ? LV.amp : 0) - G.amp)*Math.min(1, dt*1.5);
+  if (G.state === 'run') G.mt += dt*(LV.spd || 1);
+  G.hx = G.amp*Math.sin(G.mt*1.35);
+  hoopG.position.x = G.hx;
+
+  const N = 8, h = dt/N;
+  for (let s=0;s<N;s++){ for (let i=0;i<balls.length;i++) stepBall(balls[i], h); collideBalls(); }
+  thumpCool -= dt;
+  for (let i=balls.length-1;i>=0;i--){
+    const b = balls[i];
+    b.mesh.position.copy(b.p);
+    const wl = b.w.length(); if (wl > 1e-4){ t1.copy(b.w).divideScalar(wl); b.mesh.rotateOnWorldAxis(t1, wl*dt); }
+    if (b.label) b.label.position.set(b.p.x, b.p.y + 0.19, b.p.z);
+    if ((b.age > 0.9 && b.p.z > -0.1 && b !== G.pending) || b.age > 14) removeBall(b);
+  }
+  slots.forEach((s, i) => {
+    const sc = s.mesh.scale.x + ((s.alive ? 1 : 0.01) - s.mesh.scale.x)*Math.min(1, dt*12);
+    s.mesh.scale.setScalar(sc);
+    s.cx += (s.tx - s.cx)*Math.min(1, dt*12);
+    const away = Math.min(0.13, Math.abs(s.tx - s.cx)*0.5) * (s.tx === 0 ? -1 : 1);
+    s.lift += (((s.tx === 0 ? 0.05 : 0) + (G.sel === i ? 0.03 : 0)) - s.lift)*Math.min(1, dt*14);
+    const bob = Math.sin(clock*3 + i*1.7)*0.008;
+    s.mesh.position.set(s.cx, SPAWN.y + s.lift + bob, SPAWN.z + away);
+    s.label.position.set(s.cx, SPAWN.y + 0.2 + s.lift + bob, SPAWN.z + away);
+    const big = s.tx === 0 ? 1.12 : 0.92;
+    s.label.material.opacity = (G.pending || G.busy) ? 0.3 : (s.tx === 0 ? 1 : 0.8);
+    s.label.scale.set(0.34*big, 0.085*big, 1);
+  });
+  updateNet(dt, clock);
+  drawFx(dt);
+  flash *= Math.pow(0.05, dt);
+  leds.forEach((l,i) => l.material.color.copy(baseLed[i]).lerp(white, flash));
+  ledFront.material.color.setHSL((clock*0.15)%1, 0.9, 0.6);
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+syncHud(); drawBoard(); drawMarquee();
+if (document.fonts && document.fonts.load){
+  Promise.all([document.fonts.load('84px Bungee'), document.fonts.load('700 64px Lexend'), document.fonts.load('900 16px "Noto Sans TC"')])
+    .then(() => { drawBoard(); drawMarquee(); }).catch(()=>{});
+}
+requestAnimationFrame(t => { last = t; tick(t); });
+})();
+</script>
+</body>
+</html>
