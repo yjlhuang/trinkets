@@ -19,7 +19,7 @@ ROOT = os.path.dirname(HERE)
 SRC = os.path.join(ROOT, "watercolor.html")
 OUT = os.path.join(ROOT, "vocab-watercolor.html")
 
-PAGE_VERSION = "2026-10-14e"
+PAGE_VERSION = "2026-10-17a"
 
 # 單字從 one-drop.html 的 UNITS 原封不動複製過來。UNITS 本身是從班網同步的：
 # 正本 longjin2026/data/wordsblue.xlsx → build_blue.py → 班網 JSON → ../tools/sync_blue.py → one-drop.html → 這裡
@@ -27,14 +27,25 @@ ONE_DROP = os.path.join(ROOT, "one-drop.html")
 
 # 「換畫作」選單，由簡到難。regions = 在瀏覽器量的：__aw.regions.regions.filter(r=>r.area>=300).length
 # 只算「要花顏料」的區塊（面積 ≥ vocab.js 的 TAP_MIN）；更小的碎塊免費、也不算進完成度
+# legacy = 被哪張新版取代的舊版（issue #1：舊版轉檔留了白邊會漏色）。舊版的 id、圖、學生存檔都保留：
+#   - 選單只對「這張舊版有進度」的學生顯示（vocab.js 判斷），名稱標「舊版」
+#   - 上次停在舊版、但其實沒塗過的學生，打開時直接換到新版
+#   - 「全部塗完」只算非舊版
+# 已經有人塗過的圖不要直接換檔：區塊編號會整個變掉，解鎖紀錄就對不上。要改線稿就加新 id。
 ART = [
-    {"id": "vw-tools",   "name": "畫具桌",   "level": "入門", "regions": 43},
-    {"id": "vw-desk",    "name": "書桌窗景", "level": "",     "regions": 74},
-    {"id": "vw-fruit",   "name": "水果籃",   "level": "",     "regions": 84},
-    {"id": "vw-vase",    "name": "花瓶靜物", "level": "",     "regions": 88},
-    {"id": "vw-village", "name": "山間小鎮", "level": "進階", "regions": 140},
-    {"id": "vw-starry",  "name": "星夜",     "level": "進階", "regions": 171},
-    {"id": "vw-lotus",   "name": "荷花池",   "level": "挑戰", "regions": 253},
+    {"id": "vw-tools-v2",   "name": "畫具桌",   "level": "入門", "regions": 52},
+    {"id": "vw-tools",      "name": "畫具桌",   "level": "",     "regions": 43,  "legacy": "vw-tools-v2"},
+    {"id": "vw-desk-v2",    "name": "書桌窗景", "level": "",     "regions": 85},
+    {"id": "vw-desk",       "name": "書桌窗景", "level": "",     "regions": 74,  "legacy": "vw-desk-v2"},
+    {"id": "vw-fruit",      "name": "水果籃",   "level": "",     "regions": 84},
+    {"id": "vw-vase-v2",    "name": "花瓶靜物", "level": "",     "regions": 94},
+    {"id": "vw-vase",       "name": "花瓶靜物", "level": "",     "regions": 88,  "legacy": "vw-vase-v2"},
+    {"id": "vw-village-v2", "name": "山間小鎮", "level": "進階", "regions": 157},
+    {"id": "vw-village",    "name": "山間小鎮", "level": "進階", "regions": 140, "legacy": "vw-village-v2"},
+    {"id": "vw-starry-v2",  "name": "星夜",     "level": "進階", "regions": 199},
+    {"id": "vw-starry",     "name": "星夜",     "level": "進階", "regions": 171, "legacy": "vw-starry-v2"},
+    {"id": "vw-lotus-v2",   "name": "荷花池",   "level": "挑戰", "regions": 276},
+    {"id": "vw-lotus",      "name": "荷花池",   "level": "挑戰", "regions": 253, "legacy": "vw-lotus-v2"},
 ]
 
 
@@ -66,8 +77,15 @@ def art_js():
     for a in ART:
         png = open(os.path.join(HERE, "art", a["id"] + ".png"), "rb").read()
         uri = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
-        sub = " · ".join(x for x in [a["level"], f"約 {a['regions']} 塊" if a["regions"] else ""] if x)
-        items.append({"id": a["id"], "name": a["name"], "latin": sub, "src": uri})
+        legacy = a.get("legacy")
+        sub = " · ".join(x for x in ["舊版" if legacy else a["level"], f"約 {a['regions']} 塊" if a["regions"] else ""] if x)
+        item = {"id": a["id"], "name": a["name"] + ("（舊版）" if legacy else ""), "latin": sub, "src": uri}
+        if legacy:
+            ids = [x["id"] for x in ART]
+            if legacy not in ids or any(x.get("legacy") for x in ART if x["id"] == legacy):
+                sys.exit(f"{a['id']} 的 legacy 要指向清單裡的新版 id")
+            item["legacy"] = legacy
+        items.append(item)
     return "window.__VW_ART=" + json.dumps(items, ensure_ascii=False, separators=(",", ":")) + ";"
 
 
@@ -126,6 +144,14 @@ def main():
     t = once(t, '\n    <p class="small">\\u532F\\u5165\\u7684\\u5716\\u6700\\u597D\\u662F\\u767D\\u5E95\\u9ED1\\u7DDA'
                 '\\u3001\\u7DDA\\u689D\\u5C01\\u9589\\u7684\\u8457\\u8272\\u7DDA\\u7A3F\\u3002</p>', "", "匯入說明")
     t = once(t, 'F("#do-import").addEventListener(', 'F("#do-import")?.addEventListener(', "匯入按鈕事件")
+    # 選單不列「沒進度的舊版」（vocab.js 的 __vwHideArt）；目前開著的那張一定列
+    t = once(t, "let S=await Promise.all(de().map(async t=>{let l=await Or(t)",
+             "let S=await Promise.all(de().filter(t=>t.id===_.id||!window.__vwHideArt?.(t.id)).map(async t=>{let l=await Or(t)",
+             "ie 選單清單")
+    # 開頁時要開哪張：停在沒進度的舊版 → 換成新版（vocab.js 的 __vwStartArt，會查 IndexedDB 所以是 async）
+    t = once(t, "await Nt(se(H.drawing)??Dt[0])",
+             "await Nt(se(window.__vwStartArt?await window.__vwStartArt(H.drawing):H.drawing)??Dt[0])",
+             "開頁畫作")
     t = once(t, "<span>${t.name}</span></button>",
              '<span>${t.name}${t.latin?"<br><small>"+t.latin+"</small>":""}</span></button>', "選單畫名")
 

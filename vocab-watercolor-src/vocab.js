@@ -146,7 +146,7 @@ window.__vwOnDrawing=(id, set)=>{
 function checkDone(id){
   if(id!==curArt || done[id] || !curTotal || painted()<curTotal) return false;
   done[id]=true; save(); renderCredits(false);
-  const arts=window.__VW_ART||[], all=arts.length>0 && arts.every(a=>done[a.id]);
+  const arts=(window.__VW_ART||[]).filter(a=>!a.legacy), all=arts.length>0 && arts.every(a=>done[a.id]);
   confetti(all);
   toast(all?'全部 '+arts.length+' 張都塗完了！太厲害了':'整張都塗過了！可以到「調色」存成圖片', 4500);
   return true;
@@ -631,4 +631,33 @@ try{
     setTimeout(()=>toast('已從備份檔還原', 3500), 1800);
   }
 }catch(e){}
+/* ================= 舊版畫作（build.py ART 裡有 legacy 的；issue #1 換線稿） =================
+   舊版的 id、圖、存檔都還在，只是：沒在舊版塗過的學生，選單看不到它、也不會被帶去開它。
+   「塗過」＝ 解鎖過區塊、或標過塗完（localStorage），或 IndexedDB 有這張的顏色（只塗免費碎塊也算）。
+   讀不到 IndexedDB（私密瀏覽、被擋）就當作有，寧可多顯示舊版，也不要讓學生找不到作品。 */
+const LEGACY={};          // 舊版 id → 新版 id
+for(const a of window.__VW_ART||[]) if(a.legacy) LEGACY[a.id]=a.legacy;
+const legacyShown=new Set(Object.keys(LEGACY));   // 查完之前先全部顯示
+const legacyReady=(async()=>{
+  const ids=Object.keys(LEGACY); if(!ids.length) return;
+  let keys=null;
+  try{
+    const db=await idb();
+    keys=await new Promise((res,rej)=>{
+      const q=db.transaction('paint','readonly').objectStore('paint').getAllKeys();
+      q.onsuccess=()=>res(q.result.map(String)); q.onerror=()=>rej(q.error);
+    });
+    db.close();
+  }catch(e){ keys=null; }
+  for(const id of ids){
+    const has=keys===null || keys.includes('paint:'+id) || (unlocked[id]||[]).length>0 || done[id]===true;
+    if(!has) legacyShown.delete(id);
+  }
+})();
+window.__vwHideArt=id=>id in LEGACY && !legacyShown.has(id);
+window.__vwStartArt=async id=>{
+  if(!(id in LEGACY)) return id;
+  try{ await legacyReady; }catch(e){ return id; }
+  return legacyShown.has(id)?id:LEGACY[id];
+};
 })();
