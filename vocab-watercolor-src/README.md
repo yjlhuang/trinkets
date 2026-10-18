@@ -85,3 +85,5 @@ node --test same_page.test.js           # leak.js 的「點擊後網址檢查」
 - **iPad／iPhone Safari 實機**：以上都是桌面 Chromium、滑鼠事件，觸控和 Safari 的儲存行為沒有測過。
 - 從第一版重裁的四張（書桌窗景、花瓶靜物、山間小鎮、荷花池），只修了白邊造成的漏色，圖片內部沒有逐塊人工點過。
 - 已經把舊版塗完的學生，不會收到「有新版」的提示。
+
+> 2026-10-19：單字資料（UNITS）現在帶 `example`／`example_zh`（藍鵝本例句，來源 longjin2026 `data/blue_examples.xlsx`），答題後字卡顯示（`vocab.js` 的 `ex`/`ez`、`vocab.css` 的 `.q-ex`）。改例句要走班網 → `tools/sync_blue.py` → 重跑 `build.py`，不要手改。
