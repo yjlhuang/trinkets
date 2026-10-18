@@ -53,12 +53,14 @@ def main():
         src = fetch(u["unit"], args.src)
         assert src["unit"] == u["unit"] and src["unit_label"] == u["unit_label"], f"第 {u['unit']} 回的頁碼對不上"
         nu = {"unit": src["unit"], "unit_label": src["unit_label"],
-              "words": [{k: w[k] for k in ("id", "word", "pos", "meaning")} for w in src["words"]]}
+              "words": [{k: w[k] for k in ("id", "word", "pos", "meaning", "example", "example_zh")} for w in src["words"]]}
         ow = {w["id"]: w for w in u["words"]}
         assert [w["id"] for w in nu["words"]] == [w["id"] for w in u["words"]], f"第 {u['unit']} 回的字（編號）不一樣"
         for w in nu["words"]:
             if ow[w["id"]] != w:
                 changed += 1
+                if all(ow[w["id"]].get(k) == w[k] for k in ("pos", "meaning")):
+                    continue  # 只有例句不同，不逐筆列出
                 print(f"  第{u['unit']}回 {w['id']} {w['word']}：{ow[w['id']]['pos']}｜{ow[w['id']]['meaning']}  →  {w['pos']}｜{w['meaning']}")
         new.append(nu)
     print(f"{len(new)} 回（{new[0]['unit']}–{new[-1]['unit']}），{changed} 個字有變動")

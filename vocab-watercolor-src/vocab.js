@@ -42,7 +42,7 @@ UNITS.forEach(un=>{
   un.words.forEach(w=>{
     const meaning=cleanMeaning(w.meaning);
     let pos=w.pos; if(!pos){const m=meaning.match(/^([a-z]+(?:\/[a-z]+)?)\./i); pos=m?m[1]:'';}
-    WORDS[w.id]={id:w.id,word:w.word.trim(),meaning,pk:posKey(pos),unit:un.unit,gl:glosses(meaning),spell:spellForm(w.word)};
+    WORDS[w.id]={id:w.id,word:w.word.trim(),meaning,pk:posKey(pos),unit:un.unit,gl:glosses(meaning),spell:spellForm(w.word),ex:w.example||'',ez:w.example_zh||''};
     UNIT_IDS[un.unit].push(w.id);
   });
 });
@@ -309,6 +309,7 @@ function finish(ok,badText){
   const b=document.createElement('b'); b.textContent=w.word;
   const s=document.createElement('span'); s.textContent=w.meaning;
   card.append(b, sayBtn(w.word), s);
+  if(w.ex){const d=document.createElement('div'); d.className='q-ex'; const e=document.createElement('p'); e.textContent=w.ex; d.append(e); if(w.ez){const z=document.createElement('p'); z.className='q-ez'; z.textContent=w.ez; d.append(z)} card.append(d)}
   $('q-after').classList.add('on');
   $('q-nextq').focus({preventScroll:true});
   requestAnimationFrame(()=>$('q-after').scrollIntoView({block:'nearest',behavior:'smooth'}));

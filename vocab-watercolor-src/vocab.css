@@ -80,6 +80,9 @@
 .q-card { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; padding: 9px 12px; border-radius: 11px; background: var(--well); border: 1px solid var(--line); -webkit-user-select: text; user-select: text; }
 .q-card b { font: 600 18px var(--latin); }
 .q-card span { color: var(--muted); line-height: 1.6; font-size: 14px; }
+.q-card .q-ex { flex-basis: 100%; margin-top: 2px; padding-top: 8px; border-top: 1px dashed var(--line); line-height: 1.6; font-size: 14px; }
+.q-card .q-ex p { margin: 0; font-style: italic; }
+.q-card .q-ex .q-ez { font-style: normal; color: var(--muted); font-size: 13px; }
 .q-next { align-self: flex-start; font-size: 15px; padding: 8px 18px; border-radius: 999px; background: var(--ink); color: #f7f7f4; border: 0; min-height: 40px; }
 .q-next:disabled { opacity: .4; cursor: default; }
 .q-ghost { font-size: 15px; padding: 8px 16px; border-radius: 999px; background: none; color: var(--muted); border: 1px solid var(--line); min-height: 40px; }

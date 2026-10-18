@@ -20,7 +20,7 @@ ROOT = os.path.dirname(HERE)
 SRC = os.path.join(ROOT, "watercolor.html")
 OUT = os.path.join(ROOT, "vocab-watercolor.html")
 
-PAGE_VERSION = "2026-10-17a"
+PAGE_VERSION = "2026-10-19a"
 
 # 單字從 one-drop.html 的 UNITS 原封不動複製過來。UNITS 本身是從班網同步的：
 # 正本 longjin2026/data/wordsblue.xlsx → build_blue.py → 班網 JSON → ../tools/sync_blue.py → one-drop.html → 這裡
