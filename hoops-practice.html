@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>文法刷題・HOOPS PRACTICE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bungee&family=Lexend:wght@500;700&family=Noto+Sans+TC:wght@500;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#efe6f7; --panel:#fffcf6; --ink:#1b1440; --muted:#5d5480;
+  --line:rgba(27,20,64,.16); --lamp:#d99a00; --neon:#e8246a; --cyan:#0a9fb4; --cab:#c8232c; --ok:#14935a;
+  --shadow:0 10px 30px rgba(27,20,64,.18);
+  color-scheme:light; box-sizing:border-box;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e0a24; --panel:#1b1440; --ink:#fff4dc; --muted:#b8afd9;
+    --line:rgba(255,255,255,.16); --lamp:#ffc935; --neon:#ff3d7f; --cyan:#39d4e8; --cab:#ef4049; --ok:#3ddc8c;
+    --shadow:0 10px 30px rgba(0,0,0,.5); color-scheme:dark;
+  }
+}
+*,*::before,*::after{box-sizing:inherit}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);min-height:100vh;
+  font-family:"Noto Sans TC",system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
+  -webkit-tap-highlight-color:transparent}
+.wrap{max-width:720px;margin:0 auto;padding:18px 16px 40px;padding-bottom:max(40px,env(safe-area-inset-bottom))}
+h1{margin:0;font-family:Bungee,"Arial Black",Impact,sans-serif;font-weight:400;font-size:clamp(28px,7vw,38px);line-height:1;color:var(--cab)}
+.sub{margin:6px 0 18px;font-weight:900;font-size:17px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:20px 20px 18px}
+.lab{margin:0 0 8px;font-weight:900;font-size:15px}
+.hide{display:none!important}
+
+/* 設定畫面 */
+.opts{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}
+.opts label{cursor:pointer}
+.opts input{position:absolute;opacity:0;pointer-events:none}
+.opts span{display:inline-block;padding:9px 14px;border-radius:999px;border:2px solid var(--line);font-weight:900;font-size:15px;line-height:1.2}
+.opts input:checked + span{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.opts input:focus-visible + span{outline:3px solid var(--lamp);outline-offset:2px}
+.opts small{font-weight:500;opacity:.75}
+.btn{appearance:none;border:0;border-radius:14px;background:var(--cab);color:#fff;font:900 18px/1 "Noto Sans TC",sans-serif;padding:15px 18px;width:100%;cursor:pointer;box-shadow:0 5px 0 #7d1118;margin-top:6px}
+.btn:active{transform:translateY(3px);box-shadow:0 2px 0 #7d1118}
+.btn:focus-visible{outline:3px solid var(--lamp);outline-offset:3px}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 2px var(--line)}
+.btn.ghost:active{transform:translateY(1px)}
+.note{margin:14px 0 0;color:var(--muted);font-size:14px;line-height:1.6;font-weight:500}
+.note a{color:var(--cyan);font-weight:900}
+
+/* 作答 */
+.bar{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.track{flex:1;height:10px;border-radius:99px;background:var(--line);overflow:hidden}
+.track i{display:block;height:100%;width:0;background:var(--cyan);border-radius:99px;transition:width .25s}
+.stat{font-size:14px;font-weight:900;color:var(--muted);white-space:nowrap}
+.stat b{color:var(--ok)}
+.quit{appearance:none;border:0;background:none;color:var(--muted);font:900 14px "Noto Sans TC",sans-serif;cursor:pointer;padding:4px}
+.tagline{margin:0 0 4px;color:var(--muted);font-size:13px;font-weight:500}
+.sent{margin:2px 0 4px;font-family:Lexend,"Segoe UI",Arial,sans-serif;font-weight:500;font-size:clamp(20px,5vw,28px);line-height:1.4}
+.blank{display:inline-block;min-width:4.2em;padding:0 .25em;margin:0 .1em;border-bottom:3px solid var(--lamp);color:var(--lamp);font-weight:700;text-align:center}
+.blank.ok{color:var(--ok);border-color:var(--ok)}
+.zh{margin:0 0 16px;color:var(--muted);font-weight:500;font-size:15px}
+.choices{display:grid;gap:10px}
+.ch{appearance:none;text-align:left;width:100%;display:flex;align-items:center;gap:12px;background:transparent;color:var(--ink);
+  border:2px solid var(--line);border-radius:14px;padding:13px 14px;font:500 clamp(17px,4.4vw,20px)/1.3 Lexend,"Segoe UI",Arial,sans-serif;cursor:pointer}
+.ch kbd{flex:none;display:grid;place-items:center;width:26px;height:26px;border-radius:8px;background:var(--line);font:700 13px Lexend,sans-serif;color:var(--muted)}
+.ch:hover:not(:disabled){border-color:var(--lamp)}
+.ch:focus-visible{outline:3px solid var(--lamp);outline-offset:2px}
+.ch:disabled{cursor:default}
+.ch.right{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.ch.wrong{border-color:var(--neon);background:color-mix(in srgb,var(--neon) 12%,transparent)}
+.ch.dim{opacity:.55}
+.fb{margin-top:16px}
+.verdict{margin:0 0 8px;font-weight:900;font-size:20px}
+.verdict.ok{color:var(--ok)}.verdict.bad{color:var(--neon)}
+.why{border-left:4px solid var(--ok);padding:4px 0 4px 12px;margin:0 0 10px;line-height:1.65;font-weight:500}
+.why.bad{border-left-color:var(--neon)}
+.why .l{display:block;font-size:13px;color:var(--muted)}
+.why .e{font-family:Lexend,"Segoe UI",Arial,sans-serif;font-weight:700}
+.rule{background:color-mix(in srgb,var(--lamp) 14%,transparent);border-radius:12px;padding:10px 12px;line-height:1.65;font-weight:500;margin-bottom:6px}
+.tag{display:inline-block;background:var(--lamp);color:#1b1440;font-weight:900;font-size:13px;border-radius:999px;padding:2px 10px;margin-bottom:4px}
+
+/* 結果 */
+.big{font-family:Bungee,"Arial Black",Impact,sans-serif;font-size:56px;line-height:1;color:var(--cab);margin:4px 0}
+.big small{font-size:24px;color:var(--muted)}
+.ri{border:1px solid var(--line);border-left:5px solid var(--neon);border-radius:14px;padding:10px 14px;margin-bottom:10px}
+.ri .en{font-family:Lexend,"Segoe UI",Arial,sans-serif;font-size:17px;line-height:1.45;margin:2px 0}
+.ri .en b{color:var(--ok)}
+.ri .en s{color:var(--neon)}
+.ri .zh{margin:0 0 4px;font-size:14px}
+.ri p.why2{margin:0;font-size:14px;line-height:1.6;color:var(--muted);font-weight:500}
+.sec{margin:18px 0 8px;font-size:16px;font-weight:900}
+.foot{margin-top:22px;text-align:center;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>HOOPS PRACTICE</h1>
+  <p class="sub">文法刷題：選對的那個，馬上看為什麼</p>
+
+  <!-- 設定 -->
+  <section class="card" id="setup">
+    <p class="lab">題庫</p>
+    <div class="opts" id="bankOpts">
+      <label><input type="radio" name="bank" value="basic"><span>基礎 <small id="nBasic"></small></span></label>
+      <label><input type="radio" name="bank" value="adv"><span>進階・學測型 <small id="nAdv"></small></span></label>
+      <label><input type="radio" name="bank" value="mix"><span>混合 <small id="nMix"></small></span></label>
+    </div>
+    <p class="lab">想練哪個觀念？</p>
+    <div class="opts" id="tagOpts"></div>
+    <p class="lab">這一輪幾題</p>
+    <div class="opts" id="lenOpts">
+      <label><input type="radio" name="len" value="10"><span>10 題</span></label>
+      <label><input type="radio" name="len" value="20"><span>20 題</span></label>
+      <label><input type="radio" name="len" value="0"><span>全部 <small id="nAll"></small></span></label>
+    </div>
+    <button class="btn" id="goBtn">開始刷題 ▶</button>
+    <p class="note">不計時，答錯會告訴你為什麼。鍵盤可按 1／2／3 選答案、Enter 下一題。想玩遊戲版？<a href="hoops.html">去投籃 🏀</a></p>
+  </section>
+
+  <!-- 作答 -->
+  <section class="card hide" id="play">
+    <div class="bar">
+      <div class="track"><i id="prog"></i></div>
+      <span class="stat" id="stat"></span>
+      <button class="quit" id="quitBtn">結束</button>
+    </div>
+    <p class="tagline" id="tagline"></p>
+    <p class="sent" id="sent"></p>
+    <p class="zh" id="zh"></p>
+    <div class="choices" id="choices"></div>
+    <div class="fb hide" id="fb"></div>
+    <button class="btn hide" id="nextBtn">下一題 ▶</button>
+  </section>
+
+  <!-- 結果 -->
+  <section class="card hide" id="result">
+    <p class="lab" style="margin:0">這一輪結束</p>
+    <div class="big" id="rScore"></div>
+    <p class="note" id="rMeta" style="margin:0 0 6px"></p>
+    <div id="rWeak"></div>
+    <div id="rMiss"></div>
+    <button class="btn hide" id="retryWrong">只重做答錯的</button>
+    <button class="btn" id="againBtn">再來一輪</button>
+    <button class="btn ghost" id="setupBtn">換題庫／觀念</button>
+  </section>
+
+  <p class="foot">題庫與投籃遊戲共用（hoops-questions.js）</p>
+</div>
+
+<script src="hoops-questions.js"></script>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const shuffle = a => { for (let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; } return a; };
+const { CONCEPTS, QUESTIONS, QUESTIONS_ADV } = window.HOOPS_DATA;
+const BANKS = { basic:QUESTIONS, adv:QUESTIONS_ADV, mix:QUESTIONS.concat(QUESTIONS_ADV) };
+const PREF_KEY = 'hoops-practice-pref';
+
+let pref = { bank:'basic', tag:'ALL', len:'10' };
+try { Object.assign(pref, JSON.parse(localStorage.getItem(PREF_KEY) || '{}')); } catch(e){}
+
+const show = id => ['setup','play','result'].forEach(k => $('#'+k).classList.toggle('hide', k !== id));
+const pool = () => BANKS[pref.bank].filter(q => pref.tag === 'ALL' || q.tag === pref.tag);
+
+/* ---------- 設定畫面 ---------- */
+function renderSetup(){
+  $('#nBasic').textContent = `${QUESTIONS.length} 題`;
+  $('#nAdv').textContent = `${QUESTIONS_ADV.length} 題`;
+  $('#nMix').textContent = `${BANKS.mix.length} 題`;
+  if (!BANKS[pref.bank]) pref.bank = 'basic';
+  document.querySelector(`input[name=bank][value=${pref.bank}]`).checked = true;
+  renderTags();
+  if (!document.querySelector(`input[name=len][value="${pref.len}"]`)) pref.len = '10';
+  document.querySelector(`input[name=len][value="${pref.len}"]`).checked = true;
+  updateAll();
+  show('setup');
+}
+function renderTags(){
+  const count = {};
+  BANKS[pref.bank].forEach(q => count[q.tag] = (count[q.tag]||0) + 1);
+  if (pref.tag !== 'ALL' && !count[pref.tag]) pref.tag = 'ALL';
+  const items = [['ALL', '全部觀念', BANKS[pref.bank].length], ...Object.keys(CONCEPTS).filter(t => count[t]).map(t => [t, CONCEPTS[t].name, count[t]])];
+  $('#tagOpts').innerHTML = items.map(([t, name, n]) =>
+    `<label><input type="radio" name="tag" value="${t}"${t === pref.tag ? ' checked' : ''}><span>${esc(name)} <small>${n}</small></span></label>`).join('');
+}
+function updateAll(){ $('#nAll').textContent = `${pool().length} 題`; }
+$('#bankOpts').addEventListener('change', e => { pref.bank = e.target.value; renderTags(); updateAll(); });
+$('#tagOpts').addEventListener('change', e => { pref.tag = e.target.value; updateAll(); });
+$('#lenOpts').addEventListener('change', e => { pref.len = e.target.value; });
+
+/* ---------- 作答 ---------- */
+let run = null;
+function startRun(qs){
+  const list = shuffle(qs.slice());
+  const n = +pref.len;
+  run = { list: n && !run?.retry ? list.slice(0, n) : list, i:0, right:0, misses:[], locked:false, retry:false };
+  next();
+}
+function begin(){
+  try { localStorage.setItem(PREF_KEY, JSON.stringify(pref)); } catch(e){}
+  run = null;
+  startRun(pool());
+}
+function next(){
+  if (run.i >= run.list.length) return finish();
+  const q = run.list[run.i];
+  run.q = q; run.locked = false;
+  run.opts = shuffle([{ text:q.a[0], ok:true, why:q.a[1] }, ...q.w.map(w => ({ text:w[0], ok:false, why:w[1] }))]);
+  const [a, b] = q.s.split('___');
+  $('#sent').innerHTML = esc(a) + '<span class="blank" id="blank">&nbsp;</span>' + esc(b);
+  $('#zh').textContent = q.zh;
+  $('#tagline').textContent = `第 ${run.i + 1} 題・${CONCEPTS[q.tag].name}`;
+  $('#choices').innerHTML = run.opts.map((o, i) => `<button class="ch" data-i="${i}"><kbd>${i+1}</kbd><span>${esc(o.text)}</span></button>`).join('');
+  $('#fb').classList.add('hide'); $('#nextBtn').classList.add('hide');
+  stat(); show('play');
+  $('#choices').firstElementChild.focus({ preventScroll:true });
+}
+function stat(){
+  $('#prog').style.width = (run.i / run.list.length * 100) + '%';
+  $('#stat').innerHTML = `${run.i + 1} / ${run.list.length}　<b>✓ ${run.right}</b>`;
+}
+function pick(i){
+  if (run.locked) return;
+  run.locked = true;
+  const o = run.opts[i], q = run.q, c = CONCEPTS[q.tag];
+  const btns = [...document.querySelectorAll('.ch')];
+  btns.forEach((b, k) => { b.disabled = true; b.classList.add(run.opts[k].ok ? 'right' : (k === i ? 'wrong' : 'dim')); });
+  const blank = $('#blank'); blank.textContent = run.opts.find(x => x.ok).text; blank.classList.add('ok');
+  let h;
+  if (o.ok){
+    run.right++;
+    h = `<p class="verdict ok">✓ 答對了</p><div class="why"><span class="l">為什麼</span>${esc(q.a[1])}</div>`;
+  } else {
+    run.misses.push({ q, picked:o.text, pickedWhy:o.why });
+    h = `<p class="verdict bad">✗ 再看一下</p>
+      <div class="why bad"><span class="l">你選的 <span class="e">${esc(o.text)}</span> 為什麼不行</span>${esc(o.why)}</div>
+      <div class="why"><span class="l">正確答案 <span class="e">${esc(q.a[0])}</span></span>${esc(q.a[1])}</div>`;
+  }
+  h += `<div class="rule"><span class="tag">${esc(c.name)}</span><br>${esc(c.rule)}</div>`;
+  $('#fb').innerHTML = h; $('#fb').classList.remove('hide');
+  $('#nextBtn').textContent = run.i + 1 >= run.list.length ? '看成績 ▶' : '下一題 ▶';
+  $('#nextBtn').classList.remove('hide');
+  stat();
+  $('#nextBtn').focus({ preventScroll:true });
+  $('#nextBtn').scrollIntoView({ block:'nearest', behavior:'smooth' });
+}
+$('#choices').addEventListener('click', e => { const b = e.target.closest('.ch'); if (b) pick(+b.dataset.i); });
+$('#nextBtn').addEventListener('click', () => { run.i++; next(); });
+document.addEventListener('keydown', e => {
+  if ($('#play').classList.contains('hide') || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!run.locked && /^[1-3]$/.test(e.key)) pick(+e.key - 1);
+});
+$('#quitBtn').addEventListener('click', () => { run.list.length = run.i + (run.locked ? 1 : 0); run.i = run.list.length; finish(); });
+
+/* ---------- 結果 ---------- */
+function finish(){
+  const n = run.list.length;
+  if (!n){ renderSetup(); return; }
+  $('#rScore').innerHTML = `${run.right}<small> / ${n}</small>`;
+  $('#rMeta').textContent = run.misses.length ? `答錯 ${run.misses.length} 題，下面是解說` : '全對！太強了 🏀';
+  const weak = {};
+  run.misses.forEach(m => weak[m.q.tag] = (weak[m.q.tag]||0) + 1);
+  const tags = Object.keys(weak).sort((a, b) => weak[b] - weak[a]);
+  $('#rWeak').innerHTML = tags.length ? '<p class="sec">要再看一次的觀念</p>' + tags.map(t =>
+    `<div class="rule"><span class="tag">${esc(CONCEPTS[t].name)}　錯 ${weak[t]} 題</span><br>${esc(CONCEPTS[t].rule)}</div>`).join('') : '';
+  $('#rMiss').innerHTML = run.misses.length ? '<p class="sec">答錯的題目</p>' + run.misses.map(m => {
+    const [a, b] = m.q.s.split('___');
+    return `<div class="ri"><p class="en">${esc(a)}<b>${esc(m.q.a[0])}</b>${esc(b)}</p><p class="zh">${esc(m.q.zh)}</p>
+      <p class="why2">你選 <s>${esc(m.picked)}</s>：${esc(m.pickedWhy)}</p></div>`;
+  }).join('') : '';
+  $('#retryWrong').classList.toggle('hide', !run.misses.length);
+  run.lastMisses = run.misses.map(m => m.q);
+  show('result'); window.scrollTo(0, 0);
+}
+$('#retryWrong').addEventListener('click', () => {
+  const qs = run.lastMisses; run = { retry:true };
+  startRun(qs);
+});
+$('#againBtn').addEventListener('click', begin);
+$('#setupBtn').addEventListener('click', renderSetup);
+$('#goBtn').addEventListener('click', () => {
+  if (!pool().length) return;
+  begin();
+});
+
+renderSetup();
+})();
+</script>
+</body>
+</html>
