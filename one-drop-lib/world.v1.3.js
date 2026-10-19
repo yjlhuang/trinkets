@@ -5,11 +5,13 @@
 
    介面見 PLAN.md 2.2。
    存檔：仍寫回頁面原本的 key、v1 格式；既有欄位的順序與精度不變，v1.1 只在 flies 後面新增
-   critters、seenKinds、found、newFound（居民與圖鑑）。
+   critters、seenKinds、found、newFound（居民與圖鑑）。v1.2 讓居民前面的植物變透明，不新增存檔欄位。
+   v1.3 加 4 種居民（嗡嗡、點點、毛毛、小雲）和 4 種植物（三葉草、向日葵、鬱金香、南瓜），圖鑑 12 → 28 格；
+   存檔欄位不變（只多了新的 kind/type 字串），讀到不認得的居民會原樣保留、存檔時寫回。
    內部資料已經是多地圖的形狀（maps + activeMap），目前只有 home 一張。 */
 (function(){
 'use strict';
-const VERSION='1.1';
+const VERSION='1.3';
 
 function create(cfg){
 const $=id=>document.getElementById(id);
@@ -55,6 +57,18 @@ const hash=(seed,k)=>{const x=Math.sin(seed*9301+k*49297)*233280;return x-Math.f
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 const chance=p=>Math.random()<p;
 const dist=(ax,ay,bx,by)=>Math.hypot((ax-bx)*W,(ay-by)*H);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const TAU=Math.PI*2;
+// v1.3：今天的日期（南瓜只在 10～11 月長）；測試可以用 cfg.today() 注入
+const today=()=>cfg.today?cfg.today():new Date();
+const autumn=()=>{const m=today().getMonth();return m===9||m===10};
+// v1.3：植物分組。outcome() 用它決定「從這株長出什麼」；不在分組裡的會被當成樹（舊程式的 else 分支）
+const GRASSY={grass:1,mushroom:1,clover:1,pumpkin:1}, FLOWERY={flower:1,sunflower:1,tulip:1};
+// v1.3：新植物的圖鑑格。min＝長到第幾階才登錄；稀有＝color 5（跟紫花同一個機率）
+const PKEY={clover:{type:'clover',rare:false,min:1},cloverR:{type:'clover',rare:true,min:1},
+  sunflower:{type:'sunflower',rare:false,min:3},sunflowerR:{type:'sunflower',rare:true,min:3},
+  tulip:{type:'tulip',rare:false,min:3},tulipR:{type:'tulip',rare:true,min:3},
+  pumpkin:{type:'pumpkin',rare:false,min:3},pumpkinR:{type:'pumpkin',rare:true,min:3}};
 
 function resize(){
   const r=land.getBoundingClientRect();
@@ -108,16 +122,19 @@ function addPlant(type,x,y,opts={}){
   const pd=pondAt(x,y,1.05);
   if(type==='lily'){ if(!pd) return null; }
   else if(pd){ [x,y]=pondEdge(pd); }
+  [x,y]=clearOfCritters(type,x,y);
   let color=opts.color;
   if(color===undefined) color = chance(.03) ? 5 : Math.floor(Math.random()*5);
   const p={type,x,y,stage:opts.stage||1,v:0,born:now(),seed:Math.random(),color};
   plants.push(p);
   if(type==='flower'&&color===5) record('violet');
   if(type==='mushroom') record('ring');
+  if(type==='clover') record(color===5?'cloverR':'clover');
   if(type==='flower' && color===5 && opts.color===undefined) emit('discover',{kind:'rare-flower',x,y,map:activeMap,color});
   return p;
 }
-function grow(p){ if(p.stage<3){p.stage++; ring(p);} if(p.type==='lily'&&p.stage>=2) record('lily'); if(p.type==='tree'&&p.stage>=3) record('tree'); }
+function grow(p){ if(p.stage<3){p.stage++; ring(p);} if(p.type==='lily'&&p.stage>=2) record('lily'); if(p.type==='tree'&&p.stage>=3) record('tree');
+  if(PKEY[p.type]&&PKEY[p.type].min===3&&p.stage>=3) record(p.type+(p.color===5?'R':'')); }
 function ring(p){ rings.push({x:p.x,y:p.y,t0:now()}) }
 function around(x,y,minR,maxR){
   const a=Math.random()*Math.PI*2,r=(minR+Math.random()*(maxR-minR))*U;
@@ -131,7 +148,7 @@ function outcome(x,y){
   const R=.11*U;
   const near=plants.map(p=>({p,d:dist(p.x,p.y,x,y)})).filter(o=>o.d<R && o.p.type!=='lily').sort((a,b)=>a.d-b.d).map(o=>o.p);
   const count=t=>near.filter(p=>p.type===t).length;
-  const nG=count('grass'), nF=count('flower');
+  const nG=count('grass')+count('clover'), nF=count('flower');   // v1.3：三葉草也算草，苔球、毛毛不會因此變少
   const bigTrees=near.filter(p=>p.type==='tree'&&p.stage===3);
 
   // 1. dropped into a pond: lily pads, or the bank gets greener
@@ -154,6 +171,8 @@ function outcome(x,y){
   }
 
   const fresh=()=>{
+    // v1.3：秋天（10～11 月）空地偶爾冒出南瓜藤
+    if(autumn() && plants.filter(p=>p.type==='pumpkin').length<6 && chance(.05)){ acts.push(()=>addPlant('pumpkin',x,y)); return; }
     const lush=near.length>=4, t=Math.random();
     if(t<(lush?.62:.72)) acts.push(()=>addPlant('grass',x,y));
     else if(t<(lush?.88:.94)) acts.push(()=>addPlant('flower',x,y));
@@ -174,12 +193,20 @@ function outcome(x,y){
     }else if(r<.85){
       const src=near[Math.floor(Math.pow(Math.random(),2)*near.length)];
       ring(src);
-      if(src.type==='grass'||src.type==='mushroom'){
-        for(let i=0,k=1+Math.floor(Math.random()*3);i<k;i++){const [a,b]=around(x,y,.02,.07);acts.push(()=>addPlant('grass',a,b))}
+      if(GRASSY[src.type]){
+        // v1.3：三葉草會自己蔓延；很密的草地裡，新長的草偶爾是三葉草
+        const sprout=()=>(src.type==='clover'&&chance(.45))||(nG>=5&&chance(.12))?'clover':'grass';
+        for(let i=0,k=1+Math.floor(Math.random()*3);i<k;i++){const [a,b]=around(x,y,.02,.07),ty=sprout();acts.push(()=>addPlant(ty,a,b))}
         if(chance(.12)){const [a,b]=around(x,y,.02,.06);acts.push(()=>addPlant('flower',a,b))}
-      }else if(src.type==='flower'){
-        for(let i=0,k=1+(chance(.4)?1:0);i<k;i++){const [a,b]=around(src.x,src.y,.025,.07);acts.push(()=>addPlant('flower',a,b,{color:chance(.8)?src.color:undefined}))}
+        if(autumn() && plants.filter(p=>p.type==='pumpkin').length<6 && chance(.03)){const [a,b]=around(x,y,.03,.07);acts.push(()=>addPlant('pumpkin',a,b))}
+      }else if(FLOWERY[src.type]){
+        const fc=src.type==='flower'?src.color:src.type==='sunflower'?1:undefined;
+        for(let i=0,k=1+(chance(.4)?1:0);i<k;i++){const [a,b]=around(src.x,src.y,.025,.07);acts.push(()=>addPlant('flower',a,b,{color:fc!==undefined&&chance(.8)?fc:undefined}))}
         if(chance(.5)){const [a,b]=around(x,y,.02,.05);acts.push(()=>addPlant('grass',a,b))}
+        // v1.3：黃花開成一片 → 向日葵；同一種顏色的花連成一大片 → 鬱金香
+        const nY=near.filter(p=>p.type==='flower'&&p.color===1).length;
+        if(nY>=3 && near.filter(p=>p.type==='sunflower').length<2 && chance(.18)){const [a,b]=around(src.x,src.y,.03,.07);acts.push(()=>addPlant('sunflower',a,b))}
+        if(src.type==='flower' && near.filter(p=>p.type==='flower'&&p.color===src.color).length>=5 && chance(.15)){const [a,b]=around(src.x,src.y,.025,.06);acts.push(()=>addPlant('tulip',a,b))}
       }else{
         const t=Math.random(), sap=bigTrees.length>=2?.3:.15;   // a grove seeds more trees
         const [a,b]=around(src.x,src.y,.04,.1);
@@ -276,15 +303,24 @@ cv.addEventListener('click',e=>{
    critters 住在 maps[activeMap] 裡（bindMap）；提示文字走 message 事件，由頁面的 toast 顯示。 */
 const sparks=[];
 let seenKinds={};
-const CR={dew:7.4, moss:9.2, cap:7.2};
-const FIRST={dew:'水塘邊住進了一顆小露珠',moss:'草地上滾來一顆愛睡覺的苔球',cap:'蘑菇圈裡，好像有誰在偷看'};
-const RARE={dew:'來了一顆會變色的露珠',moss:'這顆苔球別著一朵稀有的花',cap:'冒出一朵沒見過顏色的小蕈寶'};
+const CR={dew:7.4, moss:9.2, cap:7.2, bee:6, ladybug:7, puff:8, cloud:8};
+const FIRST={dew:'水塘邊住進了一顆小露珠',moss:'草地上滾來一顆愛睡覺的苔球',cap:'蘑菇圈裡，好像有誰在偷看',
+  bee:'花圃裡飛來一隻嗡嗡',ladybug:'花叢裡跑來一隻點點',puff:'草地上飄來一團毛毛',cloud:'答對好多題，飄來一朵小雲'};
+const RARE={dew:'來了一顆會變色的露珠',moss:'這顆苔球別著一朵稀有的花',cap:'冒出一朵沒見過顏色的小蕈寶',
+  bee:'這隻嗡嗡是藍色條紋的',ladybug:'來了一隻黃色的點點',puff:'飄來一團粉紅色的毛毛',cloud:'小雲身邊掛著一段彩虹'};
+// v1.3：飛在空中的居民（不會被植物擋、也不會把新植物推開）；alt 是離地高度（S 單位）
+const AIR={bee:1,puff:1,cloud:1}, ALT0={bee:22,puff:12,cloud:70};
+const keepCritters=[];   // v1.3：讀到不認得的居民（例如之後版本才有的），原樣保留、存檔時寫回
+const puffSeeds=[];      // 毛毛噴出來的種子（只在記憶體）
+let streak=[];           // 最近幾次答對的時間（addWater），湊滿就來一朵小雲
+const STREAK_N=10, STREAK_MS=5*60*1000;
 function newCritter(kind,x,y,home,o={}){
   const t=now();
   return {kind,x,y,hx:home[0],hy:home[1],seed:o.seed??Math.random(),v:o.v??(Math.random()<.05?1:0),
     born:o.born??t,t0:t,wait:600+Math.random()*1500,hop:null,tgt:null,land:-1e9,
     blinkAt:t+800+Math.random()*3000,blinkT:-1e9,face:Math.random()<.5?-1:1,poke:-1e9,cheer:-1e9,
-    e:kind==='cap'?0:1,state:kind==='cap'?'hidden':'idle',st0:t,sdur:400+Math.random()*1500,wakeAt:t+6000+Math.random()*9000,wakeT:-1e9};
+    e:kind==='cap'?0:1,state:kind==='cap'?'hidden':'idle',st0:t,sdur:400+Math.random()*1500,wakeAt:t+6000+Math.random()*9000,wakeT:-1e9,
+    alt:ALT0[kind]||0,talt:ALT0[kind]||0,loop:-1e9,fly:-1e9,amt:1,drops:[],rainUntil:-1e9,heavy:-1e9,nextRain:t+4000+Math.random()*5000};
 }
 function makeCritter(kind,x,y,home,o={}){
   if(critters.length>=15) return null;
@@ -294,6 +330,11 @@ function makeCritter(kind,x,y,home,o={}){
   if(!o.quiet){
     if(!seenKinds[kind]){seenKinds[kind]=1;emit('message',FIRST[kind]);}
     else if(c.v) emit('message',RARE[kind]);
+  }
+  if(!o.quiet){   // v1.2：真的剛出現（不是讀檔）才有提示；c.reveal 只在記憶體裡，不進存檔
+    c.reveal=now();
+    rings.push({x:c.x,y:c.y,t0:now()});
+    setTimeout(()=>{ if(!c.hop&&!reduceMotion){ startHop(c,c.x,c.y,now(),420,12); c.t0=now(); c.wait=900; } },700);
   }
   return c;
 }
@@ -312,13 +353,50 @@ function critterTarget(c){
     for(let i=0;i<8;i++){const t=around(c.hx,c.hy,0,.07);if(!pondAt(t[0],t[1],1.2)) return t}
     return [c.x,c.y];
   }
+  if(c.kind==='bee'){   // 飛到附近開著的花上面；藍紋嗡嗡偏愛紫花
+    const fl=plants.filter(p=>FLOWERY[p.type]&&p.stage>=2&&dist(p.x,p.y,c.hx,c.hy)<.14*U);
+    const pref=c.v?fl.filter(p=>p.color===5):[], pool=pref.length?pref:fl;
+    if(pool.length&&chance(.8)){const f=pick(pool);c.talt=f.type==='sunflower'?44:f.type==='tulip'?30:19+f.stage*6;return [f.x,f.y]}
+    c.talt=18+Math.random()*10;return around(c.hx,c.hy,0,.06);
+  }
+  if(c.kind==='cloud'){c.talt=ALT0.cloud;return around(c.hx,c.hy,0,.14)}
+  if(c.kind==='puff'||c.kind==='ladybug'){
+    for(let i=0;i<8;i++){const t=around(c.hx,c.hy,0,c.kind==='puff'?.08:.06);if(!pondAt(t[0],t[1],1.2)) return t}
+    return [c.x,c.y];
+  }
   return ringSpot(c);
 }
 function startHop(c,x1,y1,t,d,h){c.hop={x0:c.x,y0:c.y,x1,y1,t0:t,d,h};c.face=x1>c.x?1:x1<c.x?-1:c.face}
+function airMove(c,t,dt){   // v1.3：飛的居民平滑地飄，不用跳
+  c.alt+=(c.talt-c.alt)*Math.min(1,dt*1.5);
+  if(reduceMotion||t-c.t0<c.wait) return;
+  if(!c.tgt) c.tgt=critterTarget(c);
+  c.tgt[0]=clamp(c.tgt[0],.03,.97);c.tgt[1]=clamp(c.tgt[1],.08,.98);
+  const d=dist(c.x,c.y,c.tgt[0],c.tgt[1]);
+  if(d<1.5){c.tgt=null;c.t0=t;c.wait=c.kind==='bee'?1400+Math.random()*1800:2500+Math.random()*3500;return}
+  const sp=(c.kind==='bee'?.05:c.kind==='cloud'?.012:.01)*U*dt, lin=Math.min(1,sp/d);
+  const f=c.kind==='bee'?Math.max(lin,Math.min(1,dt*1.8)):lin;
+  if(Math.abs(c.tgt[0]-c.x)>1e-4) c.face=c.tgt[0]>c.x?1:-1;
+  c.x+=(c.tgt[0]-c.x)*f;c.y+=(c.tgt[1]-c.y)*f;c.moving=t;
+}
+function rainTick(c,t,dt){   // 小雲：每隔一陣子下一點雨（雨滴只在記憶體，不會澆到植物）
+  if(!reduceMotion&&t>c.nextRain){c.rainUntil=t+1600;c.nextRain=t+6500+Math.random()*4000}
+  if(t<c.rainUntil&&!reduceMotion&&Math.random()<dt*(t<c.heavy?40:14)) c.drops.push({dx:Math.random()*2-1,t0:t});
+  for(let i=c.drops.length-1;i>=0;i--) if(t-c.drops[i].t0>720) c.drops.splice(i,1);
+}
+function puffBurst(c,t){
+  const p=critterPos(c,t), r=CR.puff*S;
+  for(let i=0;i<9;i++) puffSeeds.push({x:p.cx+(Math.random()-.5)*r,y:p.cy-p.lift,vx:(Math.random()*16-8)*S,vy:(Math.random()*-9-5)*S,t0:t,rot:Math.random()*TAU,life:1800+Math.random()*1000});
+  c.amt=.28;
+}
 function updateCritters(t,dt){
   for(const c of critters){
     if(t>c.blinkAt){c.blinkT=t;c.blinkAt=t+1800+Math.random()*3800}
     if(c.kind==='moss'&&t>c.wakeAt){c.wakeT=t;c.wakeAt=t+9000+Math.random()*12000}
+    if(c.kind==='puff') c.amt=Math.min(1,c.amt+dt/9);
+    if(c.kind==='cloud') rainTick(c,t,dt);
+    if(AIR[c.kind]){ airMove(c,t,dt); continue; }
+    if(c.kind==='ladybug'&&t-c.fly<1000) continue;
     if(c.kind==='cap'){
       const k=t-c.st0;
       if(c.state==='hidden'&&k>c.sdur){c.state='rise';c.st0=t}
@@ -341,13 +419,16 @@ function updateCritters(t,dt){
       c.x+=(c.tgt[0]-c.x)*f;c.y+=(c.tgt[1]-c.y)*f;c.moving=t;
       continue;
     }
-    const step=(c.kind==='dew'?.032:.014)*U, f=Math.min(1,step/d);
-    const dur=c.kind==='dew'?380:240;
+    const bug=c.kind==='ladybug';   // 點點：一小步一小步地蹦（橫著滑會像蜘蛛）
+    const step=(c.kind==='dew'?.032:bug?.02:.014)*U, f=Math.min(1,step/d);
+    const dur=c.kind==='dew'?380:bug?200:240;
     if(reduceMotion){c.x+=(c.tgt[0]-c.x)*f;c.y+=(c.tgt[1]-c.y)*f;c.t0=t;c.wait=400;continue}
-    startHop(c,c.x+(c.tgt[0]-c.x)*f,c.y+(c.tgt[1]-c.y)*f,t,dur,c.kind==='dew'?9:4);
-    c.t0=t;c.wait=dur+(c.kind==='dew'?120+Math.random()*260:200+Math.random()*350);
+    startHop(c,c.x+(c.tgt[0]-c.x)*f,c.y+(c.tgt[1]-c.y)*f,t,dur,c.kind==='dew'?9:bug?2.6:4);
+    c.t0=t;c.wait=dur+(c.kind==='dew'?120+Math.random()*260:bug?40+Math.random()*90:200+Math.random()*350);
   }
   for(let i=sparks.length-1;i>=0;i--) if(t-sparks[i].t0>1100) sparks.splice(i,1);
+  for(let i=puffSeeds.length-1;i>=0;i--){const s=puffSeeds[i];if(t-s.t0>s.life){puffSeeds.splice(i,1);continue}
+    s.x+=s.vx*dt+Math.sin(t*.003+i)*.15*S;s.y+=s.vy*dt;s.vy*=.992;s.vx*=.995;s.rot+=dt*2}
 }
 function critterPos(c,t){
   let x=c.x,y=c.y,lift=0,sq=0;
@@ -357,7 +438,14 @@ function critterPos(c,t){
     lift=Math.sin(Math.PI*k)*c.hop.h*S;
     sq=k<.12?-.22*(1-k/.12):.14*Math.sin(Math.PI*k);
   }else if(t-c.land<240) sq=-.24*(1-(t-c.land)/240);
-  return {cx:x*W,cy:y*H,lift,sq};
+  let cx=x*W;
+  if(AIR[c.kind]){
+    lift+=c.alt*S+(reduceMotion?0:Math.sin(t*(c.kind==='bee'?.006:.0025)+c.seed*9)*S*(c.kind==='cloud'?1.5:1));
+    if(c.kind==='bee'){const k=(t-c.loop)/800;if(k>=0&&k<1){cx+=Math.sin(k*TAU)*CR.bee*S*2.2*c.face;lift+=(1-Math.cos(k*TAU))*CR.bee*S*1.5}}
+    if(c.kind==='puff'&&t-c.cheer<900) lift+=Math.sin(Math.PI*(t-c.cheer)/900)*5*S;
+    lift=Math.min(lift,Math.max(0,y*H-CR[c.kind]*S*2.2));   // 不要飛出土地上緣
+  }else if(c.kind==='ladybug'){const k=(t-c.fly)/1000;if(k>=0&&k<1) lift+=Math.sin(Math.PI*k)*5*S}
+  return {cx,cy:y*H,lift,sq};
 }
 const happy=(c,t)=>t-c.poke<1400||t-c.cheer<1100;
 function eyes(c,t,ex,ey,er,look,open){
@@ -482,9 +570,125 @@ function drawCritter(c,t){
   const p=critterPos(c,t);
   if(c.kind==='dew') drawDew(c,t,p,g);
   else if(c.kind==='moss') drawMoss(c,t,p,g);
+  else if(c.kind==='bee') drawBee(c,t,p,g);
+  else if(c.kind==='ladybug') drawLadybug(c,t,p,g);
+  else if(c.kind==='puff') drawPuff(c,t,p,g);
+  else if(c.kind==='cloud') drawCloud(c,t,p,g);
   else drawCap(c,t,p,g);
 }
+/* ---------- v1.3 居民的畫法（照 docs/new-guide-candidates.html，降過彩度） ---------- */
+function smile(y,r,big){ctx.strokeStyle='#2a2a2a';ctx.lineWidth=r*.09;ctx.lineCap='round';ctx.beginPath();ctx.arc(0,y,big?r*.16:r*.09,Math.PI*.15,Math.PI*.85);ctx.stroke()}
+function airShadow(X,Y,rx,a){const b=ctx.globalAlpha;ctx.globalAlpha=b*a;ctx.fillStyle=PAL.shadow;ctx.beginPath();ctx.ellipse(X,Y,rx,rx*.3,0,0,TAU);ctx.fill();ctx.globalAlpha=b}
+function drawBee(c,t,p,g){   // 嗡嗡：蜜蜂
+  const r=CR.bee*S*g, X=p.cx, Y=p.cy-p.lift;
+  airShadow(X,p.cy,r*.8,.6);
+  ctx.save();ctx.translate(X,Y);
+  const flap=reduceMotion?1:.35+.65*Math.abs(Math.sin(t*.05));
+  ctx.fillStyle='rgba(255,255,255,.72)';ctx.strokeStyle='rgba(120,140,160,.35)';ctx.lineWidth=S*.4;
+  for(const s of [-1,1]){ctx.beginPath();ctx.ellipse(s*r*.8,-r*.85,r*.5,Math.max(.01,r*.85*flap),s*.55,0,TAU);ctx.fill();ctx.stroke()}
+  const body=c.v?'#f2e6bf':'#efc451', band=c.v?'#5f8fcf':'#3a2e22';
+  ctx.fillStyle=body;
+  for(let i=0;i<14;i++){const a=i/14*TAU;ctx.beginPath();ctx.arc(Math.cos(a)*r*.92,Math.sin(a)*r*.92,r*.2,0,TAU);ctx.fill()}
+  ctx.beginPath();ctx.arc(0,0,r,0,TAU);ctx.fill();
+  ctx.save();ctx.beginPath();ctx.arc(0,0,r*1.02,0,TAU);ctx.clip();
+  ctx.fillStyle=band;ctx.fillRect(-r*1.2,r*.22,r*2.4,r*.28);ctx.fillRect(-r*1.2,r*.68,r*2.4,r*.3);
+  ctx.restore();
+  ctx.strokeStyle='#3a2e22';ctx.lineWidth=S*.6;ctx.lineCap='round';ctx.fillStyle='#3a2e22';
+  for(const s of [-1,1]){ctx.beginPath();ctx.moveTo(s*r*.3,-r*.85);ctx.quadraticCurveTo(s*r*.35,-r*1.3,s*r*.6,-r*1.45);ctx.stroke();ctx.beginPath();ctx.arc(s*r*.6,-r*1.45,r*.13,0,TAU);ctx.fill()}
+  eyes(c,t,r*.34,-r*.2,r*.17,lookAt(X,Y,r),true);
+  cheeks(r*.62,0,r*.15);
+  smile(-r*.02,r,happy(c,t));
+  ctx.restore();
+}
+function drawLadybug(c,t,p,g){   // 點點：瓢蟲
+  const r=CR.ladybug*S*g, X=p.cx, Y=p.cy-p.lift;
+  const fk=(t-c.fly)/1000, w=fk>=0&&fk<1?Math.sin(Math.PI*fk):0;
+  ctx.fillStyle=PAL.shadow;ctx.beginPath();ctx.ellipse(X,p.cy,r*1.15*Math.max(.55,1-p.lift/(30*S)),r*.32,0,0,TAU);ctx.fill();
+  const walking=!!c.hop&&!reduceMotion, hk=walking?Math.min(1,(t-c.hop.t0)/c.hop.d):0;
+  ctx.save();ctx.translate(X,Y);ctx.rotate(walking?c.face*.12:0);ctx.scale(1-p.sq*.6,1+p.sq);
+  // 四顆小短腳從身體下面探出來，小跑步時輪流抬起（不畫往兩側伸的長腳，免得像蜘蛛）
+  ctx.fillStyle='#3e3632';
+  [-.62,-.3,.3,.62].forEach((fx,i)=>{const up=walking&&(i%2===(hk<.5?0:1))?r*.13:0;ctx.beginPath();ctx.ellipse(fx*r,-r*.02-up,r*.15,r*.1,0,0,TAU);ctx.fill()});
+  ctx.translate(0,-r*.14);
+  const red=c.v?['#f4dc9c','#d9b257','#b38c34']:['#e6a294','#c45e50','#9f4a40'], dot=c.v?'#7a5232':'#3a302a';
+  if(w>.05){ctx.fillStyle='rgba(225,236,240,.7)';for(const s of [-1,1]){ctx.save();ctx.translate(0,-r*1.45);ctx.rotate(s*(.5+w*.5));ctx.beginPath();ctx.ellipse(s*r*.7,-r*.2,r*.35,r*1.15,0,0,TAU);ctx.fill();ctx.restore()}}
+  for(const s of [-1,1]){
+    ctx.save();ctx.translate(0,-r*1.7);ctx.rotate(s*w*.65);ctx.translate(0,r*1.7);
+    const gr=ctx.createRadialGradient(-s*r*.3,-r*1.6,r*.1,0,-r*1.1,r*1.5);gr.addColorStop(0,red[0]);gr.addColorStop(.5,red[1]);gr.addColorStop(1,red[2]);
+    ctx.fillStyle=gr;ctx.beginPath();ctx.moveTo(0,-r*2.05);ctx.bezierCurveTo(s*r*1.5,-r*2.05,s*r*1.45,-r*.45,s*r*.35,-r*.35);ctx.lineTo(0,-r*.35);ctx.closePath();ctx.fill();
+    ctx.fillStyle=dot;for(const [dx,dy,rr] of [[.62,-1.45,.2],[.9,-.85,.15],[.28,-.8,.13]]){ctx.beginPath();ctx.arc(s*dx*r,dy*r,rr*r,0,TAU);ctx.fill()}
+    ctx.restore();
+  }
+  ctx.strokeStyle='rgba(60,30,25,.4)';ctx.lineWidth=r*.07;ctx.beginPath();ctx.moveTo(0,-r*2.02);ctx.lineTo(0,-r*.4);ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,.3)';ctx.beginPath();ctx.ellipse(-r*.55,-r*1.55,r*.18,r*.1,-.6,0,TAU);ctx.fill();
+  ctx.fillStyle='#3e3632';ctx.beginPath();ctx.ellipse(0,-r*.5,r*.95,r*.62,0,0,TAU);ctx.fill();
+  ctx.fillStyle='#f1e6d3';ctx.beginPath();ctx.ellipse(0,-r*.42,r*.72,r*.44,0,0,TAU);ctx.fill();
+  ctx.strokeStyle='#3e3632';ctx.lineWidth=r*.1;ctx.lineCap='round';ctx.fillStyle='#3e3632';
+  for(const s of [-1,1]){const sw=reduceMotion?0:Math.sin(t*.005+s+c.seed*3)*r*.1;ctx.beginPath();ctx.moveTo(s*r*.3,-r*1.0);ctx.quadraticCurveTo(s*r*.55,-r*1.5,s*r*.9+sw,-r*1.55);ctx.stroke();ctx.beginPath();ctx.arc(s*r*.9+sw,-r*1.55,r*.13,0,TAU);ctx.fill()}
+  const idleLook=walking||reduceMotion?0:Math.sin(t*.0012+c.seed*9)*r*.05;   // 停下來時東張西望
+  eyes(c,t,r*.3,-r*.5,r*.14,hover?lookAt(X,Y,r):idleLook,true);
+  cheeks(r*.55,-r*.32,r*.12);
+  smile(-r*.36,r,happy(c,t));
+  ctx.restore();
+}
+function drawPuff(c,t,p,g){   // 毛毛：蒲公英絨球
+  const base=CR.puff*S*g, r=base*(.62+.38*c.amt), X=p.cx, Y=p.cy-p.lift;
+  ctx.fillStyle=PAL.shadow;ctx.beginPath();ctx.ellipse(X,p.cy,base*.85*(.9+.1*c.amt),base*.26,0,0,TAU);ctx.fill();
+  ctx.save();ctx.translate(X,Y);ctx.rotate(reduceMotion?0:Math.sin(t*.002+c.seed*3)*.07);
+  const n=Math.floor(8+30*c.amt), col=c.v?['#f7e9ec','#e3c3cd','#c49ba8']:['#fbf8ef','#ebe4cc','#c9be98'], b=ctx.globalAlpha;
+  ctx.lineCap='round';
+  for(let i=0;i<n;i++){
+    const a=i/n*TAU+hash(c.seed,i)*.3, len=r*(.5+.35*hash(c.seed,i+9)), r0=r*.62, x1=Math.cos(a)*(r0+len), y1=Math.sin(a)*(r0+len);
+    ctx.strokeStyle=col[2];ctx.globalAlpha=b*.55;ctx.lineWidth=r*.07;ctx.beginPath();ctx.moveTo(Math.cos(a)*r0,Math.sin(a)*r0);ctx.lineTo(x1,y1);ctx.stroke();ctx.globalAlpha=b;
+    ctx.fillStyle=col[0];ctx.beginPath();ctx.arc(x1,y1,r*.075,0,TAU);ctx.fill();
+  }
+  const gr=ctx.createRadialGradient(-r*.3,-r*.35,r*.1,0,0,r*.95);gr.addColorStop(0,col[0]);gr.addColorStop(.7,col[1]);gr.addColorStop(1,col[2]);
+  ctx.fillStyle=gr;ctx.beginPath();ctx.arc(0,0,r*.85,0,TAU);ctx.fill();
+  eyes(c,t,r*.3,-r*.05,r*.15,lookAt(X,Y,r),true);
+  cheeks(r*.5,r*.22,r*.15);
+  smile(r*.12,r,happy(c,t));
+  ctx.restore();
+}
+function drawCloud(c,t,p,g){   // 小雲
+  const r=CR.cloud*S*g, X=p.cx, Y=p.cy-p.lift, b=ctx.globalAlpha;
+  ctx.strokeStyle='rgba(90,150,200,.8)';ctx.lineWidth=S*.6;ctx.lineCap='round';
+  for(const d of c.drops){
+    const k=(t-d.t0)/600, x=X+d.dx*r*.9;
+    if(k<1){const y=Y+r*.5+(p.cy-Y-r*.5)*k;ctx.beginPath();ctx.moveTo(x,y-S*1.6);ctx.lineTo(x,y);ctx.stroke()}
+    else{const q=(k-1)/.2;ctx.globalAlpha=b*.6*(1-q);ctx.strokeStyle='#fff';ctx.lineWidth=S*.4;ctx.beginPath();ctx.ellipse(x,p.cy,S*(1+q*3),S*(.4+q),0,0,TAU);ctx.stroke();
+      ctx.globalAlpha=b;ctx.strokeStyle='rgba(90,150,200,.8)';ctx.lineWidth=S*.6}
+  }
+  airShadow(X,p.cy,r*1.5,.5);
+  if(c.v){ // 彩虹
+    ctx.lineWidth=S*1.15;ctx.globalAlpha=b*.75;
+    ['#e99a92','#efbd85','#eedb8a','#9fcb8c','#8bb7dc','#ad9cd8'].forEach((cc,i)=>{ctx.strokeStyle=cc;ctx.beginPath();ctx.arc(X-r*1.1,Y+r*.9,r*(2.15-i*.17),Math.PI*1.02,Math.PI*1.5);ctx.stroke()});
+    ctx.globalAlpha=b;
+  }
+  ctx.save();ctx.translate(X,Y);
+  const sx=reduceMotion?1:1+Math.sin(t*.002+c.seed)*.025;ctx.scale(sx,2-sx);
+  const puffs=[[-.85,.05,.6],[-.3,-.38,.72],[.38,-.45,.78],[.95,0,.58],[0,.15,.75]];
+  ctx.fillStyle='rgba(110,130,150,.16)';for(const [x,y,s] of puffs){ctx.beginPath();ctx.arc(x*r,y*r+S*.6,s*r*1.06,0,TAU);ctx.fill()}
+  const gr=ctx.createLinearGradient(0,-r*1.2,0,r*.8);gr.addColorStop(0,'#ffffff');gr.addColorStop(1,c.v?'#e8e2f6':'#dde6ee');
+  ctx.fillStyle=gr;for(const [x,y,s] of puffs){ctx.beginPath();ctx.arc(x*r,y*r,s*r,0,TAU);ctx.fill()}
+  ctx.fillRect(-r*.85,0,r*1.8,r*.6);
+  const raining=t<c.rainUntil;
+  if(raining){ // 下雨時瞇著眼，很舒服的樣子
+    ctx.strokeStyle='#2a2a2a';ctx.lineWidth=r*.09;ctx.lineCap='round';
+    for(const s of [-1,1]){ctx.beginPath();ctx.arc(s*r*.32,r*.06,r*.14,Math.PI*1.15,Math.PI*1.85);ctx.stroke()}
+  }else eyes(c,t,r*.32,-r*.02,r*.15,lookAt(X,Y,r),true);
+  cheeks(r*.62,r*.2,r*.15);
+  smile(r*.12,r,happy(c,t)||raining);
+  ctx.restore();
+}
+
 function drawSparks(t){
+  for(const s of puffSeeds){
+    const k=(t-s.t0)/s.life;ctx.save();ctx.translate(s.x,s.y);ctx.rotate(s.rot);ctx.globalAlpha=clamp((1-k)*1.8,0,1);
+    ctx.strokeStyle='#d3caa0';ctx.lineWidth=S*.28;ctx.lineCap='round';
+    for(let j=-2;j<=2;j++){ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(j*S*.45,-S*1.9);ctx.stroke()}
+    ctx.fillStyle='#8a7a4a';ctx.beginPath();ctx.arc(0,S*.2,S*.35,0,TAU);ctx.fill();ctx.restore();
+  }
+  ctx.globalAlpha=1;
   for(const s of sparks){
     const k=(t-s.t0)/1100; if(k<0) continue;
     const X=s.x+Math.sin(k*6+s.x)*3*S, Y=s.y-k*22*S, r=3.2*S*(1-k*.3);
@@ -510,20 +714,28 @@ function poke(c){
   const t=now();c.poke=t;c.wakeT=t;
   const p=critterPos(c,t), r=CR[c.kind]*S;
   if(c.kind==='cap'){c.state='sink';c.st0=t;c.e0=c.e;c.hop=null}
+  else if(c.kind==='bee') c.loop=t;
+  else if(c.kind==='ladybug'){c.fly=t;c.hop=null}
+  else if(c.kind==='puff') puffBurst(c,t);
+  else if(c.kind==='cloud'){c.rainUntil=t+2200;c.heavy=t+2200}
   else if(!c.hop&&!reduceMotion){startHop(c,c.x,c.y,t,440,15);c.t0=t;c.wait=1100}
-  sparks.push({x:p.cx,y:p.cy-r*2.6,t0:t,c:'#f08aa2'});
+  sparks.push({x:p.cx,y:AIR[c.kind]?p.cy-p.lift-r*1.6:p.cy-r*2.6,t0:t,c:'#f08aa2'});
 }
 function critterCheer(){
   critters.forEach((c,i)=>setTimeout(()=>{
     const t=now();
     if(c.kind==='cap'&&c.state!=='out') return;
     c.cheer=t;
+    if(c.kind==='bee'){c.loop=t;return}
+    if(c.kind==='ladybug'){c.fly=t;c.hop=null;return}
+    if(c.kind==='cloud'){c.rainUntil=Math.max(c.rainUntil,t+1200);return}
+    if(c.kind==='puff') return;
     if(!c.hop&&!reduceMotion){startHop(c,c.x,c.y,t,360,c.kind==='moss'?6:10);c.t0=t;c.wait=Math.max(c.wait,700)}
   },i*90+Math.random()*60));
 }
 function critterNotice(x,y){ // a drop lands nearby: dew and moss come to look
   for(const c of critters){
-    if(c.kind==='cap'||dist(c.x,c.y,x,y)>.16*U) continue;
+    if(c.kind==='cap'||AIR[c.kind]||dist(c.x,c.y,x,y)>.16*U) continue;
     const tg=around(x,y,.02,.035);
     if(c.kind==='dew'){ if(pondAt(tg[0],tg[1],1.05)) continue; const p=nearestPond(c.hx,c.hy); if(!p||!inPond(p,tg[0],tg[1],2.4)) continue; }
     else if(pondAt(tg[0],tg[1],1.15)) continue;
@@ -542,6 +754,25 @@ function residents(x,y,acts,nG,bigTrees){
     if(critters.filter(c=>c.kind==='cap'&&dist(c.hx,c.hy,hx,hy)<6).length<2&&chance(.25))
       acts.push(()=>{if(critters.filter(c=>c.kind==='cap'&&dist(c.hx,c.hy,hx,hy)<6).length>=2)return;const c=makeCritter('cap',hx,hy,[hx,hy]);if(c){const p=ringSpot(c);c.x=p[0];c.y=p[1]}});
   }
+  // v1.3：嗡嗡（花圃有三種以上顏色）、點點（花開得多）、毛毛（草非常密）
+  const nK=k=>critters.filter(c=>c.kind===k).length, near=(k,r)=>critters.some(c=>c.kind===k&&dist(c.hx,c.hy,x,y)<r*U);
+  const fl=plants.filter(p=>FLOWERY[p.type]&&p.stage>=2&&dist(p.x,p.y,x,y)<.11*U);
+  const cols=new Set(fl.filter(p=>p.type==='flower').map(p=>p.color)).size;
+  const dry=!pondAt(x,y,1.2);
+  if(cols>=3&&dry&&nK('bee')<3&&!near('bee',.15)&&chance(.15)) acts.push(()=>{if(!near('bee',.15))makeCritter('bee',x,y,[x,y])});
+  if(fl.length>=4&&dry&&nK('ladybug')<3&&!near('ladybug',.15)&&chance(.15)) acts.push(()=>{if(!near('ladybug',.15))makeCritter('ladybug',x,y,[x,y])});
+  if(nG>=10&&dry&&nK('puff')<3&&!near('puff',.15)&&chance(.1)) acts.push(()=>{if(!near('puff',.15))makeCritter('puff',x,y,[x,y])});
+}
+function streakTick(){   // v1.3：5 分鐘內答對 10 次（算 addWater 的次數，不算水滴數）→ 來一朵小雲
+  const t=Date.now(); streak.push(t);
+  streak=streak.filter(x=>t-x<STREAK_MS);
+  if(streak.length<STREAK_N) return;
+  streak=[];
+  if(!ready||critters.filter(c=>c.kind==='cloud').length>=2) return;
+  const spots=plants.filter(p=>p.type!=='lily');
+  if(spots.length<8) return;
+  const sp=pick(spots);
+  if(makeCritter('cloud',sp.x,sp.y,[sp.x,sp.y])) save();
 }
 
 /* ================= 圖鑑 (field guide) =================
@@ -641,7 +872,56 @@ const GUIDE=[
    hint:'蘑菇圈附近，好像有誰在偷看'},
   {k:'capR', name:'紫蕈寶', art:'critter',kind:'cap',v:1,rare:true,
    desc:'紫色的蕈寶，比一般的更害羞，很少露面。',
-   hint:'蕈寶也有稀有的顏色'},
+   hint:'蕈寶的帽子有紅、橘、白，稀有的那種不在裡面'},
+  {k:'bee', name:'嗡嗡', art:'critter',kind:'bee',v:0,
+   desc:'毛茸茸的小蜜蜂，在花和花之間飛來飛去，從來不螫人。',
+   hint:'五顏六色的花圃'},
+  {k:'beeR', name:'藍紋嗡嗡', art:'critter',kind:'bee',v:1,rare:true,
+   desc:'身上是藍色條紋的嗡嗡。有紫花的時候，只拜訪紫花。',
+   hint:'嗡嗡裡面，有一隻條紋不一樣'},
+  {k:'ladybug', name:'點點', art:'critter',kind:'ladybug',v:0,
+   desc:'圓圓的紅殼小瓢蟲，小跑一下、停一下。被點到會打開翅膀飄起來。',
+   hint:'花開得很多的地方，有小紅點在跑'},
+  {k:'ladybugR', name:'黃點點', art:'critter',kind:'ladybug',v:1,rare:true,
+   desc:'黃底配咖啡色點點的點點，很少見。',
+   hint:'點點也有不是紅色的'},
+  {k:'puff', name:'毛毛', art:'critter',kind:'puff',v:0,
+   desc:'一團軟綿綿的絨毛球。被點到會噴出種子，過一陣子再慢慢長回來。',
+   hint:'草長得非常非常密的地方'},
+  {k:'puffR', name:'粉紅毛毛', art:'critter',kind:'puff',v:1,rare:true,
+   desc:'粉紅色的毛毛，噴出來的種子也是粉紅的。',
+   hint:'有一團毛毛的顏色不太一樣'},
+  {k:'cloud', name:'小雲', art:'critter',kind:'cloud',v:0,
+   desc:'答對很多題就會飄來的小雲。你每答對一題，它就下一點雨。',
+   hint:'一口氣答對很多題看看'},
+  {k:'cloudR', name:'彩虹小雲', art:'critter',kind:'cloud',v:1,rare:true,
+   desc:'身邊掛著一段彩虹的小雲。',
+   hint:'小雲偶爾會帶著彩虹'},
+  {sec:'花草',note:'在對的地方澆水，會長出不一樣的植物'},
+  {k:'clover', name:'三葉草', art:'plant',type:'clover',color:0,ps:.05,
+   desc:'一叢一叢的三葉草，長大會開白色的小絨球花。會自己慢慢蔓延。',
+   hint:'草長得很密的地方，仔細看看'},
+  {k:'cloverR', name:'四葉草', art:'plant',type:'clover',color:5,ps:.05,rare:true,
+   desc:'三葉草裡偶爾會有一片四葉的。找到了會閃一下。',
+   hint:'三葉草裡，有沒有不一樣的？'},
+  {k:'sunflower', name:'向日葵', art:'plant',type:'sunflower',color:0,ps:.02,
+   desc:'長得比其他花都高，花盤圓圓大大的。',
+   hint:'黃色的花開成一片的時候'},
+  {k:'sunflowerR', name:'紅向日葵', art:'plant',type:'sunflower',color:5,ps:.02,rare:true,
+   desc:'花瓣是酒紅色的向日葵，很少見。',
+   hint:'向日葵也有不是黃色的'},
+  {k:'tulip', name:'鬱金香', art:'plant',type:'tulip',color:0,ps:.021,
+   desc:'杯子形狀的花，有紅、黃、粉三種顏色。',
+   hint:'同一種顏色的花連成一大片'},
+  {k:'tulipR', name:'火焰鬱金香', art:'plant',type:'tulip',color:5,ps:.021,rare:true,
+   desc:'白底帶紅色火焰紋的鬱金香。',
+   hint:'有一種鬱金香身上有花紋'},
+  {k:'pumpkin', name:'南瓜', art:'plant',type:'pumpkin',color:0,ps:.032,
+   desc:'只在秋天（10～11 月）長。藤蔓在地上爬，最後結出一顆圓圓的南瓜。',
+   hint:'秋天的時候，空地上好像會冒出藤蔓'},
+  {k:'pumpkinR', name:'白南瓜', art:'plant',type:'pumpkin',color:5,ps:.032,rare:true,
+   desc:'白色的南瓜，很少見。',
+   hint:'南瓜也有不是橘色的'},
   {sec:'土地的秘密',note:'照顧土地時會慢慢發生的事'},
   {k:'pond', name:'水塘', art:'pond',
    desc:'同一塊地澆了太多水，就積成一個小水塘。',
@@ -682,6 +962,7 @@ function scanFound(){ // fill in anything already on the land (older saves)
   if(plants.some(p=>p.type==='mushroom')) mark('ring');
   if(plants.some(p=>p.type==='flower'&&p.color===5)) mark('violet');
   if(flies.length) mark('fly');
+  for(const k in PKEY){const d=PKEY[k];if(plants.some(p=>p.type===d.type&&(p.color===5)===d.rare&&p.stage>=d.min)) mark(k)}
 }
 function onLand(key){
   switch(key){
@@ -691,10 +972,13 @@ function onLand(key){
     case 'ring': return plants.filter(p=>p.type==='tree'&&p.stage>=3&&plants.some(q=>q.type==='mushroom'&&dist(q.x,q.y,p.x,p.y)<.1*U)).length;
     case 'fly': return flies.length;
     case 'violet': return plants.filter(p=>p.type==='flower'&&p.color===5).length;
-    default: return critters.filter(c=>c.kind+(c.v?'R':'')===key).length;
+    default:
+      if(PKEY[key]){const d=PKEY[key];return plants.filter(p=>p.type===d.type&&(p.color===5)===d.rare&&p.stage>=d.min).length}
+      return critters.filter(c=>c.kind+(c.v?'R':'')===key).length;
   }
 }
-const UNIT_WORD={pond:'個',lily:'朵',tree:'棵',ring:'個',fly:'隻',violet:'朵'};
+const UNIT_WORD={pond:'個',lily:'朵',tree:'棵',ring:'個',fly:'隻',violet:'朵',cloud:'朵',cloudR:'朵',puff:'團',puffR:'團',
+  clover:'叢',cloverR:'叢',sunflower:'朵',sunflowerR:'朵',tulip:'朵',tulipR:'朵',pumpkin:'顆',pumpkinR:'顆'};
 function updateGuideBtn(){
   const n=G_ITEMS.filter(e=>found[e.k]).length;
   G.gcount.textContent=n+'/'+G_ITEMS.length;
@@ -712,6 +996,10 @@ function pokePortrait(pt,t){
   const c=pt.st.c; if(!c) return;
   c.poke=t;c.wakeT=t;
   if(c.kind==='cap'){ if(c.pstate==='out'){c.pstate='sink';c.pt0=t} }
+  else if(c.kind==='bee') c.loop=t;
+  else if(c.kind==='ladybug') c.fly=t;
+  else if(c.kind==='puff') c.amt=.28;
+  else if(c.kind==='cloud'){c.rainUntil=t+2200;c.heavy=t+2200}
   else if(!c.hop&&!reduceMotion){startHop(c,c.x,c.y,t,440,15)}
 }
 function tickPortraitCritter(c,t){
@@ -719,6 +1007,9 @@ function tickPortraitCritter(c,t){
   if(c.kind==='moss'&&t>c.wakeAt){c.wakeT=t;c.wakeAt=t+7000+Math.random()*8000}
   if(c.hop&&t-c.hop.t0>=c.hop.d){c.hop=null;c.land=t}
   if(c.kind==='dew'&&!c.hop&&!reduceMotion&&t>c.nextHop){startHop(c,c.x,c.y,t,380,8);c.nextHop=t+2500+Math.random()*4000}
+  if(c.kind==='bee'&&!reduceMotion&&t>c.nextHop){c.loop=t;c.nextHop=t+3500+Math.random()*3000}
+  if(c.kind==='puff') c.amt=Math.min(1,c.amt+1/540);
+  if(c.kind==='cloud') rainTick(c,t,1/60);
   if(c.kind==='cap'){
     const k=t-c.pt0;
     if(c.pstate==='sink'){c.e=Math.max(0,1-k/260);if(c.e<=0){c.pstate='hidden';c.pt0=t}}
@@ -734,12 +1025,14 @@ function drawPortrait(pt,t){
     switch(e.art){
       case 'critter':{
         if(!st.c){
-          st.c=newCritter(e.kind,.5,e.kind==='cap'?.8:.78,[.5,.8],{v:e.v,seed:e.kind==='moss'?(e.v?.31:.12):.37,born:-1e9});
+          st.c=newCritter(e.kind,.5,e.kind==='cap'?.8:AIR[e.kind]?.86:.78,[.5,.8],{v:e.v,seed:e.kind==='moss'?(e.v?.31:.12):.37,born:-1e9});
           st.c.e=1;st.c.state='out';st.c.pstate='out';st.c.pt0=t;st.c.nextHop=t+800+Math.random()*2000;st.c.face=1;
+          if(AIR[e.kind]){st.c.alt=st.c.talt={bee:17,puff:9,cloud:16}[e.kind]}
         }
         tickPortraitCritter(st.c,t);
         if(e.kind==='moss') st.c.face=1;
-        S=P*(e.kind==='dew'?.027:.024);
+        if(e.kind==='bee'){S=P*.016;drawFlower({seed:.3,color:e.v?5:2},.5*W,.94*H,2,1,t)}
+        S=P*({dew:.027,bee:.03,ladybug:.028,puff:.026,cloud:.024}[e.kind]||.024);
         drawCritter(st.c,t);break;
       }
       case 'pond':{
@@ -777,6 +1070,11 @@ function drawPortrait(pt,t){
       }
       case 'violet':{
         S=P*.019; drawFlower({seed:.23,color:5},.5*W,.88*H,2.6,1,t);
+        break;
+      }
+      case 'plant':{
+        S=P*.012; drawGrass({seed:.7},.16*W,.9*H,1.5,1,t);drawGrass({seed:.9},.85*W,.88*H,1.5,1,t);
+        S=P*e.ps; SPECIES[e.type].draw({seed:.137,v:3,stage:3,color:e.color},.5*W,.88*H,1,t);
         break;
       }
     }
@@ -911,6 +1209,8 @@ function drawFlower(p,X,Y,v,a,time){
   }
 }
 function drawTree(p,X,Y,v,a,time){
+  // v1.2：外層可能已設了透明度（居民前面的植物）；這裡設 alpha 的地方都乘上它，fade=1 時和原本完全相同
+  const base=ctx.globalAlpha;
   const s=S*a, cr=Math.max(0,(v-.9))*s*9.5;
   ctx.fillStyle=PAL.shadow;
   ctx.beginPath();ctx.ellipse(X+cr*.2,Y+s,s*3+cr*1.05,s*1.2+cr*.35,0,0,Math.PI*2);ctx.fill();
@@ -919,11 +1219,11 @@ function drawTree(p,X,Y,v,a,time){
   ctx.beginPath();ctx.moveTo(X-tw,Y);ctx.lineTo(X-tw*.55,Y-th);ctx.lineTo(X+tw*.55,Y-th);ctx.lineTo(X+tw,Y);ctx.closePath();ctx.fill();
   const sway=reduceMotion?0:Math.sin(time*.0008+p.seed*12)*s*.8;
   if(v<1.8){
-    ctx.globalAlpha=Math.min(1,(1.8-v)*1.3);
+    ctx.globalAlpha=base*Math.min(1,(1.8-v)*1.3);
     ctx.fillStyle=PAL.leaf;
     ctx.beginPath();ctx.ellipse(X-s*3+sway,Y-th-s,s*3.2,s*1.5,.5,0,Math.PI*2);ctx.fill();
     ctx.beginPath();ctx.ellipse(X+s*3+sway,Y-th-s*2,s*3.2,s*1.5,-.5,0,Math.PI*2);ctx.fill();
-    ctx.globalAlpha=1;
+    ctx.globalAlpha=base;
   }
   if(cr>0){
     const cy=Y-th-cr*.55;
@@ -932,9 +1232,9 @@ function drawTree(p,X,Y,v,a,time){
       ctx.fillStyle=PAL.canopy[k%3];
       ctx.beginPath();ctx.arc(X+ox,cy+oy,cr*(.55+hash(p.seed,k+5)*.3),0,Math.PI*2);ctx.fill();
     }
-    ctx.fillStyle=PAL.canopyHi;ctx.globalAlpha=.55;
+    ctx.fillStyle=PAL.canopyHi;ctx.globalAlpha=base*.55;
     ctx.beginPath();ctx.arc(X-cr*.28+sway,cy-cr*.3,cr*.32,0,Math.PI*2);ctx.fill();
-    ctx.globalAlpha=1;
+    ctx.globalAlpha=base;
   }
 }
 function drawMushroom(p,X,Y,a){
@@ -957,6 +1257,133 @@ function drawLily(p,X,Y,v,a){
     ctx.fillStyle='#f0b8c8';
     for(let i=0;i<6;i++){const an=i/6*Math.PI*2;ctx.beginPath();ctx.ellipse(X+Math.cos(an)*s*1.3*k,Y-s*1.2+Math.sin(an)*s*.6*k,s*1.1*k,s*.7*k,an,0,Math.PI*2);ctx.fill()}
     ctx.fillStyle='#f3d36a';ctx.beginPath();ctx.arc(X,Y-s*1.2,s*.6*k,0,Math.PI*2);ctx.fill();
+  }
+}
+/* ---------- v1.3 植物：三葉草、向日葵、鬱金香、南瓜（照 docs/new-guide-candidates.html） ----------
+   畫在原點、腳在 (0,0)；s＝單位長度；v＝1～3；rare＝color 5。外層已設的透明度（居民前面的植物）一律乘上去。 */
+function drawNewPlant(fn,p,X,Y,a,t,z){
+  ctx.save();ctx.translate(X,Y);ctx.scale(a*z,a*z);
+  fn(ctx,Math.max(1,p.v),S,t,p.seed,p.color===5,p.color);
+  ctx.restore();
+}
+function pStar(g,x,y,r,a){ // 四角星閃光
+  if(r<=0) return;
+  const b=g.globalAlpha;g.globalAlpha=b*a;g.fillStyle='#fff8d6';g.beginPath();
+  g.moveTo(x,y-r);g.quadraticCurveTo(x,y,x+r,y);g.quadraticCurveTo(x,y,x,y+r);g.quadraticCurveTo(x,y,x-r,y);g.quadraticCurveTo(x,y,x,y-r);
+  g.fill();g.globalAlpha=b;
+}
+function pZig(g,cx,cy,r0,r1,a0,a1,n,fill){
+  g.fillStyle=fill;g.beginPath();g.moveTo(cx,cy);
+  for(let i=0;i<=n*2;i++){const a=a0+(a1-a0)*i/(n*2),rr=i%2?r1:r0;g.lineTo(cx+Math.cos(a)*rr,cy+Math.sin(a)*rr)}
+  g.closePath();g.fill();
+}
+function pPetal(g,x,y,w,h,rot,col){
+  g.save();g.translate(x,y);g.rotate(rot);g.fillStyle=col;g.beginPath();g.moveTo(0,0);
+  g.bezierCurveTo(-w,-h*.3,-w*.8,-h,0,-h);g.bezierCurveTo(w*.8,-h,w,-h*.3,0,0);g.fill();g.restore();
+}
+function pShade(hex,k){const n=parseInt(hex.slice(1),16),f=x=>Math.round(clamp(k<0?x*(1+k):x+(255-x)*k,0,255));
+  return '#'+[f(n>>16),f(n>>8&255),f(n&255)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+function drawClover(g,v,s,t,seed,rare){
+  const spots=[[0,0,1],[-5,1.2,.9],[5,.8,.95],[-2.6,-1.6,.85],[2.8,-1.8,.8]];
+  const n=v<1.5?1:v<2.5?3:5;
+  if(v>2.4){const k=clamp((v-2.4)/.6,0,1); // 白色小絨球花
+    for(const [dx,h] of [[-3.5,9],[3,10.5]]){
+      const sw=reduceMotion?0:Math.sin(t*.0012+seed*7+dx)*s*.6, tx=dx*s+sw, ty=-h*s*k;
+      g.strokeStyle=PAL.leaf;g.lineWidth=s*.6;g.lineCap='round';g.beginPath();g.moveTo(dx*s,0);g.quadraticCurveTo(dx*s,-h*s*.5,tx,ty);g.stroke();
+      for(let i=0;i<10;i++){const a=i/10*TAU;g.fillStyle=i%3?'#f4f0e6':'#ecc8d2';g.beginPath();g.arc(tx+Math.cos(a)*s*1.1*k,ty+Math.sin(a)*s*.9*k,s*.7*k+.01,0,TAU);g.fill()}
+      g.fillStyle='#fbf9f3';g.beginPath();g.arc(tx,ty-s*.3*k,s*.8*k+.01,0,TAU);g.fill();
+    }
+  }
+  for(let i=0;i<n;i++){
+    const [dx,dy,sz]=spots[i], bx=dx*s, by=dy*s*.5, h=(4+hash(seed,i)*2.5)*s;
+    const sw=reduceMotion?0:Math.sin(t*.0014+seed*9+i)*s*.5, tx=bx+sw, ty=by-h;
+    g.strokeStyle=PAL.leaf;g.lineWidth=s*.55;g.lineCap='round';g.beginPath();g.moveTo(bx,by);g.quadraticCurveTo(bx,by-h*.5,tx,ty);g.stroke();
+    const four=rare&&i===0, m=four?4:3, L=2.3*s*sz;
+    for(let k=0;k<m;k++){
+      const a=-Math.PI/2+k*TAU/m+(four?Math.PI/4:0), cx=tx+Math.cos(a)*L*.72, cy=ty+Math.sin(a)*L*.5;
+      const px=-Math.sin(a), py=Math.cos(a)*.7;
+      g.fillStyle=four?'#79b452':['#6aa448','#629a43','#72ab50'][k%3];
+      g.beginPath();g.arc(cx+px*L*.3,cy+py*L*.3,L*.46,0,TAU);g.arc(cx-px*L*.3,cy-py*L*.3,L*.46,0,TAU);g.fill();
+      g.beginPath();g.moveTo(tx,ty);g.lineTo(cx+px*L*.55,cy+py*L*.55);g.lineTo(cx-px*L*.55,cy-py*L*.55);g.closePath();g.fill();
+      g.strokeStyle='rgba(255,255,255,.4)';g.lineWidth=s*.35;g.beginPath();g.moveTo(cx+px*L*.25,cy+py*L*.25);g.lineTo(cx-Math.cos(a)*L*.15,cy-Math.sin(a)*L*.1);g.lineTo(cx-px*L*.25,cy-py*L*.25);g.stroke();
+    }
+    if(four&&!reduceMotion){const tw=(t*.0008+seed)%1;pStar(g,tx+L*1.3,ty-L*1.1,s*2*Math.sin(Math.PI*tw),Math.sin(Math.PI*tw))}
+  }
+}
+function drawSunflower(g,v,s,t,seed,rare){
+  const h=s*(6+(v-1)*15), sway=reduceMotion?0:Math.sin(t*.001+seed*9)*s*1.3*(h/(36*s)), tx=sway, ty=-h;
+  g.strokeStyle='#5f8a3a';g.lineWidth=s*1.7;g.lineCap='round';g.beginPath();g.moveTo(0,0);g.quadraticCurveTo(0,-h*.5,tx,ty);g.stroke();
+  if(v<1.6){g.fillStyle='#76a248';for(const d of [-1,1]){g.beginPath();g.ellipse(tx+d*s*2.2,ty-s*.6,s*2.3,s*1.3,d*.35,0,TAU);g.fill()}return}
+  for(const [f,d] of [[.3,-1],[.55,1],[.75,-1]]){
+    if(f>.35&&v<2) continue;
+    const lx=sway*f, ly=-h*f;
+    g.fillStyle=d>0?'#6b9a3c':'#5f8a3a';g.beginPath();g.ellipse(lx+d*s*3.2,ly-s*.8,s*3.6,s*2,d*-.45,0,TAU);g.fill();
+    g.strokeStyle='rgba(255,255,255,.22)';g.lineWidth=s*.35;g.beginPath();g.moveTo(lx,ly);g.lineTo(lx+d*s*5.5,ly-s*2.2);g.stroke();
+  }
+  const open=clamp((v-2.2)/.8,0,1);
+  if(open<=0){pZig(g,tx,ty,s*2.2,s*3.2,0,TAU,8,'#6b9a3c');g.fillStyle='#7fae4c';g.beginPath();g.arc(tx,ty,s*2.2,0,TAU);g.fill();return}
+  const R=s*(3+3.4*open);
+  g.save();g.translate(tx,ty);g.rotate(reduceMotion?0:Math.sin(t*.0008+seed)*.08);g.scale(.92,1);
+  for(let layer=0;layer<2;layer++){
+    const pc=rare?(layer?'#cf6a3e':'#9c3a3c'):(layer?'#f0cc52':'#e0ad35');
+    for(let i=0;i<16;i++){g.save();g.rotate(i/16*TAU+layer*TAU/32);g.fillStyle=pc;
+      g.beginPath();g.ellipse(0,-R*(.78-layer*.08),R*.2,R*(.42-layer*.06),0,0,TAU);g.fill();g.restore()}
+  }
+  g.fillStyle=rare?'#3a2418':'#6b4a2b';g.beginPath();g.arc(0,0,R*.58,0,TAU);g.fill();
+  g.fillStyle=rare?'#5a3a24':'#8a6238';
+  for(let i=0;i<22;i++){const a=i*2.4,rr=Math.sqrt(i/22)*R*.5;g.beginPath();g.arc(Math.cos(a)*rr,Math.sin(a)*rr,R*.05,0,TAU);g.fill()}
+  g.restore();
+}
+const TULIP=['#d4604f','#ecc251','#e698ae'];
+function drawTulip(g,v,s,t,seed,rare,color){
+  const lh=s*(5+v*2.6);
+  for(const [d,c] of [[-1,'#78a05a'],[1,'#6a984c']]){g.save();g.translate(d*s*.6,0);g.rotate(d*.32);
+    g.fillStyle=c;g.beginPath();g.moveTo(0,0);g.bezierCurveTo(d*s*3.4,-lh*.35,d*s*2.2,-lh*.9,d*s*.3,-lh);g.bezierCurveTo(-d*s*1.6,-lh*.55,-d*s*1.4,-lh*.2,0,0);g.fill();g.restore()}
+  if(v<1.4) return;
+  const open=clamp((v-2.2)/.8,0,1), c0=(color|0)%3;
+  [[-2.4,1,c0],[3,.84,(c0+1+Math.floor(hash(seed,3)*2))%3]].forEach(([dx,f,ci])=>{
+    const H=s*(7+(v-1.4)*8)*f, sw=reduceMotion?0:Math.sin(t*.0011+seed*6+dx)*s*.8, hx=dx*s+sw, hy=-H;
+    g.strokeStyle='#6a984c';g.lineWidth=s*.9;g.lineCap='round';g.beginPath();g.moveTo(dx*s*.4,0);g.quadraticCurveTo(dx*s,-H*.5,hx,hy);g.stroke();
+    const col=TULIP[ci];
+    if(open<=0){const gr=g.createLinearGradient(0,hy+s*2,0,hy-s*3);gr.addColorStop(0,'#78a05a');gr.addColorStop(1,rare?'#f3e7df':col);
+      g.fillStyle=gr;g.beginPath();g.ellipse(hx,hy-s*1.6,s*1.4,s*2.4,0,0,TAU);g.fill();return}
+    const c=s*(2.4+1.2*open), base=rare?'#f8f1e7':col, dark=rare?'#e6dacb':pShade(col,-.18);
+    pPetal(g,hx,hy,c*.75,c*2,0,dark);
+    pPetal(g,hx,hy,c*.62,c*1.8,-.28-open*.12,base);
+    pPetal(g,hx,hy,c*.62,c*1.8,.28+open*.12,base);
+    pPetal(g,hx,hy,c*.6,c*1.75,0,pShade(base,.06));
+    if(rare){g.strokeStyle='#c8574a';g.lineWidth=s*.45;g.lineCap='round';
+      for(const [x0,x1] of [[-.4,-.55],[0,0],[.4,.55],[-.15,-.25],[.18,.28]]){g.beginPath();g.moveTo(hx+x0*c*.8,hy-c*.3);g.quadraticCurveTo(hx+x0*c,hy-c*1.1,hx+x1*c,hy-c*1.6);g.stroke()}}
+  });
+}
+function drawPumpkin(g,v,s,t,seed,rare){
+  const len=clamp((v-.8)/2,0,1);
+  g.strokeStyle='#6b8a3c';g.lineWidth=s*1.1;g.lineCap='round';
+  g.beginPath();g.moveTo(-s*2,0);g.bezierCurveTo(-s*6,-s*1.5,-s*9*len,s*.5,-s*13*len,-s*.8);g.stroke();
+  g.beginPath();g.moveTo(-s*2,0);g.bezierCurveTo(s*3,s*1,s*8*len,-s*1,s*12*len,-s*.3);g.stroke();
+  g.lineWidth=s*.4;g.beginPath();const cx=s*12*len+s*.5,cy=-s*1.6;
+  for(let a=0;a<TAU*1.6;a+=.2){const rr=s*1.3*(1-a/(TAU*1.8));g.lineTo(cx+Math.cos(a)*rr,cy+Math.sin(a)*rr)}g.stroke();
+  const leaf=(x,L,rot)=>{g.save();g.translate(x,0);g.rotate(rot);
+    g.strokeStyle='#6b8a3c';g.lineWidth=s*.6;g.beginPath();g.moveTo(0,0);g.lineTo(0,-L*.9);g.stroke();
+    g.fillStyle='#6f9a45';for(let i=0;i<5;i++){const a=-Math.PI/2+(i-2)*.55;g.beginPath();g.arc(Math.cos(a)*L*.55,-L*1.25+Math.sin(a)*L*.5+L*.55,L*.48,0,TAU);g.fill()}
+    g.fillStyle='#5f8a3a';g.beginPath();g.arc(0,-L*1.2,L*.42,0,TAU);g.fill();
+    g.strokeStyle='rgba(255,255,255,.2)';g.lineWidth=s*.3;g.beginPath();for(let i=0;i<3;i++){const a=-Math.PI/2+(i-1)*.7;g.moveTo(0,-L*1.05);g.lineTo(Math.cos(a)*L*.7,-L*1.05+Math.sin(a)*L*.7)}g.stroke();
+    g.restore()};
+  const sw=reduceMotion?0:Math.sin(t*.0012+seed*5)*.05;
+  leaf(-s*2,s*(2.6+v*.7),-.15+sw);
+  if(v>1.6){leaf(-s*8*len,s*(2.2+v*.5),-.45+sw);leaf(s*7*len,s*(2+v*.5),.4-sw)}
+  const fl=clamp((v-1.8)/.4,0,1)*(1-clamp((v-2.6)/.3,0,1));
+  if(fl>0){const fx=s*9*len,fy=-s*2.8;g.fillStyle='#ecc251';g.beginPath();
+    for(let i=0;i<10;i++){const a=-Math.PI/2+i/10*TAU,rr=(i%2?1.1:2.4)*s*fl;g.lineTo(fx+Math.cos(a)*rr,fy+Math.sin(a)*rr)}g.closePath();g.fill();
+    g.fillStyle='#e0a040';g.beginPath();g.arc(fx,fy,s*.6*fl,0,TAU);g.fill()}
+  const pk=clamp((v-2.3)/.7,0,1);
+  if(pk>0){
+    const P2=s*(2+5*pk), px=s*1.5;
+    const cols=rare?['#cfc8b8','#e6e0d2','#f4f0e6']:['#c96b26','#dc8135','#e9984c'];
+    g.fillStyle=PAL.shadow;g.beginPath();g.ellipse(px,s*.3,P2*1.2,P2*.3,0,0,TAU);g.fill();
+    for(const [dx,rx,ci] of [[-.72,.42,0],[.72,.42,0],[-.38,.5,1],[.38,.5,1],[0,.45,2]]){g.fillStyle=cols[ci];g.beginPath();g.ellipse(px+dx*P2,-P2*.78,rx*P2,P2*.78,0,0,TAU);g.fill()}
+    g.fillStyle='rgba(255,255,255,.22)';g.beginPath();g.ellipse(px-P2*.12,-P2*1.15,P2*.1,P2*.28,-.2,0,TAU);g.fill();
+    g.strokeStyle=rare?'#7f8a5a':'#5d6b2f';g.lineWidth=s*1.1;g.beginPath();g.moveTo(px,-P2*1.45);g.quadraticCurveTo(px+s*.3,-P2*1.45-s*1.6,px+s*1.4,-P2*1.45-s*1.8);g.stroke();
   }
 }
 function drawPond(p,t){
@@ -997,6 +1424,52 @@ function drawDrop(X,Y,s,al){
   ctx.globalAlpha=1;
 }
 
+/* ---------- keeping residents visible ----------
+   Plants standing in front of a resident become see-through around its body,
+   so it still looks tucked into the meadow but can always be read.
+   A resident that has just arrived gets a stronger clearing for a few seconds.
+   （v1.2，照 docs/one-drop-visibility-reference.html 移植） */
+const REVEAL_MS=3000;
+function critterViews(t){
+  const out=[];
+  for(const c of critters){
+    if(c.kind==='cap'&&c.e<=0) continue;
+    if(c.kind==='bee'||c.kind==='cloud') continue;   // 飛得比植物高，不用讓前面的植物變透明
+    const p=critterPos(c,t), r=CR[c.kind]*S;
+    const k=t-(c.reveal||-1e9);
+    out.push({cx:p.cx, cy:p.cy, top:p.cy-p.lift-r*2.5, r, fresh:k<REVEAL_MS?1-k/REVEAL_MS:0});
+  }
+  return out;
+}
+const PLANT_BOX={grass:[7,24],flower:[8,34],tree:[26,95],mushroom:[4,8],clover:[9,17],sunflower:[10,42],tulip:[9,33],pumpkin:[12,15]};   // [half width, height] in S units
+function foliageAlpha(p,X,Y,views){
+  const box=PLANT_BOX[p.type]; if(!box) return 1;
+  const hw=box[0]*S, h=box[1]*S*(p.type==='tree'?Math.max(.4,p.v/3):1);
+  let a=1;
+  for(const v of views){
+    if(Y<=v.cy-1) continue;                        // behind the resident: drawn first anyway
+    if(Y-h>v.cy) continue;                         // too short to reach its body
+    if(Y>v.cy+(v.r*3+h)) continue;
+    const reach=v.r*1.3+hw*(1+v.fresh*.6);
+    const dx=Math.abs(X-v.cx);
+    if(dx>=reach) continue;
+    const edge=Math.min(1,(reach-dx)/(v.r*.9));    // soft edge, no popping as it hops
+    const floor=v.fresh>0?.14:.3;
+    a=Math.min(a,1-(1-floor)*edge);
+  }
+  return a;
+}
+function clearOfCritters(type,x,y){
+  // new growth never sprouts right on top of a resident
+  if(type==='lily'||!critters.length) return [x,y];
+  for(const c of critters){
+    if(AIR[c.kind]) continue;
+    const r=CR[c.kind]*S*1.5, dx=(x-c.x)*W, dy=(y-c.y)*H, d=Math.hypot(dx,dy);
+    if(d<r){ const a=d>0.5?Math.atan2(dy,dx):Math.random()*Math.PI*2; x=c.x+Math.cos(a)*r*1.1/W; y=c.y+Math.sin(a)*r*1.1/H; }
+  }
+  return [x,y];
+}
+
 // 物種表：type → 怎麼畫。之後加新物種只要加一筆（外觀、出現條件、圖鑑文字會慢慢搬進來）
 const SPECIES={
   grass:   {draw:(p,X,Y,a,t)=>drawGrass(p,X,Y,p.v,a,t)},
@@ -1004,6 +1477,10 @@ const SPECIES={
   tree:    {draw:(p,X,Y,a,t)=>drawTree(p,X,Y,p.v,a,t)},
   mushroom:{draw:(p,X,Y,a)=>drawMushroom(p,X,Y,a)},
   lily:    {draw:(p,X,Y,a)=>drawLily(p,X,Y,p.v,a)},
+  clover:   {draw:(p,X,Y,a,t)=>drawNewPlant(drawClover,p,X,Y,a,t,1.5)},
+  sunflower:{draw:(p,X,Y,a,t)=>drawNewPlant(drawSunflower,p,X,Y,a,t,1)},
+  tulip:    {draw:(p,X,Y,a,t)=>drawNewPlant(drawTulip,p,X,Y,a,t,1.3)},
+  pumpkin:  {draw:(p,X,Y,a,t)=>drawNewPlant(drawPumpkin,p,X,Y,a,t,1.1)},
 };
 
 let last=now(), wetColor='';
@@ -1027,12 +1504,16 @@ function paint(t,withHover){
   ctx.globalAlpha=1;
   // lily pads lie flat on the water, so they go under everything standing
   const flat=plants.filter(p=>p.type==='lily'), up=plants.filter(p=>p.type!=='lily').concat(critters).sort((a,b)=>a.y-b.y);
+  const views=critterViews(t);
   for(const p of flat.concat(up)){
     if(p.kind){ drawCritter(p,t); continue; }
     const a=reduceMotion?1:Math.max(.001,easeBack((t-p.born)/700));
     const X=p.x*W,Y=p.y*H;
+    const fade=views.length&&p.type!=='lily'?foliageAlpha(p,X,Y,views):1;
+    ctx.globalAlpha=fade;
     const sp=SPECIES[p.type];
     if(sp) sp.draw(p,X,Y,a,t);
+    ctx.globalAlpha=1;
   }
   for(const f of flies) drawFly(f,t);
   drawSparks(t);
@@ -1071,7 +1552,7 @@ function serialize(){
     wets:wets.slice(-400).map(w=>[+w.x.toFixed(4),+w.y.toFixed(4),+w.r.toFixed(1)]),
     ponds:ponds.map(p=>[+p.x.toFixed(4),+p.y.toFixed(4),+p.r.toFixed(4)]),
     flies:flies.map(f=>[+f.x.toFixed(4),+f.y.toFixed(4),+f.seed.toFixed(6),f.c]),
-    critters:critters.map(c=>[c.kind,+c.x.toFixed(4),+c.y.toFixed(4),+c.seed.toFixed(6),c.v,+c.hx.toFixed(4),+c.hy.toFixed(4)]), seenKinds, found, newFound
+    critters:critters.map(c=>[c.kind,+c.x.toFixed(4),+c.y.toFixed(4),+c.seed.toFixed(6),c.v,+c.hx.toFixed(4),+c.hy.toFixed(4)]).concat(keepCritters), seenKinds, found, newFound
   });
 }
 function writeNow(){
@@ -1096,7 +1577,7 @@ function load(){
     (d.wets||[]).forEach(a=>wets.push({x:a[0],y:a[1],r:a[2],t0:-1e9}));
     (d.ponds||[]).forEach(a=>ponds.push({x:a[0],y:a[1],r:a[2],born:-1e9}));
     (d.flies||[]).forEach(a=>flies.push({x:a[0],y:a[1],seed:a[2],c:a[3],born:-1e9}));
-    (d.critters||[]).forEach(a=>{if(CR[a[0]]) makeCritter(a[0],a[1],a[2],[a[5],a[6]],{seed:a[3],v:a[4],born:-1e9,quiet:true})});
+    (d.critters||[]).forEach(a=>{if(!Array.isArray(a)) return; if(CR[a[0]]) makeCritter(a[0],a[1],a[2],[a[5],a[6]],{seed:a[3],v:a[4],born:-1e9,quiet:true}); else keepCritters.push(a)});
     if(d.seenKinds&&typeof d.seenKinds==='object') seenKinds=d.seenKinds;
     if(d.found&&typeof d.found==='object') found=d.found;
     if(d.newFound&&typeof d.newFound==='object') newFound=d.newFound;
@@ -1110,7 +1591,7 @@ function load(){
 /* ================= 清空土地 ================= */
 function reset(){
   gen++;
-  for(const a of [plants,wets,ponds,flies,falls,rings,critters,sparks]) a.length=0;
+  for(const a of [plants,wets,ponds,flies,falls,rings,critters,sparks,keepCritters,puffSeeds]) a.length=0;
   seenKinds={};         // 圖鑑紀錄 found 不清
   water=0;
   syncWater(false); save();
@@ -1161,7 +1642,7 @@ requestAnimationFrame(frame);
 const api={
   VERSION,
   load, save, reset, on,
-  addWater(n){ n=n|0; if(n<=0) return; water+=n; syncWater(true); critterCheer(); },   // 答對：居民一起跳
+  addWater(n){ n=n|0; if(n<=0) return; water+=n; syncWater(true); critterCheer(); streakTick(); },   // 答對：居民一起跳；連續答對會來小雲
   refresh(){ syncWater(false); },               // 啟動時畫一次水滴列與提示字
   freeze(){ frozen=true; clearTimeout(saveT); },
   get water(){ return water; },
@@ -1170,10 +1651,18 @@ const api={
   _peek(){
     const t=now();
     return {
-      critters:critters.map(c=>{const p=critterPos(c,t);return {kind:c.kind,v:c.v,x:p.cx,y:p.cy-p.lift-CR[c.kind]*S*1.1,hop:!!c.hop,cheer:c.cheer,state:c.state,e:c.e}}),
+      critters:critters.map(c=>{const p=critterPos(c,t);const k=t-(c.reveal||-1e9);return {kind:c.kind,v:c.v,x:p.cx,y:p.cy-p.lift-CR[c.kind]*S*1.1,
+        fx:p.cx,fy:p.cy,cx:c.x,cy:c.y,r:CR[c.kind]*S,hop:!!c.hop,cheer:c.cheer,state:c.state,e:c.e,fresh:k<REVEAL_MS?1-k/REVEAL_MS:0}}),
+      // v1.2：每株植物現在的透明度（順序同存檔的 plants；睡蓮一律 1）
+      fade:(()=>{const vs=critterViews(t);return plants.map(p=>vs.length&&p.type!=='lily'?foliageAlpha(p,p.x*W,p.y*H,vs):1)})(),
+      plants:plants.map(p=>({type:p.type,x:p.x,y:p.y})), ponds:ponds.map(p=>({x:p.x,y:p.y,r:p.r})), W, H, S,
       found:{...found}, newFound:{...newFound}, seenKinds:{...seenKinds}, guideOpen:!G.guide.hidden, now:t,
     };
   },
+  // v1.2 測試用：假如畫面座標 (X,Y)（px，植物的腳）有一株 type（樹用 v），它現在的透明度（唯讀）
+  _fadeAt(type,X,Y,v=3){ return foliageAlpha({type,v},X,Y,critterViews(now())); },
+  // v1.2 測試用（會改資料）：直接呼叫 addPlant，看新植物落在哪（x,y 是 0～1）；頁面不要用
+  _addPlant(type,x,y){ const p=addPlant(type,x,y); return p&&{x:p.x,y:p.y,inPond:!!pondAt(p.x,p.y)}; },
 };
 return api;
 }
