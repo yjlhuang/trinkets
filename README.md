@@ -40,4 +40,4 @@
 
 ## 授權
 
-[MIT License](LICENSE)
+[PolyForm Noncommercial License 1.0.0](LICENSE)：個人、學習、教學、研究等非商業用途可自由使用與修改；商業用途請先聯絡作者取得授權。

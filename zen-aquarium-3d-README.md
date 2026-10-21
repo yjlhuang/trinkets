@@ -261,8 +261,8 @@ tools/
 
 ## 授權
 
-**程式碼採 [MIT](LICENSE)。**
+**程式碼採 [PolyForm Noncommercial License 1.0.0](LICENSE)（非商業用途）。**
 
-內嵌資產不適用 MIT，各自沿用上方 Credits 所列的授權：模型為 CC BY 3.0、音訊為 Pixabay Content License。
+內嵌資產不適用上述授權，各自沿用上方 Credits 所列的授權：模型為 CC BY 3.0、音訊為 Pixabay Content License。
 
 **CC BY 3.0 要求標示原作者**，所以出處同時寫在這份 README 和畫面左上角。要移除任一處之前，請先確認另一處仍在，否則會不符合授權要求。
