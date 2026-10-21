@@ -235,6 +235,37 @@
   ::-webkit-scrollbar{ width:9px; height:9px; }
   ::-webkit-scrollbar-track{ background:transparent; }
   ::-webkit-scrollbar-thumb{ background:#3a3d44; border-radius:5px; }
+
+  /* ---- 手機／窄螢幕：畫布在上、控制面板在下 ---- */
+  @media (max-width: 760px){
+    .app{ height:100vh; height:100dvh; }
+    .topbar{ flex-wrap:wrap; gap:6px; padding:8px 10px; }
+    .topbar .title{ font-size:13px; margin-right:2px; }
+    .icon-btn{ width:32px; height:32px; }
+    .btn{ padding:0 10px; }
+    #btnUpload, #btnDownload{ font-size:0; gap:0; padding:0 10px; }
+    #btnUpload svg, #btnDownload svg{ width:17px; height:17px; }
+    .spacer{ flex:1 1 0; min-width:0; }
+    .zoom-group{ order:10; flex:1 0 100%; margin:0; }
+    .zoom-group input[type=range]{ flex:1; width:auto; }
+    .main{ flex-direction:column; }
+    .canvas-area{ order:1; flex:1 1 0; min-height:0; padding:12px; }
+    .sidebar{
+      order:2; width:100%; flex:0 0 auto; max-height:40dvh;
+      border-right:none; border-top:1px solid var(--border);
+      padding:12px 12px 16px;
+    }
+    .section{ margin-bottom:16px; }
+    .tool-list{ flex-direction:row; flex-wrap:wrap; }
+    .tool-item{ flex:1 1 calc(50% - 4px); justify-content:center; padding:9px 8px; }
+    .tool-item .key{ display:none; }
+    .type-grid{ grid-template-columns:repeat(4,1fr); gap:6px; }
+    .type-item{ padding:5px 3px 6px; }
+    .type-item .type-label{ font-size:10px; }
+    .emoji-grid{ grid-template-columns:repeat(6,1fr); }
+    .dropzone{ padding:36px 20px; }
+    .toast{ bottom:auto; top:70px; }
+  }
 </style>
 </head>
 <body>
@@ -1020,9 +1051,38 @@
   }
 
   /* ============ 指標事件（統一綁在 overlay canvas） ============ */
+  // 兩指手勢：縮放＋平移（手機用）。第二根手指落下時，先取消第一根手指已開始的動作。
+  const touches = new Map();
+  let gesture = null;
+  let emojiJustCreated = false;
+
+  function touchMetrics(){
+    const [a,b] = [...touches.values()];
+    return { x:(a.x+b.x)/2, y:(a.y+b.y)/2, d:Math.hypot(a.x-b.x, a.y-b.y) || 1 };
+  }
+  function abortOps(){
+    if(brushing){
+      brushing = false; lastPt = null;
+      if(historyStack.length){ bctx.putImageData(historyStack.pop(),0,0); updateUndoRedoButtons(); }
+    }
+    rectStart = null; lassoPoints = [];
+    if(emojiJustCreated){ discardEmoji(); emojiJustCreated = false; }
+    emojiDrag = null;
+    if(floatEmoji) renderEmojiOverlay(); else clearOverlay();
+  }
   overlayCanvas.addEventListener('pointerdown', e=>{
     if(!state.hasImage) return;
     overlayCanvas.setPointerCapture(e.pointerId);
+    if(e.pointerType === 'touch'){
+      touches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+      if(touches.size >= 2){
+        abortOps();
+        const m = touchMetrics();
+        gesture = { d0:m.d, z0:zoom, last:{x:m.x, y:m.y} };
+        return;
+      }
+    }
+    if(gesture) return;
     const p = toCanvasCoords(e);
 
     if(state.tool === 'brush'){
@@ -1045,6 +1105,7 @@
         emojiDrag = {mode:'move', dx:p.x-floatEmoji.x, dy:p.y-floatEmoji.y};
       } else {
         commitEmoji();
+        emojiJustCreated = true;
         floatEmoji = {x:p.x, y:p.y, size:state.emojiSize, ch:state.emoji};
         emojiDrag = {mode:'move', dx:0, dy:0};
       }
@@ -1054,6 +1115,18 @@
 
   overlayCanvas.addEventListener('pointermove', e=>{
     if(!state.hasImage) return;
+    if(touches.has(e.pointerId)) touches.set(e.pointerId, {x:e.clientX, y:e.clientY});
+    if(gesture){
+      if(touches.size >= 2){
+        const m = touchMetrics();
+        fitMode = false;
+        applyZoom(gesture.z0 * m.d / gesture.d0, gesture.last.x, gesture.last.y);
+        canvasArea.scrollLeft -= m.x - gesture.last.x;
+        canvasArea.scrollTop  -= m.y - gesture.last.y;
+        gesture.last = {x:m.x, y:m.y};
+      }
+      return;
+    }
     const p = toCanvasCoords(e);
 
     if(state.tool === 'brush'){
@@ -1093,6 +1166,9 @@
   });
 
   function endStroke(e){
+    touches.delete(e.pointerId);
+    if(gesture){ if(touches.size < 2) gesture = null; if(touches.size === 0) emojiJustCreated = false; return; }
+    emojiJustCreated = false;
     if(!state.hasImage) return;
     if(state.tool === 'brush' && brushing){
       brushing = false;
