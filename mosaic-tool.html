@@ -54,6 +54,11 @@
   }
   .topbar .title span{ color:var(--accent); }
   .spacer{ flex:1; }
+  .zoom-group{ display:flex; align-items:center; gap:6px; margin-right:8px; }
+  .zoom-group input[type=range]{ width:110px; }
+  .zoom-group .zval{ font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent); min-width:40px; text-align:right; }
+  .zoom-group.disabled{ opacity:.38; pointer-events:none; }
+  .zoom-group .btn{ height:28px; padding:0 9px; font-size:12px; }
   .icon-btn{
     display:flex; align-items:center; justify-content:center;
     width:34px; height:34px;
@@ -148,6 +153,14 @@
     padding:10px 11px; background:var(--panel-2); border-radius:var(--radius); border:1px solid var(--border);
   }
   .hint-box b{ color:var(--text); }
+  .help{ font-size:11.5px; color:var(--muted); border:1px solid var(--border); border-radius:var(--radius); background:var(--panel-2); }
+  .help summary{ cursor:pointer; padding:9px 11px; color:var(--text); font-weight:500; list-style:none; }
+  .help summary::-webkit-details-marker{ display:none; }
+  .help summary::before{ content:'▸ '; color:var(--muted); }
+  .help[open] summary::before{ content:'▾ '; }
+  .help-body{ padding:0 11px 10px; line-height:1.9; }
+  .help-body h4{ margin:8px 0 2px; font-size:10.5px; letter-spacing:.08em; color:var(--accent); font-weight:600; }
+  .help-body kbd{ font-family:'JetBrains Mono',monospace; font-size:10.5px; background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:0 5px; color:var(--text); }
 
   /* ---- Canvas area ---- */
   .canvas-area{
@@ -163,18 +176,39 @@
     overflow:auto; padding:24px;
   }
   .canvas-wrap{
-    position:relative; max-width:100%;
+    position:relative; flex:none; margin:auto;
     box-shadow:0 8px 30px rgba(0,0,0,.5);
     display:none; line-height:0;
   }
   .canvas-wrap.show{ display:block; }
-  .canvas-wrap canvas{ display:block; max-width:100%; height:auto; }
+  .canvas-wrap canvas{ display:block; width:100%; height:100%; }
   #overlayCanvas{ position:absolute; top:0; left:0; touch-action:none; }
   .canvas-wrap.tool-brush #overlayCanvas{ cursor:none; }
   .canvas-wrap.tool-rect #overlayCanvas{ cursor:crosshair; }
   .canvas-wrap.tool-lasso #overlayCanvas{ cursor:crosshair; }
+  .canvas-wrap.tool-emoji #overlayCanvas{ cursor:crosshair; }
+
+  .emoji-grid{ display:grid; grid-template-columns:repeat(5,1fr); gap:4px; margin-bottom:10px; }
+  .emoji-item{
+    display:flex; align-items:center; justify-content:center;
+    height:34px; font-size:20px; line-height:1;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius);
+    cursor:pointer; transition:border-color .12s;
+    font-family:'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif;
+  }
+  .emoji-item:hover{ border-color:#4a4d55; }
+  .emoji-item.active{ border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; background:var(--accent-dim); }
+  .emoji-input{
+    width:100%; height:34px; padding:0 10px; margin-bottom:6px;
+    background:var(--panel-2); border:1px solid var(--border); border-radius:var(--radius);
+    color:var(--text); font-size:18px; text-align:center;
+    font-family:'Segoe UI Emoji','Apple Color Emoji','Noto Color Emoji',sans-serif;
+  }
+  .emoji-input:focus{ outline:none; border-color:var(--accent); }
+  .emoji-note{ font-size:10.5px; color:var(--muted); line-height:1.5; }
 
   .dropzone{
+    margin:auto; flex:none;
     width:min(560px,90%); padding:56px 32px;
     border:1.5px dashed var(--border); border-radius:12px;
     text-align:center; color:var(--muted);
@@ -218,14 +252,20 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
     </button>
     <div class="spacer"></div>
+    <div class="zoom-group disabled" id="zoomGroup" title="縮放 (Ctrl+滾輪)">
+      <button class="btn" id="btnZoomFit" title="符合視窗 (Ctrl+0)">符合</button>
+      <button class="btn" id="btnZoom100" title="原始大小 100%">1:1</button>
+      <input type="range" id="zoomSlider" min="10" max="400" value="100">
+      <span class="zval" id="zoomVal">100%</span>
+    </div>
     <button class="btn" id="btnUpload">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="M6 10l6-6 6 6"/><path d="M4 20h16"/></svg>
       上傳圖片
     </button>
-    <button class="icon-btn" id="btnCopy" title="複製到剪貼簿" disabled>
+    <button class="icon-btn" id="btnCopy" title="複製到剪貼簿 (Ctrl+C)" disabled>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
     </button>
-    <button class="btn primary" id="btnDownload" disabled>
+    <button class="btn primary" id="btnDownload" title="下載 (Ctrl+S)" disabled>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12"/><path d="M6 12l6 6 6-6"/><path d="M4 20h16"/></svg>
       下載
     </button>
@@ -238,12 +278,12 @@
       <div class="section">
         <div class="section-label">塗抹方式</div>
         <div class="tool-list" id="toolList">
-          <div class="tool-item active" data-tool="brush">
+          <div class="tool-item" data-tool="brush">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 14.5 3 21"/><path d="M14 6.5 17.5 3 21 6.5 17.5 10z"/><path d="M9.5 14.5 17.5 6.5l3 3-8 8-4 1z"/></svg>
             筆刷塗抹
             <span class="key">B</span>
           </div>
-          <div class="tool-item" data-tool="rect">
+          <div class="tool-item active" data-tool="rect">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5" width="16" height="14" rx="1" stroke-dasharray="3 2.5"/></svg>
             框選範圍
             <span class="key">R</span>
@@ -253,15 +293,31 @@
             套索選取
             <span class="key">L</span>
           </div>
+          <div class="tool-item" data-tool="emoji">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9.5h.01"/><path d="M15 9.5h.01"/></svg>
+            貼上表情符號
+            <span class="key">E</span>
+          </div>
         </div>
       </div>
 
-      <div class="section">
+      <div class="section" id="emojiSection" style="display:none">
+        <div class="section-label">表情符號</div>
+        <div class="emoji-grid" id="emojiGrid"></div>
+        <input type="text" class="emoji-input" id="emojiInput" placeholder="貼上或輸入任何 emoji" autocomplete="off">
+        <div class="emoji-note">也可以自己貼上任何 emoji（Win＋<b>.</b> 開啟表情選單）。貼上後可拖曳移動、拖四角縮放。</div>
+        <div class="slider-row" style="margin-top:14px">
+          <div class="slider-head"><label>表情大小</label><span class="val" id="emojiSizeVal">160</span></div>
+          <input type="range" id="emojiSizeSlider" min="30" max="600" value="160">
+        </div>
+      </div>
+
+      <div class="section" id="typeSection">
         <div class="section-label">馬賽克類型</div>
         <div class="type-grid" id="typeGrid"></div>
       </div>
 
-      <div class="section">
+      <div class="section" id="paramSection">
         <div class="section-label">參數</div>
         <div class="slider-row">
           <div class="slider-head"><label>尺寸／筆刷粗細</label><span class="val" id="sizeVal">28</span></div>
@@ -271,15 +327,36 @@
           <div class="slider-head"><label>強度</label><span class="val" id="intensityVal">85</span></div>
           <input type="range" id="intensitySlider" min="5" max="100" value="85">
           <div style="font-size:10.5px;color:var(--muted);margin-top:6px;line-height:1.5;" id="intensityCaption">
-            馬賽克／模糊／雜訊：控制效果力道，一律完全遮蓋原圖。<br>黑／白遮擋：固定 100% 不透明。
+            馬賽克／模糊／雜訊：控制效果力道（雜訊為隨機色塊，完全不保留原圖）。<br>黑／白遮擋：固定 100% 不透明。
           </div>
         </div>
       </div>
 
       <div class="section">
         <div class="hint-box" id="toolHint">
-          <b>筆刷塗抹</b>：按住滑鼠拖曳，畫過的地方即時打上馬賽克。放開滑鼠即完成一筆，可再按復原。
+          <b>框選範圍</b>：拖曳畫出矩形範圍，放開滑鼠後整個範圍會一次套用馬賽克。
         </div>
+      </div>
+
+      <div class="section">
+        <details class="help">
+          <summary>快捷鍵與使用說明</summary>
+          <div class="help-body">
+            <h4>通用</h4>
+            <kbd>Ctrl</kbd>+<kbd>V</kbd> 貼上截圖　<kbd>Ctrl</kbd>+<kbd>S</kbd> 下載<br>
+            <kbd>Ctrl</kbd>+<kbd>C</kbd> 複製圖片　<kbd>Ctrl</kbd>+<kbd>Z</kbd> 復原<br>
+            <kbd>Ctrl</kbd>+滾輪 縮放圖片　<kbd>Ctrl</kbd>+<kbd>0</kbd> 符合視窗<br>
+            <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> 或 <kbd>Ctrl</kbd>+<kbd>Y</kbd> 重做
+            <h4>切換工具</h4>
+            <kbd>B</kbd> 筆刷　<kbd>R</kbd> 框選　<kbd>L</kbd> 套索　<kbd>E</kbd> 表情
+            <h4>表情（貼上後尚未定稿時）</h4>
+            拖曳本體＝移動，拖曳四角＝縮放<br>
+            <kbd>Enter</kbd> 定稿　<kbd>Esc</kbd>／<kbd>Delete</kbd> 取消<br>
+            <kbd>+</kbd> <kbd>-</kbd> 調大小　<kbd>←↑↓→</kbd> 微調位置（加 <kbd>Shift</kbd> 一次 10 px）
+            <h4>小提醒</h4>
+            表情定稿前按復原＝取消該表情；下載／複製前會自動定稿。
+          </div>
+        </details>
       </div>
 
     </div>
@@ -291,7 +368,7 @@
         <p>或點擊上方「上傳圖片」，也可以直接 <span class="kbd">Ctrl</span>+<span class="kbd">V</span> 貼上剪貼簿截圖</p>
         <button class="btn primary" id="btnUploadCenter">選擇檔案</button>
       </div>
-      <div class="canvas-wrap tool-brush" id="canvasWrap">
+      <div class="canvas-wrap tool-rect" id="canvasWrap">
         <canvas id="baseCanvas"></canvas>
         <canvas id="overlayCanvas"></canvas>
       </div>
@@ -319,8 +396,12 @@
   const TOOL_HINTS = {
     brush: '<b>筆刷塗抹</b>：按住滑鼠拖曳，畫過的地方即時打上馬賽克。放開滑鼠即完成一筆，可再按復原。',
     rect:  '<b>框選範圍</b>：拖曳畫出矩形範圍，放開滑鼠後整個範圍會一次套用馬賽克。',
-    lasso: '<b>套索選取</b>：按住滑鼠沿著不規則邊界畫一圈，放開後自動封閉範圍並套用馬賽克。'
+    lasso: '<b>套索選取</b>：按住滑鼠沿著不規則邊界畫一圈，放開後自動封閉範圍並套用馬賽克。',
+    emoji: '<b>表情符號</b>：點圖貼上後，表情會保持「可調整」狀態：拖曳本體移動、拖曳四角縮放。按 <b>Enter</b> 或點框外／換工具即定稿，<b>Esc／Delete</b> 取消。'
   };
+
+  const EMOJI_PRESETS = ['😀','😎','🥸','😂','🥰','😐','🤪','🤖','👻','🐱','🐶','🐵','💩','🙈','🌞','⭐','❤️','🚫'];
+  const EMOJI_FONT = '"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
 
   const MAX_DIM = 1800;
   const MAX_HISTORY = 20;
@@ -344,15 +425,22 @@
   const intensityVal = $('intensityVal');
 
   const state = {
-    tool: 'brush',
+    tool: 'rect',
     type: 'pixelate',
     size: 28,
     intensity: 85,
+    emoji: '😎',
+    emojiSize: 160,
     hasImage: false
   };
   let historyStack = [];
   let redoStack = [];
   let originalImageData = null;
+  let zoom = 1;          // 圖片顯示倍率（相對原始像素）
+  let fitMode = true;    // true＝自動符合視窗
+  // 浮動中的表情：{x,y,size,ch}。定稿（commit）前都只畫在 overlay，可移動／縮放。
+  let floatEmoji = null;
+  let emojiDrag = null; // {mode:'move'|'resize', dx, dy}
 
   function showToast(msg){
     toast.textContent = msg;
@@ -360,6 +448,40 @@
     clearTimeout(showToast._t);
     showToast._t = setTimeout(()=>toast.classList.remove('show'), 1800);
   }
+
+  /* ============ 縮放（只縮放圖片，不影響整頁） ============ */
+  function fitZoom(){
+    const pad = 48;
+    const zw = (canvasArea.clientWidth - pad) / baseCanvas.width;
+    const zh = (canvasArea.clientHeight - pad) / baseCanvas.height;
+    return Math.max(0.05, Math.min(zw, zh, 1));
+  }
+  function applyZoom(z, cx, cy){
+    if(!state.hasImage) return;
+    z = Math.max(0.1, Math.min(4, z));
+    const r0 = canvasWrap.getBoundingClientRect();
+    if(cx == null){ cx = canvasArea.getBoundingClientRect().left + canvasArea.clientWidth/2; cy = canvasArea.getBoundingClientRect().top + canvasArea.clientHeight/2; }
+    const fx = r0.width ? (cx-r0.left)/r0.width : .5, fy = r0.height ? (cy-r0.top)/r0.height : .5;
+    zoom = z;
+    canvasWrap.style.width = Math.round(baseCanvas.width*z) + 'px';
+    canvasWrap.style.height = Math.round(baseCanvas.height*z) + 'px';
+    $('zoomSlider').value = Math.round(z*100);
+    $('zoomVal').textContent = Math.round(z*100) + '%';
+    const r1 = canvasWrap.getBoundingClientRect();
+    canvasArea.scrollLeft += (r1.left + fx*r1.width) - cx;
+    canvasArea.scrollTop  += (r1.top  + fy*r1.height) - cy;
+  }
+  function setFit(){ fitMode = true; applyZoom(fitZoom()); }
+  $('zoomSlider').addEventListener('input', e=>{ fitMode = false; applyZoom(+e.target.value/100); });
+  $('btnZoomFit').addEventListener('click', setFit);
+  $('btnZoom100').addEventListener('click', ()=>{ fitMode = false; applyZoom(1); });
+  canvasArea.addEventListener('wheel', e=>{
+    if(!e.ctrlKey || !state.hasImage) return;
+    e.preventDefault();
+    fitMode = false;
+    applyZoom(zoom * Math.exp(-e.deltaY*0.0015), e.clientX, e.clientY);
+  }, {passive:false});
+  window.addEventListener('resize', ()=>{ if(fitMode && state.hasImage) applyZoom(fitZoom()); });
 
   function updateUndoRedoButtons(){
     $('btnUndo').disabled = historyStack.length === 0;
@@ -463,6 +585,7 @@
     for(let i=0;i<passes;i++) boxBlurOnePass(data,w,h,radius);
   }
 
+  // 毛玻璃用的輕微雜訊：在原圖上加亮度偏移
   function addNoiseBlock(data,w,h,block,amount){
     block = Math.max(2, Math.round(block/3));
     for(let by=0; by<h; by+=block){
@@ -474,6 +597,27 @@
           let idx=((by+y)*w+bx)*4;
           for(let x=0;x<bw;x++, idx+=4){
             data[idx]=data[idx]+n; data[idx+1]=data[idx+1]+n; data[idx+2]=data[idx+2]+n;
+          }
+        }
+      }
+    }
+  }
+
+  // 「雜訊」遮蓋：每個小格換成隨機灰階＋色偏，完全不保留原圖資訊（像電視雪花）
+  function noiseCover(data,w,h,block){
+    block = Math.max(2, Math.round(block/3));
+    for(let by=0; by<h; by+=block){
+      const bh=Math.min(block,h-by);
+      for(let bx=0; bx<w; bx+=block){
+        const bw=Math.min(block,w-bx);
+        const base = Math.random()*255;
+        const r = base + (Math.random()-0.5)*90;
+        const g = base + (Math.random()-0.5)*90;
+        const b = base + (Math.random()-0.5)*90;
+        for(let y=0;y<bh;y++){
+          let idx=((by+y)*w+bx)*4;
+          for(let x=0;x<bw;x++, idx+=4){
+            data[idx]=r; data[idx+1]=g; data[idx+2]=b;
           }
         }
       }
@@ -499,7 +643,7 @@
       case 'blur':      boxBlurPasses(data,w,h,2, Math.max(1,size/12)); break;
       case 'heavyblur': boxBlurPasses(data,w,h,4, Math.max(2,size/7)); break;
       case 'glass':     boxBlurPasses(data,w,h,3, Math.max(2,size/9)); addNoiseBlock(data,w,h,size,8); whitenOverlay(data,w,h,0.16); break;
-      case 'noise':     addNoiseBlock(data,w,h,size,85); break;
+      case 'noise':     noiseCover(data,w,h,size); break;
       case 'black':     fillColor(data,w,h,10,10,10); break;
       case 'white':     fillColor(data,w,h,250,250,250); break;
     }
@@ -557,6 +701,7 @@
       const s = MAX_DIM / Math.max(w,h);
       w = Math.round(w*s); h = Math.round(h*s);
     }
+    floatEmoji = null; emojiDrag = null;
     baseCanvas.width = w; baseCanvas.height = h;
     overlayCanvas.width = w; overlayCanvas.height = h;
     bctx.clearRect(0,0,w,h);
@@ -566,6 +711,8 @@
     state.hasImage = true;
     dropzone.style.display = 'none';
     canvasWrap.classList.add('show');
+    $('zoomGroup').classList.remove('disabled');
+    setFit();
     updateUndoRedoButtons();
     showToast('圖片已載入');
   }
@@ -645,16 +792,121 @@
     item.addEventListener('click', ()=>{
       toolList.querySelectorAll('.tool-item').forEach(el=>el.classList.remove('active'));
       item.classList.add('active');
+      commitEmoji();
       state.tool = item.dataset.tool;
-      canvasWrap.classList.remove('tool-brush','tool-rect','tool-lasso');
+      canvasWrap.classList.remove('tool-brush','tool-rect','tool-lasso','tool-emoji');
       canvasWrap.classList.add('tool-'+state.tool);
       toolHint.innerHTML = TOOL_HINTS[state.tool];
+      const isEmoji = state.tool === 'emoji';
+      $('emojiSection').style.display = isEmoji ? '' : 'none';
+      $('typeSection').style.display = isEmoji ? 'none' : '';
+      $('paramSection').style.display = isEmoji ? 'none' : '';
       clearOverlay();
     });
   });
 
-  sizeSlider.addEventListener('input', ()=>{ state.size = +sizeSlider.value; sizeVal.textContent = sizeSlider.value; });
-  intensitySlider.addEventListener('input', ()=>{ state.intensity = +intensitySlider.value; intensityVal.textContent = intensitySlider.value; });
+  /* ============ 表情符號 ============ */
+  const emojiGrid = $('emojiGrid');
+  const emojiInput = $('emojiInput');
+
+  function setEmoji(ch){
+    state.emoji = ch;
+    emojiGrid.querySelectorAll('.emoji-item').forEach(el=>el.classList.toggle('active', el.textContent === ch));
+    emojiInput.value = ch;
+    if(floatEmoji){ floatEmoji.ch = ch; renderEmojiOverlay(); }
+  }
+  EMOJI_PRESETS.forEach(ch=>{
+    const el = document.createElement('div');
+    el.className = 'emoji-item';
+    el.textContent = ch;
+    el.addEventListener('click', ()=>setEmoji(ch));
+    emojiGrid.appendChild(el);
+  });
+  // 貼上／輸入的內容只取第一個字（grapheme），避免整串文字被當成一個表情
+  function firstGrapheme(s){
+    s = s.trim();
+    if(!s) return '';
+    if(window.Intl && Intl.Segmenter){
+      const it = new Intl.Segmenter(undefined, {granularity:'grapheme'}).segment(s)[Symbol.iterator]();
+      return it.next().value.segment;
+    }
+    return Array.from(s)[0];
+  }
+  emojiInput.addEventListener('input', ()=>{
+    const ch = firstGrapheme(emojiInput.value);
+    if(ch) setEmoji(ch);
+  });
+  emojiInput.addEventListener('focus', ()=>emojiInput.select());
+  setEmoji(state.emoji);
+
+  $('emojiSizeSlider').addEventListener('input', e=>{
+    setEmojiSize(+e.target.value);
+    if(floatEmoji) renderEmojiOverlay();
+  });
+
+  function drawEmoji(ctx, x, y, size, ch){
+    ctx.save();
+    ctx.font = size + 'px ' + EMOJI_FONT;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(ch, x, y + size*0.06);
+    ctx.restore();
+  }
+
+  const MIN_EMOJI = 30, MAX_EMOJI = 1200;
+
+  function overlayScale(){
+    return overlayCanvas.width / overlayCanvas.getBoundingClientRect().width;
+  }
+  function emojiHit(p){
+    if(!floatEmoji) return null;
+    const r = floatEmoji.size/2, hs = 12*overlayScale();
+    const corners = [[-1,-1],[1,-1],[-1,1],[1,1]];
+    for(const [sx,sy] of corners){
+      if(Math.abs(p.x-(floatEmoji.x+sx*r)) <= hs && Math.abs(p.y-(floatEmoji.y+sy*r)) <= hs) return 'resize';
+    }
+    if(Math.abs(p.x-floatEmoji.x) <= r && Math.abs(p.y-floatEmoji.y) <= r) return 'move';
+    return null;
+  }
+  function renderEmojiOverlay(ghost){
+    clearOverlay();
+    const e = floatEmoji || ghost;
+    if(!e) return;
+    drawEmoji(octx, e.x, e.y, e.size, e.ch);
+    const r = e.size/2, sc = overlayScale();
+    octx.strokeStyle = 'rgba(224,163,54,0.95)';
+    octx.lineWidth = 1.5*sc;
+    octx.setLineDash([5*sc,4*sc]);
+    octx.strokeRect(e.x-r, e.y-r, e.size, e.size);
+    octx.setLineDash([]);
+    if(floatEmoji){
+      const hs = 6*sc;
+      octx.fillStyle = '#e0a336';
+      [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(([sx,sy])=>{
+        octx.fillRect(e.x+sx*r-hs, e.y+sy*r-hs, hs*2, hs*2);
+      });
+    }
+  }
+  function setEmojiSize(v){
+    v = Math.max(MIN_EMOJI, Math.min(MAX_EMOJI, Math.round(v)));
+    state.emojiSize = v;
+    if(floatEmoji) floatEmoji.size = v;
+    $('emojiSizeVal').textContent = v;
+    $('emojiSizeSlider').value = Math.min(600, v);
+  }
+  function commitEmoji(){
+    if(!floatEmoji) return;
+    pushHistory();
+    drawEmoji(bctx, floatEmoji.x, floatEmoji.y, floatEmoji.size, floatEmoji.ch);
+    floatEmoji = null; emojiDrag = null;
+    clearOverlay();
+  }
+  function discardEmoji(){
+    if(!floatEmoji) return false;
+    floatEmoji = null; emojiDrag = null;
+    clearOverlay();
+    return true;
+  }
 
   /* ============ 座標換算 ============ */
   function toCanvasCoords(e){
@@ -785,6 +1037,18 @@
     } else if(state.tool === 'lasso'){
       lassoPoints = [p];
       drawLassoPreview();
+    } else if(state.tool === 'emoji'){
+      const hit = emojiHit(p);
+      if(hit === 'resize'){
+        emojiDrag = {mode:'resize'};
+      } else if(hit === 'move'){
+        emojiDrag = {mode:'move', dx:p.x-floatEmoji.x, dy:p.y-floatEmoji.y};
+      } else {
+        commitEmoji();
+        floatEmoji = {x:p.x, y:p.y, size:state.emojiSize, ch:state.emoji};
+        emojiDrag = {mode:'move', dx:0, dy:0};
+      }
+      renderEmojiOverlay();
     }
   });
 
@@ -810,6 +1074,20 @@
       if(lassoPoints.length){
         lassoPoints.push(p);
         drawLassoPreview();
+      }
+    } else if(state.tool === 'emoji'){
+      if(emojiDrag && floatEmoji){
+        if(emojiDrag.mode === 'move'){
+          floatEmoji.x = p.x - emojiDrag.dx;
+          floatEmoji.y = p.y - emojiDrag.dy;
+        } else {
+          setEmojiSize(2*Math.max(Math.abs(p.x-floatEmoji.x), Math.abs(p.y-floatEmoji.y)));
+        }
+        renderEmojiOverlay();
+      } else {
+        const hit = emojiHit(p);
+        overlayCanvas.style.cursor = hit==='resize' ? 'nwse-resize' : hit==='move' ? 'move' : 'crosshair';
+        renderEmojiOverlay(floatEmoji ? null : {x:p.x, y:p.y, size:state.emojiSize, ch:state.emoji});
       }
     }
   });
@@ -839,16 +1117,19 @@
       }
       lassoPoints = [];
       clearOverlay();
+    } else if(state.tool === 'emoji'){
+      emojiDrag = null;
     }
   }
   overlayCanvas.addEventListener('pointerup', endStroke);
   overlayCanvas.addEventListener('pointerleave', ()=>{
-    if(state.tool==='brush' && !brushing) clearOverlay();
+    if((state.tool==='brush' && !brushing) || (state.tool==='emoji' && !floatEmoji)) clearOverlay();
   });
   overlayCanvas.addEventListener('pointercancel', endStroke);
 
   /* ============ 上方工具列動作 ============ */
   function undo(){
+    if(discardEmoji()) return;
     if(historyStack.length===0) return;
     redoStack.push(bctx.getImageData(0,0,baseCanvas.width, baseCanvas.height));
     const prev = historyStack.pop();
@@ -856,6 +1137,7 @@
     updateUndoRedoButtons();
   }
   function redo(){
+    discardEmoji();
     if(redoStack.length===0) return;
     historyStack.push(bctx.getImageData(0,0,baseCanvas.width, baseCanvas.height));
     const next = redoStack.pop();
@@ -867,12 +1149,15 @@
 
   $('btnReset').addEventListener('click', ()=>{
     if(!originalImageData) return;
+    discardEmoji();
     pushHistory();
     bctx.putImageData(originalImageData,0,0);
     showToast('已還原成原圖');
   });
 
-  $('btnDownload').addEventListener('click', ()=>{
+  function doDownload(){
+    if(!state.hasImage) return;
+    commitEmoji();
     baseCanvas.toBlob(blob=>{
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -881,9 +1166,10 @@
       setTimeout(()=>URL.revokeObjectURL(url), 2000);
       showToast('已下載圖片');
     }, 'image/png');
-  });
-
-  $('btnCopy').addEventListener('click', ()=>{
+  }
+  function doCopy(){
+    if(!state.hasImage) return;
+    commitEmoji();
     baseCanvas.toBlob(async blob=>{
       try{
         await navigator.clipboard.write([ new ClipboardItem({ 'image/png': blob }) ]);
@@ -892,13 +1178,36 @@
         showToast('複製失敗，瀏覽器不支援此功能，請改用下載');
       }
     }, 'image/png');
-  });
+  }
+  $('btnDownload').addEventListener('click', doDownload);
+  $('btnCopy').addEventListener('click', doCopy);
 
   /* ============ 鍵盤快捷鍵 ============ */
   window.addEventListener('keydown', e=>{
     const tag = (e.target && e.target.tagName) || '';
+    const mod = e.ctrlKey || e.metaKey;
+    if(mod && e.key === '0'){ e.preventDefault(); setFit(); return; }
+    if(mod && e.key.toLowerCase()==='s'){ e.preventDefault(); doDownload(); return; }
     if(tag === 'INPUT' || tag==='TEXTAREA') return;
-    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='z'){
+    if(mod && e.key.toLowerCase()==='c' && !(window.getSelection && String(window.getSelection()))){
+      e.preventDefault(); doCopy(); return;
+    }
+    if(floatEmoji){
+      if(e.key === 'Enter'){ e.preventDefault(); commitEmoji(); return; }
+      if(e.key === 'Escape' || e.key === 'Delete' || e.key === 'Backspace'){ e.preventDefault(); discardEmoji(); return; }
+      if(e.key === '+' || e.key === '='){ setEmojiSize(floatEmoji.size*1.1); renderEmojiOverlay(); return; }
+      if(e.key === '-'){ setEmojiSize(floatEmoji.size/1.1); renderEmojiOverlay(); return; }
+      if(e.key.startsWith('Arrow')){
+        e.preventDefault();
+        const d = e.shiftKey ? 10 : 1;
+        if(e.key==='ArrowLeft') floatEmoji.x -= d;
+        if(e.key==='ArrowRight') floatEmoji.x += d;
+        if(e.key==='ArrowUp') floatEmoji.y -= d;
+        if(e.key==='ArrowDown') floatEmoji.y += d;
+        renderEmojiOverlay(); return;
+      }
+    }
+    if(mod && e.key.toLowerCase()==='z'){
       e.preventDefault();
       if(e.shiftKey) redo(); else undo();
     } else if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='y'){
@@ -909,9 +1218,12 @@
       toolList.querySelector('[data-tool="rect"]').click();
     } else if(e.key.toLowerCase()==='l'){
       toolList.querySelector('[data-tool="lasso"]').click();
+    } else if(e.key.toLowerCase()==='e'){
+      toolList.querySelector('[data-tool="emoji"]').click();
     }
   });
 
+  toolHint.innerHTML = TOOL_HINTS[state.tool];
   updateUndoRedoButtons();
 })();
 </script>
