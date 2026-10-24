@@ -219,6 +219,9 @@ body{
 .sheet-card .btn{margin-top:20px;width:100%}
 .sum-score{font-family:var(--f-display);font-weight:600;font-size:44px;line-height:1;margin-top:12px}
 .sum-score small{font-size:20px;color:var(--ink-2);font-weight:500}
+/* 結算彩紙（參照 hoops）：8 題以上才撒，疊在結算卡上面、不擋點擊 */
+#confetti{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:6}
+.badge{display:inline-block;margin-top:10px;padding:5px 12px 6px;border-radius:999px;font:600 15px/1 var(--f-display);color:var(--on-accent);background:var(--accent)}
 .sum-list{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
 .sum-list li{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-size:15px;border-top:1px solid var(--line);padding-top:8px}
 .sum-list b{font-family:var(--f-display);font-weight:600;font-size:17px}
@@ -359,6 +362,7 @@ body{
     <div class="sheet-card">
       <h2>本局結果</h2>
       <div class="sum-score"><span id="sum-n">0</span><small> / 10</small></div>
+      <span id="sum-badge" class="badge" hidden></span>
       <p id="sum-msg"></p>
       <ul id="sum-list" class="sum-list"></ul>
       <div class="seg" role="radiogroup" aria-label="答完一題之後">
@@ -378,6 +382,7 @@ body{
       <div class="rev-btns"><button id="rev-back" class="btn ghost" type="button">回到結果</button><button id="rev-again" class="btn" type="button">再玩一局</button></div>
     </div>
   </section>
+  <canvas id="confetti" aria-hidden="true"></canvas>
   <div id="fail" hidden role="alert">
     <div>
       <h2>布丁出了點狀況</h2>
@@ -1510,6 +1515,7 @@ function pickRound() {
   return shuffle(pick);
 }
 function startRound() {
+  clearConfetti();
   Quiz.round = pickRound(); Quiz.idx = 0; Quiz.right = 0; Quiz.noHint = 0; Quiz.wrong = []; Quiz.history = []; Quiz.later = []; Quiz.queue = [];
   Game.paused = true;
   introEl.hidden = true; summaryEl.hidden = true; quizEl.hidden = false;
@@ -1578,7 +1584,11 @@ function showSummary() {
     var li = document.createElement('li'), b = document.createElement('b'), s = document.createElement('span');
     b.textContent = c.chunk; s.textContent = c.zh; li.appendChild(b); li.appendChild(s); ul.appendChild(li);
   });
+  var tier = celebrateTier(), badge = $('#sum-badge');
+  badge.textContent = '搭配詞達人'; badge.hidden = tier < 3;
+  if (tier === 3) $('#sum-msg').textContent = '全部答對，而且一次提示都沒看！';
   Game.paused = false; Game.next = 0.4;
+  cfLater(0.25, function () { celebrate(tier); });
   summaryEl.hidden = false;
   try { $('#btn-again').focus({ preventScroll: true }); } catch (e) {}
 }
@@ -1611,6 +1621,107 @@ function updateQuiz(dt) {
 }
 $('#btn-start').addEventListener('click', function () { ensureAudio(); startRound(); });
 $('#btn-again').addEventListener('click', function () { ensureAudio(); startRound(); });
+/* ---------- 結算彩紙與小喇叭（參照 hoops）----------
+   0：7 題以下不撒　1：8–9 題小小一陣　2：10 題全對，兩側彩紙砲　3：全對而且都沒看中文提示，再加碼一波 */
+var cfCanvas = $('#confetti'), cf = cfCanvas.getContext('2d'), parts = [], cfRaf = 0, cfLast = 0;
+var CONF = ['#ffc935', '#ff3d7f', '#39d4e8', '#ff7a1a', '#ffffff', '#9b7bff'];
+var reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+function sizeConfetti() {
+  var d = Math.min(window.devicePixelRatio || 1, 2), w = cfCanvas.clientWidth, h = cfCanvas.clientHeight;
+  cfCanvas.width = w * d; cfCanvas.height = h * d; cf.setTransform(d, 0, 0, d, 0, 0);
+}
+function spawnPart(x, y, vx, vy) {
+  parts.push({ x: x, y: y, vx: vx, vy: vy, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 14, w: 5 + Math.random() * 6, h: 8 + Math.random() * 9,
+    c: CONF[(Math.random() * CONF.length) | 0], life: 2.4 + Math.random() * 1.4, t: 0, dot: Math.random() < 0.2 });
+  if (!cfRaf) { sizeConfetti(); cfLast = performance.now(); cfRaf = requestAnimationFrame(drawConfetti); }
+}
+function burst(x, y, n, power, angle, spread) {
+  if (reduceMotion) n = Math.ceil(n / 4);
+  for (var i = 0; i < n; i++) { var a = angle + (Math.random() - 0.5) * 2 * spread, sp = (260 + Math.random() * 420) * power; spawnPart(x, y, Math.cos(a) * sp, Math.sin(a) * sp); }
+}
+function rain(n) {
+  if (reduceMotion) n = Math.ceil(n / 4);
+  var w = cfCanvas.clientWidth;
+  for (var i = 0; i < n; i++) spawnPart(Math.random() * w, -20 - Math.random() * 160, (Math.random() - 0.5) * 80, 60 + Math.random() * 120);
+}
+function drawConfetti(now) {   // 只在有彩紙時跑，撒完就停
+  var dt = Math.min(0.05, (now - cfLast) / 1000), w = cfCanvas.clientWidth, h = cfCanvas.clientHeight; cfLast = now;
+  cf.clearRect(0, 0, w, h);
+  for (var i = parts.length - 1; i >= 0; i--) {
+    var p = parts[i]; p.t += dt;
+    p.vy += 900 * dt; p.vx *= Math.pow(0.35, dt); p.vy *= Math.pow(0.55, dt);
+    p.x += (p.vx + Math.sin(p.t * 6 + p.rot) * 30) * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+    if (p.t > p.life || p.y > h + 30) { parts.splice(i, 1); continue; }
+    cf.save(); cf.translate(p.x, p.y); cf.rotate(p.rot);
+    cf.globalAlpha = Math.min(1, (p.life - p.t) * 2); cf.fillStyle = p.c;
+    if (p.dot) { cf.beginPath(); cf.arc(0, 0, p.w * 0.45, 0, 7); cf.fill(); }
+    else { var sq = Math.abs(Math.cos(p.t * 8 + p.rot)); cf.fillRect(-p.w / 2, -p.h * sq / 2, p.w, p.h * sq); }
+    cf.restore();
+  }
+  cfRaf = parts.length ? requestAnimationFrame(drawConfetti) : 0;
+}
+function clearConfetti() { parts.length = 0; cfToken++; }
+function sfx() { return soundOn ? ensureAudio() : null; }
+function tone(f, d, type, vol, delay) {
+  var a = sfx(); if (!a) return;
+  var o = a.createOscillator(), g = a.createGain(), t = a.currentTime + (delay || 0);
+  o.type = type; o.frequency.setValueAtTime(f, t);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + d + 0.03);
+}
+function noiseHit(t, dur, type, freq, q, vol) {
+  var a = ac;
+  if (!noiseHit.b) { var len = Math.floor(a.sampleRate * 0.8), b = a.createBuffer(1, len, a.sampleRate), dd = b.getChannelData(0); for (var i = 0; i < len; i++) dd[i] = Math.random() * 2 - 1; noiseHit.b = b; }
+  var s = a.createBufferSource(); s.buffer = noiseHit.b;
+  var f = a.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t); f.Q.value = q;
+  var g = a.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + dur + 0.02);
+  return f;
+}
+function popCannon(delay, vol) {   // 「砰」＋紙屑沙沙聲
+  var a = sfx(); if (!a) return;
+  var t = a.currentTime + delay, f = noiseHit(t, 0.32, 'bandpass', 1900, 0.8, vol);
+  f.frequency.exponentialRampToValueAtTime(380, t + 0.25);
+  for (var i = 0; i < 7; i++) tone(2400 + Math.random() * 2600, 0.05, 'square', 0.014, delay + 0.12 + Math.random() * 0.4);
+}
+function cymbal(delay) { var a = sfx(); if (a) noiseHit(a.currentTime + delay, 1.1, 'highpass', 6000, 0.5, 0.09); }
+function brass(f, d, delay, vol) {
+  var a = sfx(); if (!a) return;
+  vol = vol || 0.07;
+  var t = a.currentTime + delay, o1 = a.createOscillator(), o2 = a.createOscillator(), flt = a.createBiquadFilter(), g = a.createGain();
+  o1.type = o2.type = 'sawtooth'; o1.frequency.value = o2.frequency.value = f; o2.detune.value = 8;
+  flt.type = 'lowpass'; flt.Q.value = 2;
+  flt.frequency.setValueAtTime(f * 1.2, t); flt.frequency.linearRampToValueAtTime(f * 5.5, t + 0.06); flt.frequency.exponentialRampToValueAtTime(f * 2.6, t + d);
+  g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + 0.035);
+  g.gain.setValueAtTime(vol * 0.85, t + Math.max(0.05, d - 0.08)); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.06);
+  o1.connect(flt); o2.connect(flt); flt.connect(g); g.connect(master);
+  [o1, o2].forEach(function (o) { o.start(t); o.stop(t + d + 0.12); });
+}
+function fanfare(tier) {   // 「當當當—當！」，等級越高越長
+  var G4 = 392, C5 = 523, E5 = 659, G5 = 784, C6 = 1047;
+  var seq = [[G4, 0.11, 0], [G4, 0.11, 0.14], [G4, 0.11, 0.28], [C5, 0.55, 0.42]];
+  if (tier >= 2) seq.push([E5, 0.14, 1.0], [G5, 0.14, 1.16], [C6, 0.9, 1.32]);
+  seq.forEach(function (n) { brass(n[0], n[1], n[2]); });
+  if (tier >= 3) { seq.forEach(function (n) { brass(n[0] * 1.26, n[1], n[2], 0.04); }); brass(C5, 1.0, 1.32, 0.045); brass(E5, 1.0, 1.32, 0.045); }
+}
+var cfToken = 0;
+function cfLater(sec, fn) { var k = cfToken; setTimeout(function () { if (k === cfToken) fn(); }, sec * 1000); }   // 結算時 later() 不會跑；重開一局就取消
+function celebrateTier() {
+  if (Quiz.right >= QN) return Quiz.noHint >= QN ? 3 : 2;
+  return Quiz.right >= 8 ? 1 : 0;
+}
+function celebrate(t) {
+  var w = cfCanvas.clientWidth, h = cfCanvas.clientHeight;
+  if (!t) return;
+  popCannon(0, 0.3); fanfare(t);
+  rain([0, 40, 90, 130][t]);
+  if (t >= 2) { popCannon(0.06, 0.3); cymbal(1.32); burst(w * 0.06, h * 0.85, 60, 1.4, -1.1, 0.45); burst(w * 0.94, h * 0.85, 60, 1.4, -2.04, 0.45); }
+  if (t >= 3) {
+    popCannon(0.6, 0.3); popCannon(1.2, 0.32); cymbal(2.3);
+    cfLater(0.6, function () { burst(w * 0.5, h * 0.3, 80, 1.1, -Math.PI / 2, 1.1); for (var i = 0; i < 6; i++) tone(2093 * (1 + Math.random() * 0.6), 0.12, 'sine', 0.035, i * 0.035); });
+    cfLater(1.2, function () { burst(w * 0.06, h * 0.85, 70, 1.5, -1.1, 0.45); burst(w * 0.94, h * 0.85, 70, 1.5, -2.04, 0.45); rain(100); });
+  }
+}
 function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 function buildReview() {   // 參照 hoops：答錯 → 看提示才對 → 一次就對
   var h = Quiz.history || [];
@@ -1658,7 +1769,7 @@ window.__pudding = {
   hit: function (i, x, z) { queueHit(puddings[i], x || 0, z || 0); },
   spawn: function (i, life) { popUp(puddings[i], life || 3); },
   pick: pickAt,
-  quiz: Quiz, setAuto: function (v) { autoNext = v; syncMode(); }, items: ITEMS, start: startRound, ask: ask, next: nextQuestion, stats: stats
+  quiz: Quiz, setAuto: function (v) { autoNext = v; syncMode(); }, items: ITEMS, confetti: function () { return parts.length; }, start: startRound, ask: ask, next: nextQuestion, stats: stats
 };
 })();
 
