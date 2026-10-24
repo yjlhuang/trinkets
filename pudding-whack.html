@@ -223,6 +223,26 @@ body{
 .sum-list li{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-size:15px;border-top:1px solid var(--line);padding-top:8px}
 .sum-list b{font-family:var(--f-display);font-weight:600;font-size:17px}
 .sum-list span{color:var(--ink-2);text-align:right;min-width:0}
+/* 錯題檢討（參照 hoops）：整局十題，答錯的排最前面 */
+.btn.ghost{color:var(--ink);background:transparent;border:1px solid var(--line)}
+.sheet-card .btn.ghost{margin-top:16px}
+.sheet-card .btn.ghost + .btn{margin-top:10px}
+.sheet-card.rev{max-width:520px;display:flex;flex-direction:column;overflow:hidden}
+.rev-list{flex:1;min-height:0;overflow:auto;margin:12px -6px 0;padding:0 6px}
+.ri{border-top:1px solid var(--line);padding:10px 0 12px}
+.ri-h{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2)}
+.ri-h .no{font:600 14px/1 var(--f-display);color:var(--ink);min-width:1.4em}
+.ri-h .st{margin-left:auto;font-weight:700}
+.ri.bad .st{color:var(--bad)} .ri.hint .st{color:var(--accent)} .ri.ok .st{color:var(--good)}
+.sheet-card .ri .chunk,.sheet-card .ri .en{color:var(--ink)}
+.ri .chunk{margin:6px 0 0;font:600 18px/1.25 var(--f-display)}
+.ri .chunk span{font:700 15px var(--f-body);color:var(--ink-2);margin-left:8px}
+.ri .en{margin:4px 0 0;font-size:14px;line-height:1.5}
+.ri .en b{color:var(--good)}
+.ri .pick{margin:4px 0 0;font-size:13px;color:var(--ink-2)}
+.ri .pick s{color:var(--bad);font-weight:700}
+.rev-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.sheet-card .rev-btns .btn{margin-top:0}
 @media (max-width:460px){
   .q-main{font-size:26px}
   .fb-word{font-size:28px}
@@ -346,7 +366,16 @@ body{
         <button type="button" role="radio" aria-checked="false" data-mode="manual">手動繼續</button>
       </div>
       <p class="seg-note"></p>
+      <button id="btn-rev" class="btn ghost" type="button">檢討這一局</button>
       <button id="btn-again" class="btn" type="button">再玩一局</button>
+    </div>
+  </section>
+  <section id="review" class="sheet" hidden aria-label="檢討這一局">
+    <div class="sheet-card rev">
+      <h2>檢討這一局</h2>
+      <p id="rev-sub"></p>
+      <div id="rev-list" class="rev-list"></div>
+      <div class="rev-btns"><button id="rev-back" class="btn ghost" type="button">回到結果</button><button id="rev-again" class="btn" type="button">再玩一局</button></div>
     </div>
   </section>
   <div id="fail" hidden role="alert">
@@ -1457,14 +1486,31 @@ function clearBoard() {
     if (P.used && P.state !== 'hidden' && P.state !== 'sinking') sink(P);
   });
 }
+/* 抽題：每個範圍一疊洗好的牌（存在這台裝置），整疊抽完才重洗，所以答對的題不會很快又出現。
+   答錯還沒補回來的（錯的次數 > 對的次數）不受限制，下一局優先出最多 3 題。 */
+var decks = {};
+try { decks = JSON.parse(window.localStorage.getItem('pudding-colloc-deck') || '{}') || {}; } catch (e) { decks = {}; }
 function pickRound() {
-  var all = poolItems();
-  var missed = shuffle(all.filter(function (w) { var s = stats[w.id]; return s && s.miss > s.ok; })).slice(0, 3);
-  var rest = shuffle(all.filter(function (w) { return missed.indexOf(w) < 0; }));
-  return shuffle(missed.concat(rest).slice(0, QN));
+  var all = poolItems(), byId = {};
+  all.forEach(function (it) { byId[it.id] = it; });
+  var d = decks[pool] = decks[pool] || {};
+  var last = (d.last || []).filter(function (id) { return byId[id]; });
+  var deck = (d.left || []).filter(function (id) { return byId[id]; });
+  var pick = shuffle(all.filter(function (w) { var s = stats[w.id]; return s && s.miss > s.ok; })).slice(0, 3);
+  while (pick.length < Math.min(QN, all.length)) {
+    if (!deck.length) {   // 重洗：上一局和這一局已經抽到的先不放進新的一疊
+      deck = shuffle(all.filter(function (it) { return pick.indexOf(it) < 0 && last.indexOf(it.id) < 0; }).map(function (it) { return it.id; }));
+      if (!deck.length) deck = shuffle(all.filter(function (it) { return pick.indexOf(it) < 0; }).map(function (it) { return it.id; }));
+    }
+    var it = byId[deck.pop()];
+    if (pick.indexOf(it) < 0) pick.push(it);
+  }
+  d.left = deck; d.last = pick.map(function (it) { return it.id; });
+  try { window.localStorage.setItem('pudding-colloc-deck', JSON.stringify(decks)); } catch (e) {}
+  return shuffle(pick);
 }
 function startRound() {
-  Quiz.round = pickRound(); Quiz.idx = 0; Quiz.right = 0; Quiz.noHint = 0; Quiz.wrong = []; Quiz.later = []; Quiz.queue = [];
+  Quiz.round = pickRound(); Quiz.idx = 0; Quiz.right = 0; Quiz.noHint = 0; Quiz.wrong = []; Quiz.history = []; Quiz.later = []; Quiz.queue = [];
   Game.paused = true;
   introEl.hidden = true; summaryEl.hidden = true; quizEl.hidden = false;
   $('#hint').classList.add('gone');
@@ -1496,6 +1542,7 @@ function quizHit(P) {   // 由 applyHit 呼叫
   Quiz.answered = true; Quiz.state = 'feedback';
   var c = Quiz.cur, ok = isRight(P.word, c), st = stats[c.id] = stats[c.id] || { ok: 0, miss: 0 };
   if (ok) { st.ok++; Quiz.right++; if (!Quiz.zhShown) Quiz.noHint++; } else { st.miss++; Quiz.wrong.push(c); }
+  Quiz.history.push({ c: c, n: Quiz.idx + 1, ok: ok, pick: P.word.w, hint: Quiz.zhShown });
   saveStats();
   setLabel(P, P.word, ok ? 'good' : 'bad');
   puddings.forEach(function (Q) {
@@ -1564,6 +1611,33 @@ function updateQuiz(dt) {
 }
 $('#btn-start').addEventListener('click', function () { ensureAudio(); startRound(); });
 $('#btn-again').addEventListener('click', function () { ensureAudio(); startRound(); });
+function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function buildReview() {   // 參照 hoops：答錯 → 看提示才對 → 一次就對
+  var h = Quiz.history || [];
+  var order = h.filter(function (e) { return !e.ok; }).concat(h.filter(function (e) { return e.ok && e.hint; }), h.filter(function (e) { return e.ok && !e.hint; }));
+  var bad = h.length - Quiz.right;
+  $('#rev-sub').textContent = '這一局共 ' + h.length + ' 題' + (bad ? '，答錯的 ' + bad + ' 題排在最前面。' : '，全部答對。');
+  var list = $('#rev-list'); list.textContent = '';
+  order.forEach(function (e) {
+    var c = e.c, st = !e.ok ? ['bad', '答錯'] : e.hint ? ['hint', '看了提示才對'] : ['ok', '一次就對'];
+    var ri = el('div', 'ri ' + st[0]), hd = el('div', 'ri-h');
+    hd.appendChild(el('span', 'no', String(e.n))); hd.appendChild(el('span', 'tag', c.kind));
+    hd.appendChild(el('span', '', c.id.replace(/學測-0?(\d+)$/, ' 學測 第 $1 題'))); hd.appendChild(el('span', 'st', st[1]));
+    ri.appendChild(hd);
+    var ch = el('p', 'chunk', c.chunk); ch.appendChild(el('span', '', c.zh)); ri.appendChild(ch);
+    var i = c.sentence.indexOf('___'), en = el('p', 'en');
+    en.appendChild(document.createTextNode(c.sentence.slice(0, i))); en.appendChild(el('b', '', c.answer)); en.appendChild(document.createTextNode(c.sentence.slice(i + 3)));
+    ri.appendChild(en);
+    if (!e.ok) { var pk = el('p', 'pick', '你敲的是 '); pk.appendChild(el('s', '', e.pick)); ri.appendChild(pk); }
+    list.appendChild(ri);
+  });
+}
+$('#btn-rev').addEventListener('click', function () {
+  buildReview(); summaryEl.hidden = true; $('#review').hidden = false; $('#rev-list').scrollTop = 0;
+  try { $('#rev-back').focus({ preventScroll: true }); } catch (e) {}
+});
+$('#rev-back').addEventListener('click', function () { $('#review').hidden = true; summaryEl.hidden = false; });
+$('#rev-again').addEventListener('click', function () { $('#review').hidden = true; ensureAudio(); startRound(); });
 btnNext.addEventListener('click', nextQuestion);
 
 /* ---------- 開始：先讓幾顆布丁已經冒出來，第一眼就有東西可以敲 ---------- */
