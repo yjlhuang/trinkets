@@ -186,6 +186,12 @@ body{
 .q-prog{font:500 13px/1 var(--f-display);letter-spacing:.08em;color:var(--ink-2);font-variant-numeric:tabular-nums}
 .q-main{margin-top:8px;font-weight:700;font-size:28px;line-height:1.2;text-wrap:balance}
 .q-fb{margin-top:6px}
+/* 中文提示：出題 4 秒還沒敲才淡淡浮出來，程度好的學生不用看 */
+.q-hint{display:flex;align-items:center;gap:8px;margin-top:8px;font-weight:700;font-size:17px;line-height:1.3;color:var(--ink-2);animation:hint-in .5s ease both}
+.q-hint .tag{flex:none}
+@keyframes hint-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+@media (max-height:620px){ .q-hint{font-size:15px;margin-top:5px} }
+@media (prefers-reduced-motion: reduce){ .q-hint{animation:none} }
 .fb-word{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;font-family:var(--f-display);font-weight:600;font-size:30px;line-height:1.1}
 .fb-zh{margin-top:4px;font-weight:700;font-size:18px}
 .fb-ex{margin:8px 0 0;font-size:15px;line-height:1.45}
@@ -303,6 +309,7 @@ body{
   <section id="quiz" hidden aria-live="polite">
     <div class="q-row"><span id="q-prog" class="q-prog">1 / 10</span><span id="q-pos" class="tag"></span></div>
     <div id="q-main" class="q-main"></div>
+    <div id="q-hint" class="q-hint" hidden><span class="tag">提示</span><span id="q-hint-zh"></span></div>
     <div id="q-fb" class="q-fb" hidden>
       <div class="fb-word"><span id="fb-word"></span><span id="fb-pos" class="tag"></span></div>
       <div id="fb-zh" class="fb-zh"></div>
@@ -313,7 +320,7 @@ body{
   <section id="intro" class="sheet" aria-label="開始">
     <div class="sheet-card">
       <h2>布丁打地鼠</h2>
-      <p>看句子，敲下空格裡該填的那顆布丁。題目都是 100–115 學測考過的搭配詞和片語，四顆布丁就是當年的四個選項。</p>
+      <p>看句子，敲下空格裡該填的那顆布丁。題目都是 100–115 學測考過的搭配詞和片語，四顆布丁就是當年的四個選項。想不出來？等 4 秒會出現中文提示。</p>
       <div class="seg seg3" id="pool" role="radiogroup" aria-label="題目範圍">
         <button type="button" role="radio" aria-checked="true" data-pool="all">全部</button>
         <button type="button" role="radio" aria-checked="false" data-pool="搭配詞">搭配詞</button>
@@ -1350,7 +1357,7 @@ var ITEMS = window.PUDDING_ITEMS || [];
 var pool = 'all';
 try { pool = window.localStorage.getItem('pudding-colloc-pool') || 'all'; } catch (e) {}
 var QN = 10, CHOICES = 4;
-var Quiz = { state: 'intro', round: [], idx: 0, cur: null, right: 0, wrong: [], t: 0, queue: [], later: [], answered: false, hintAt: 8 };
+var Quiz = { state: 'intro', round: [], idx: 0, cur: null, right: 0, wrong: [], t: 0, queue: [], later: [], answered: false, hintAt: 8, zhAt: 4, zhShown: false, noHint: 0 };
 var stats = {};   // 每個單字答對/答錯幾次，只存在這台裝置的瀏覽器裡
 try { stats = JSON.parse(window.localStorage.getItem('pudding-colloc') || '{}') || {}; } catch (e) { stats = {}; }
 var autoNext = true;   // 預設：答完一題停幾秒自動繼續
@@ -1457,7 +1464,7 @@ function pickRound() {
   return shuffle(missed.concat(rest).slice(0, QN));
 }
 function startRound() {
-  Quiz.round = pickRound(); Quiz.idx = 0; Quiz.right = 0; Quiz.wrong = []; Quiz.later = []; Quiz.queue = [];
+  Quiz.round = pickRound(); Quiz.idx = 0; Quiz.right = 0; Quiz.noHint = 0; Quiz.wrong = []; Quiz.later = []; Quiz.queue = [];
   Game.paused = true;
   introEl.hidden = true; summaryEl.hidden = true; quizEl.hidden = false;
   $('#hint').classList.add('gone');
@@ -1476,6 +1483,7 @@ function ask() {
   qPos.textContent = c.kind;
   fillFrame(qMain, c.frame);
   qMain.hidden = false; qFb.hidden = true;
+  Quiz.zhShown = false; $('#q-hint-zh').textContent = c.zh; $('#q-hint').hidden = true;
 }
 function fillExample(el, c) {   // 原句，空格填回答案並標色
   var i = c.sentence.indexOf('___'), m = document.createElement('mark');
@@ -1487,7 +1495,7 @@ function quizHit(P) {   // 由 applyHit 呼叫
   if (Quiz.state !== 'asking' || Quiz.answered || !P.word) return;
   Quiz.answered = true; Quiz.state = 'feedback';
   var c = Quiz.cur, ok = isRight(P.word, c), st = stats[c.id] = stats[c.id] || { ok: 0, miss: 0 };
-  if (ok) { st.ok++; Quiz.right++; } else { st.miss++; Quiz.wrong.push(c); }
+  if (ok) { st.ok++; Quiz.right++; if (!Quiz.zhShown) Quiz.noHint++; } else { st.miss++; Quiz.wrong.push(c); }
   saveStats();
   setLabel(P, P.word, ok ? 'good' : 'bad');
   puddings.forEach(function (Q) {
@@ -1497,7 +1505,7 @@ function quizHit(P) {   // 由 applyHit 呼叫
     later(0.45, function () { Q.hold = false; sink(Q); setLabel(Q, null); });
   });
   quizEl.className = ok ? 'good' : 'bad';
-  qMain.hidden = true; qFb.hidden = false;
+  qMain.hidden = true; qFb.hidden = false; $('#q-hint').hidden = true;
   $('#fb-word').textContent = c.chunk; $('#fb-pos').textContent = c.id.replace(/學測-0?(\d+)$/, ' 學測 第 $1 題');
   $('#fb-zh').textContent = c.zh; fillExample($('#fb-ex'), c);
   btnNext.textContent = Quiz.idx + 1 >= QN ? '看結果' : '下一題';
@@ -1516,7 +1524,8 @@ function showSummary() {
   Quiz.state = 'summary'; Quiz.later = []; Quiz.queue = [];
   clearBoard(); quizEl.hidden = true;
   $('#sum-n').textContent = Quiz.right;
-  $('#sum-msg').textContent = Quiz.wrong.length ? '這幾個下一局會優先再出現：' : '全部答對了！';
+  var nh = '其中 ' + Quiz.noHint + ' 題沒看中文提示就答對。';
+  $('#sum-msg').textContent = !Quiz.wrong.length ? '全部答對了！' + nh : (Quiz.right ? nh : '') + '這幾個下一局會優先再出現：';
   var ul = $('#sum-list'); ul.textContent = '';
   Quiz.wrong.forEach(function (c) {
     var li = document.createElement('li'), b = document.createElement('b'), s = document.createElement('span');
@@ -1543,6 +1552,9 @@ function updateQuiz(dt) {
     if (p >= 1) { Quiz.autoAt = -1; nextQuestion(); return; }
   }
   // 太久沒敲：正確答案那顆輕輕晃動提示（不倒數、不扣分）
+  if (Quiz.state === 'asking' && !Quiz.answered && !Quiz.zhShown && Quiz.t > Quiz.zhAt) {   // 4 秒還沒敲：浮出中文
+    Quiz.zhShown = true; $('#q-hint').hidden = false;
+  }
   if (Quiz.state === 'asking' && !Quiz.answered && Quiz.t > Quiz.hintAt) {
     var ph = (Quiz.t - Quiz.hintAt) % 2.6;
     if (ph < dt) puddings.forEach(function (P) {
