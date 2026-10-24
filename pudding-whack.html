@@ -218,6 +218,8 @@ body{
 .sheet-card p{margin:10px 0 0;font-size:15px;line-height:1.6;color:var(--ink-2)}
 .sheet-card .btn{margin-top:20px;width:100%}
 .sum-score{font-family:var(--f-display);font-weight:600;font-size:44px;line-height:1;margin-top:12px}
+.sheet-card p.alt{margin-top:6px;font-size:14px}
+.sheet-card p.alt a{color:var(--accent);font-weight:700}
 .sum-score small{font-size:20px;color:var(--ink-2);font-weight:500}
 /* 結算彩紙（參照 hoops）：8 題以上才撒，疊在結算卡上面、不擋點擊 */
 #confetti{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:6}
@@ -343,6 +345,7 @@ body{
   <section id="intro" class="sheet" aria-label="開始">
     <div class="sheet-card">
       <h2>布丁打地鼠</h2>
+      <p class="alt">不想玩遊戲、只想刷題？<a href="pudding-practice.html">用刷題模式 →</a></p>
       <p>看句子，敲下空格裡該填的那顆布丁。題目都是 100–115 學測考過的搭配詞和片語，四顆布丁就是當年的四個選項。想不出來？等 4 秒會出現中文提示。</p>
       <div class="seg seg3" id="pool" role="radiogroup" aria-label="題目範圍">
         <button type="button" role="radio" aria-checked="true" data-pool="all">全部</button>

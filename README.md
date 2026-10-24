@@ -11,6 +11,7 @@
 | `hoops.html` | 文法投籃機：3D 投籃遊戲，投進對的動詞才得分 |
 | `hoops-practice.html` | 文法刷題：同一份題庫，不計時、不用玩遊戲，答完看解說 |
 | `pudding-whack.html` | 布丁打地鼠：學測搭配詞・片語（100–115 共 103 題），看原句挖空、敲當年四個選項之一；4 秒沒敲出中文提示，結算可檢討整局，8 題以上撒彩紙（題庫 `pudding-words.js`） |
+| `pudding-practice.html` | 搭配詞片語刷題：同一份題庫，不玩遊戲、看完整原句選答案，可看中文提示、只重做答錯的 |
 | `one-drop.html` | 一滴水・單字：單字答題 |
 | `ipas-one-drop.html` | 一滴水・iPAS AI：iPAS 題目版 |
 | `vocab-watercolor.html` | 單字水彩：答題後上色（原始碼在 `vocab-watercolor-src/`） |
@@ -39,7 +40,7 @@
 
 文法投籃機與刷題頁共用 `hoops-questions.js`，改題目只要改這一個檔。
 
-布丁打地鼠的題庫 `pudding-words.js` 是從 exams repo 產生的，不要手改：改 exams 的 `scripts/build_collocations.py`，再執行
+布丁打地鼠與刷題頁共用的題庫 `pudding-words.js` 是從 exams repo 產生的，不要手改：改 exams 的 `scripts/build_collocations.py`，再執行
 `python scripts/build_collocations.py ../trinkets/pudding-words.js` 重新輸出。
 
 ## 授權
