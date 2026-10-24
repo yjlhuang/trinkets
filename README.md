@@ -10,7 +10,7 @@
 |---|---|
 | `hoops.html` | 文法投籃機：3D 投籃遊戲，投進對的動詞才得分 |
 | `hoops-practice.html` | 文法刷題：同一份題庫，不計時、不用玩遊戲，答完看解說 |
-| `pudding-whack.html` | 布丁打地鼠：學測搭配詞・片語，敲下空格該填的布丁（題庫 `pudding-words.js`） |
+| `pudding-whack.html` | 布丁打地鼠：學測搭配詞・片語（100–115 共 103 題），看原句挖空、敲當年四個選項之一；4 秒沒敲出中文提示，結算可檢討整局，8 題以上撒彩紙（題庫 `pudding-words.js`） |
 | `one-drop.html` | 一滴水・單字：單字答題 |
 | `ipas-one-drop.html` | 一滴水・iPAS AI：iPAS 題目版 |
 | `vocab-watercolor.html` | 單字水彩：答題後上色（原始碼在 `vocab-watercolor-src/`） |
