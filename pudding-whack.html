@@ -1,0 +1,1581 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>布丁打地鼠：搭配詞片語</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Noto+Sans+TC:wght@500;700&display=swap">
+<style>
+/* Layout: full-bleed WebGL stage; UI floats on top (brand left, two small controls right, one hint at the bottom). */
+:root{
+  --bg-a:#eef5fb;
+  --bg-b:#b9d1e5;
+  --dot:rgba(29,50,72,.13);
+  --ink:#1d3248;
+  --ink-2:#4d6d8a;
+  --panel:rgba(255,255,255,.80);
+  --line:rgba(29,50,72,.16);
+  --accent:#c2570f;
+  --on-accent:#ffffff;
+  --pop:#fff6dc;
+  --pop-edge:#8f3a05;
+  --f-display:'Fredoka','Noto Sans TC','PingFang TC','Microsoft JhengHei',system-ui,sans-serif;
+  --f-body:'Noto Sans TC','PingFang TC','Microsoft JhengHei',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg-a:#35506f; --bg-b:#141d2b; --dot:rgba(234,241,248,.10);
+    --ink:#edf3fa; --ink-2:#a8bcd1; --panel:rgba(18,27,41,.80); --line:rgba(237,243,250,.18);
+    --accent:#ffb35c; --on-accent:#2a1300; --pop:#fff3d1; --pop-edge:#7a3004;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg-a:#35506f; --bg-b:#141d2b; --dot:rgba(234,241,248,.10);
+  --ink:#edf3fa; --ink-2:#a8bcd1; --panel:rgba(18,27,41,.80); --line:rgba(237,243,250,.18);
+  --accent:#ffb35c; --on-accent:#2a1300; --pop:#fff3d1; --pop-edge:#7a3004;
+  color-scheme: dark;
+}
+[hidden]{display:none!important}
+html,body{height:100%;overscroll-behavior:none}
+body{
+  background-color:var(--bg-b);
+  background-image:radial-gradient(ellipse 80% 70% at 50% 42%, var(--bg-a) 0%, var(--bg-b) 78%);
+  color:var(--ink);
+  font-family:var(--f-body);
+  overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+#app{position:relative;width:100%;height:100%;overflow:hidden}
+#app::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:radial-gradient(var(--dot) 1.1px, transparent 1.4px);
+  background-size:24px 24px;
+  -webkit-mask-image:radial-gradient(ellipse 70% 65% at 50% 50%, #000 0%, transparent 100%);
+          mask-image:radial-gradient(ellipse 70% 65% at 50% 50%, #000 0%, transparent 100%);
+}
+#gl{
+  position:absolute;inset:0;width:100%;height:100%;display:block;
+  touch-action:none;outline:none;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+}
+#gl:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
+#gl[data-pointer]:focus-visible{outline:none}   /* 滑鼠或觸控點擊取得的焦點不畫框，只有鍵盤操作才畫 */
+#fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.pop{
+  position:absolute;white-space:nowrap;
+  font-family:var(--f-display);font-weight:600;font-size:clamp(24px,5vmin,42px);
+  color:var(--pop);
+  text-shadow:2px 0 var(--pop-edge),-2px 0 var(--pop-edge),0 2px var(--pop-edge),0 -2px var(--pop-edge),
+              1.5px 1.5px var(--pop-edge),-1.5px 1.5px var(--pop-edge),1.5px -1.5px var(--pop-edge),-1.5px -1.5px var(--pop-edge),
+              0 5px 0 var(--pop-edge);
+  animation:pop .6s cubic-bezier(.2,.8,.25,1) forwards;
+}
+@keyframes pop{
+  0%{opacity:0;transform:translate(-50%,-30%) scale(.35) rotate(var(--rot))}
+  16%{opacity:1;transform:translate(-50%,-70%) scale(1.25) rotate(var(--rot))}
+  100%{opacity:0;transform:translate(-50%,-210%) scale(1) rotate(var(--rot))}
+}
+#ui{
+  position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;
+  padding-block:14px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  pointer-events:none;
+}
+.top-stack{display:flex;flex-direction:column;gap:10px;min-width:0}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.brand{min-width:0}
+.brand h1{margin:0;font-family:var(--f-display);font-weight:600;font-size:clamp(22px,3.6vw,30px);line-height:1.05;letter-spacing:.01em}
+.brand p{margin:3px 0 0;font-size:13px;letter-spacing:.28em;color:var(--ink-2);font-weight:500}
+.ctrls{display:flex;gap:8px;pointer-events:auto}
+.pill{
+  display:inline-flex;align-items:center;gap:7px;
+  font:500 13px/1 var(--f-body);color:var(--ink);
+  background:var(--panel);border:1px solid var(--line);border-radius:999px;
+  padding:9px 14px 9px 12px;min-height:38px;cursor:pointer;touch-action:manipulation;
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+}
+.pill:hover{border-color:var(--ink-2)}
+.pill:focus-visible,.chk input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.pill svg{width:16px;height:16px;flex:none}
+.pill[aria-pressed="false"]{color:var(--ink-2)}
+#perf{
+  align-self:flex-end;width:min(330px,100%);pointer-events:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+}
+.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:0 0 10px}
+.stats div{min-width:0}
+.stats dt{font-size:11px;color:var(--ink-2);white-space:nowrap;letter-spacing:.04em}
+.stats dd{margin:2px 0 0;font:600 15px/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.chk{display:flex;align-items:flex-start;gap:9px;font-size:13px;line-height:1.35;padding:5px 0;cursor:pointer}
+.chk input{margin:2px 0 0;width:16px;height:16px;accent-color:var(--accent);flex:none}
+.chk span{min-width:0}
+#hint{
+  align-self:center;margin:0;text-align:center;
+  font-size:14px;letter-spacing:.12em;color:var(--ink-2);font-weight:500;
+  padding:8px 16px;border-radius:999px;background:var(--panel);border:1px solid var(--line);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  transition:opacity .6s ease, transform .6s ease;
+}
+#hint.gone{opacity:0;transform:translateY(8px)}
+#fail{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  padding-block:24px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));
+  background:var(--bg-b);z-index:5;
+}
+#fail > div{max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px 22px 20px}
+#fail h2{margin:0 0 8px;font-family:var(--f-display);font-size:20px}
+#fail p{margin:0;line-height:1.6;font-size:14px;color:var(--ink-2)}
+@media (max-width:460px){
+  .stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .pill span.lbl-long{display:none}
+}
+@media (prefers-reduced-motion: reduce){
+  .pop{animation-duration:.01s}
+  #hint{transition:none}
+}
+
+/* ===== 第 2 階段：單字層 ===== */
+:root{
+  --good:#137a55; --good-bg:#d6f3e6;
+  --bad:#b0321c;  --bad-bg:#ffe1da;
+  --lbl-bg:rgba(255,255,255,.97);
+  --veil:rgba(238,245,251,.74);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --good:#7ce8b8; --good-bg:#123a2b;
+    --bad:#ff9a86;  --bad-bg:#4a1d16;
+    --lbl-bg:rgba(27,42,63,.97);
+    --veil:rgba(14,21,32,.72);
+  }
+}
+:root[data-theme="dark"]{
+  --good:#7ce8b8; --good-bg:#123a2b;
+  --bad:#ff9a86;  --bad-bg:#4a1d16;
+  --lbl-bg:rgba(27,42,63,.97);
+  --veil:rgba(14,21,32,.72);
+}
+#ui{z-index:2}
+#labels{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:0}
+.lbl{
+  position:absolute;left:0;top:0;white-space:nowrap;
+  font-family:var(--f-display);font-weight:600;font-size:17px;line-height:1;letter-spacing:.01em;
+  color:var(--ink);background:var(--lbl-bg);
+  border:2px solid var(--line);border-radius:999px;padding:7px 13px 8px;
+  box-shadow:0 3px 0 rgba(29,50,72,.18);
+  will-change:transform;
+}
+.lbl.good{color:var(--good);background:var(--good-bg);border-color:var(--good)}
+.lbl.bad{color:var(--bad);background:var(--bad-bg);border-color:var(--bad)}
+.tag{
+  display:inline-block;font:500 12px/1 var(--f-body);letter-spacing:.06em;
+  color:var(--ink-2);border:1px solid var(--line);border-radius:999px;padding:4px 9px 5px;
+}
+#quiz{
+  position:absolute;z-index:1;top:62px;
+  left:max(16px, env(safe-area-inset-left, 0px));right:max(16px, env(safe-area-inset-right, 0px));
+  max-width:520px;margin-inline:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:12px 16px 14px;
+  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+}
+#quiz.good{border-color:var(--good)}
+#quiz.bad{border-color:var(--bad)}
+.q-row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.q-prog{font:500 13px/1 var(--f-display);letter-spacing:.08em;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.q-main{margin-top:8px;font-weight:700;font-size:28px;line-height:1.2;text-wrap:balance}
+.q-fb{margin-top:6px}
+.fb-word{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;font-family:var(--f-display);font-weight:600;font-size:30px;line-height:1.1}
+.fb-zh{margin-top:4px;font-weight:700;font-size:18px}
+.fb-ex{margin:8px 0 0;font-size:15px;line-height:1.45}
+.fb-ex mark{background:transparent;color:var(--accent);font-weight:700;border-bottom:2px solid currentColor}
+.fb-exzh{margin:3px 0 0;font-size:13px;line-height:1.5;color:var(--ink-2)}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  min-height:48px;padding:0 22px;border:0;border-radius:14px;cursor:pointer;touch-action:manipulation;
+  font:600 16px/1 var(--f-body);color:var(--on-accent);background:var(--accent);
+}
+.btn:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+#btn-next{margin-top:10px;width:100%;min-height:44px}
+.sheet{
+  position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;
+  padding-block:24px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));
+  background:var(--veil);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);
+}
+.sheet-card{
+  width:100%;max-width:360px;max-height:100%;overflow:auto;
+  background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:24px 22px 22px;
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
+}
+.sheet-card h2{margin:0;font-family:var(--f-display);font-weight:600;font-size:28px;line-height:1.1}
+.sheet-card p{margin:10px 0 0;font-size:15px;line-height:1.6;color:var(--ink-2)}
+.sheet-card .btn{margin-top:20px;width:100%}
+.sum-score{font-family:var(--f-display);font-weight:600;font-size:44px;line-height:1;margin-top:12px}
+.sum-score small{font-size:20px;color:var(--ink-2);font-weight:500}
+.sum-list{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.sum-list li{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font-size:15px;border-top:1px solid var(--line);padding-top:8px}
+.sum-list b{font-family:var(--f-display);font-weight:600;font-size:17px}
+.sum-list span{color:var(--ink-2);text-align:right;min-width:0}
+@media (max-width:460px){
+  .q-main{font-size:26px}
+  .fb-word{font-size:28px}
+}
+@media (max-height:620px){
+  #quiz{top:58px;padding:9px 14px 11px}
+  .q-main{font-size:22px;margin-top:5px}
+  .fb-word{font-size:22px}
+  .fb-zh{font-size:15px}
+  .fb-ex{font-size:13px;margin-top:6px}
+  .fb-exzh{display:none}
+  #btn-next{min-height:42px;margin-top:8px}
+}
+
+/* 標題換成較長的 Pudding Whack：標題列不換行，窄螢幕縮小按鈕 */
+.top{flex-wrap:nowrap}
+.ctrls{flex-shrink:0}
+@media (max-width:460px){
+  .brand h1{font-size:18px;white-space:nowrap}
+  .brand p{letter-spacing:.2em}
+  .pill{padding:8px 11px 8px 10px;gap:5px}
+}
+@media (max-width:340px){ #snd-label{display:none} .brand p{display:none} }
+
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:18px;padding:4px;border:1px solid var(--line);border-radius:14px}
+.seg button{
+  min-height:42px;border:0;border-radius:10px;cursor:pointer;touch-action:manipulation;
+  font:600 15px/1 var(--f-body);color:var(--ink-2);background:transparent;
+}
+.seg button[aria-checked="true"]{color:var(--bg-a);background:var(--ink)}
+.seg button:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+.sheet-card .seg-note{margin:8px 2px 0;font-size:13px;line-height:1.5}
+.sheet-card .seg + .seg-note + .btn{margin-top:14px}
+.seg3{grid-template-columns:1fr 1fr 1fr}
+.q-main.frame{font-family:var(--f-display);font-weight:600;font-size:22px;line-height:1.4;text-wrap:pretty}
+.q-main .blank{display:inline-block;min-width:3.2em;border-bottom:3px solid var(--accent);margin:0 .12em;transform:translateY(-.15em)}
+.fb-word{font-size:24px}
+.fb-ex mark{white-space:nowrap}
+.lbl.long{font-size:15px;padding:6px 11px 7px}
+.lbl.xlong{font-size:13px;padding:6px 9px 7px}
+@media (max-width:460px){ .q-main.frame{font-size:19px} .fb-word{font-size:22px} .lbl.long{font-size:13px} .lbl.xlong{font-size:11.5px;padding:5px 8px 6px} }
+@media (max-height:620px){ .q-main.frame{font-size:17px} .fb-word{font-size:19px} }
+/* 自動繼續：按鈕底色慢慢變深，表示快要跳到下一題；點按鈕可提早跳過 */
+#btn-next.auto{background-image:linear-gradient(90deg,rgba(0,0,0,.24) calc(var(--p,0) * 100%),transparent 0)}
+</style>
+
+<div id="app">
+  <canvas id="gl" tabindex="0" aria-label="布丁打地鼠：點擊或觸碰冒出來的布丁，木槌會敲下去。按 Enter 或空白鍵也可以敲。"></canvas>
+  <div id="fx" aria-hidden="true"></div>
+  <div id="labels" aria-hidden="true"></div>
+  <div id="ui">
+    <div class="top-stack">
+      <header class="top">
+        <div class="brand">
+          <h1>Pudding Whack</h1>
+          <p>學測搭配詞・片語</p>
+        </div>
+        <div class="ctrls">
+          <button id="btn-sound" class="pill" type="button" aria-pressed="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4z"/><path id="snd-wave" d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+            <span id="snd-label">音效 開</span>
+          </button>
+          <button id="btn-perf" class="pill" type="button" aria-expanded="false" aria-controls="perf">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13h4l3-8 4 14 3-6h4"/></svg>
+            <span>效能</span>
+          </button>
+        </div>
+      </header>
+      <section id="perf" hidden aria-label="效能測試面板">
+        <dl class="stats">
+          <div><dt>幀率</dt><dd id="st-fps">--</dd></div>
+          <div><dt>幀時間</dt><dd id="st-ms">--</dd></div>
+          <div><dt>繪製呼叫</dt><dd id="st-calls">--</dd></div>
+          <div><dt>三角形</dt><dd id="st-tris">--</dd></div>
+          <div><dt>像素比</dt><dd id="st-dpr">--</dd></div>
+        </dl>
+        <label class="chk"><input type="checkbox" id="opt-trans" checked><span>焦糖半透明（關掉可比較重疊像素的成本）</span></label>
+        <label class="chk"><input type="checkbox" id="opt-hires" checked><span>高解析度（使用裝置像素比，上限 2）</span></label>
+        <label class="chk"><input type="checkbox" id="opt-auto"><span>自動連打壓力測試（每秒約 9 下）</span></label>
+      </section>
+    </div>
+    <p id="hint">點冒出來的布丁，敲下去</p>
+  </div>
+  <section id="quiz" hidden aria-live="polite">
+    <div class="q-row"><span id="q-prog" class="q-prog">1 / 10</span><span id="q-pos" class="tag"></span></div>
+    <div id="q-main" class="q-main"></div>
+    <div id="q-fb" class="q-fb" hidden>
+      <div class="fb-word"><span id="fb-word"></span><span id="fb-pos" class="tag"></span></div>
+      <div id="fb-zh" class="fb-zh"></div>
+      <p id="fb-ex" class="fb-ex"></p>
+      <button id="btn-next" class="btn" type="button">下一題</button>
+    </div>
+  </section>
+  <section id="intro" class="sheet" aria-label="開始">
+    <div class="sheet-card">
+      <h2>布丁打地鼠</h2>
+      <p>看句子，敲下空格裡該填的那顆布丁。題目都是 100–115 學測考過的搭配詞和片語，四顆布丁就是當年的四個選項。</p>
+      <div class="seg seg3" id="pool" role="radiogroup" aria-label="題目範圍">
+        <button type="button" role="radio" aria-checked="true" data-pool="all">全部</button>
+        <button type="button" role="radio" aria-checked="false" data-pool="搭配詞">搭配詞</button>
+        <button type="button" role="radio" aria-checked="false" data-pool="片語">片語</button>
+      </div>
+      <p class="seg-note" id="pool-note"></p>
+      <div class="seg" role="radiogroup" aria-label="答完一題之後">
+        <button type="button" role="radio" aria-checked="true" data-mode="auto">自動繼續</button>
+        <button type="button" role="radio" aria-checked="false" data-mode="manual">手動繼續</button>
+      </div>
+      <p class="seg-note"></p>
+      <button id="btn-start" class="btn" type="button">開始（10 題）</button>
+    </div>
+  </section>
+  <section id="summary" class="sheet" hidden aria-label="本局結果">
+    <div class="sheet-card">
+      <h2>本局結果</h2>
+      <div class="sum-score"><span id="sum-n">0</span><small> / 10</small></div>
+      <p id="sum-msg"></p>
+      <ul id="sum-list" class="sum-list"></ul>
+      <div class="seg" role="radiogroup" aria-label="答完一題之後">
+        <button type="button" role="radio" aria-checked="true" data-mode="auto">自動繼續</button>
+        <button type="button" role="radio" aria-checked="false" data-mode="manual">手動繼續</button>
+      </div>
+      <p class="seg-note"></p>
+      <button id="btn-again" class="btn" type="button">再玩一局</button>
+    </div>
+  </section>
+  <div id="fail" hidden role="alert">
+    <div>
+      <h2>布丁出了點狀況</h2>
+      <p id="fail-msg"></p>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="pudding-words.js"></script>
+<script>
+(function () {
+'use strict';
+
+/* ---------- 啟動檢查：CDN 與 WebGL ---------- */
+var $ = function (s) { return document.querySelector(s); };
+function fail(msg) { $('#fail-msg').textContent = msg; $('#fail').hidden = false; }
+
+if (typeof THREE === 'undefined') {
+  fail('無法從 cdnjs.cloudflare.com 載入 Three.js。請確認網路連線，然後重新整理頁面。');
+  return;
+}
+
+var stage = $('#app');
+var canvas = $('#gl');
+var renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+} catch (err) {
+  fail('這個瀏覽器或裝置無法建立 WebGL 繪圖環境，所以看不到 3D 布丁。');
+  return;
+}
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.setClearColor(0x000000, 0);
+renderer.localClippingEnabled = true;   // 布丁沉到台面以下的部分用裁切平面藏起來
+
+canvas.addEventListener('webglcontextlost', function (e) {
+  e.preventDefault();
+  fail('繪圖環境中斷了（可能是裝置記憶體不足）。請重新整理頁面。');
+});
+
+/* ---------- 基本常數 ---------- */
+var H = 2.0;            // 布丁高度
+var RB = 1.62;          // 底部半徑
+var RT = 1.34;          // 頂部半徑
+var NU = 72;            // 圍繞一圈的分段數
+var TOP_REST = H + 0.12;// 靜止時焦糖頂面高度
+var STEP = 1 / 240;     // 固定物理步長
+var MALLET_S = 1.4;     // 木槌整體放大，手機上才看得清楚
+var MALLET_R = 0.425 * MALLET_S, MALLET_HL = 0.59 * MALLET_S;
+var HOLE_R = 1.84;      // 洞的半徑
+var HIDE_Y = -2.75;     // 完全藏起來時的高度（整顆在台面以下）
+var BOARD_T = 0.7;      // 台面厚度
+var SPX = 3.95, SPZ = 4.2;   // 洞的間距
+
+function lin(hex) { return new THREE.Color(hex).convertSRGBToLinear(); }
+function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+function lerp(a, b, k) { return a + (b - a) * k; }
+function rnd(a, b) { return a + Math.random() * (b - a); }
+
+var scene = new THREE.Scene();
+var camera = new THREE.PerspectiveCamera(32, 1, 0.1, 160);
+var TARGET = new THREE.Vector3(0, 0.6, 0);
+var CAM_ELEV = 0.96;     // 俯視約 55 度，前排不會把後排的臉擋住
+var camDist = 30;
+var shake = 0;
+
+function placeCamera() {
+  var s = shake * 0.035;
+  camera.position.set(
+    TARGET.x + (Math.random() - 0.5) * s,
+    TARGET.y + Math.sin(CAM_ELEV) * camDist + (Math.random() - 0.5) * s,
+    TARGET.z + Math.cos(CAM_ELEV) * camDist
+  );
+  camera.lookAt(TARGET);
+}
+
+/* ---------- 版面：直向 2x3，橫向 3x2 ---------- */
+var layout = null;      // { key, cols, rows, holes:[{x,z}], bw, bd, home }
+function makeLayout(aspect) {
+  var portrait = aspect < 0.95, cols = portrait ? 2 : 3, rows = portrait ? 3 : 2, holes = [];
+  for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) holes.push({ x: (c - (cols - 1) / 2) * SPX, z: (r - (rows - 1) / 2) * SPZ });
+  var margin = HOLE_R + 0.95;
+  var bw = (cols - 1) * SPX + 2 * margin, bd = (rows - 1) * SPZ + 2 * margin;
+  var backZ = -(rows - 1) / 2 * SPZ;
+  return {
+    key: portrait ? 'p' : 'l', portrait: portrait, cols: cols, rows: rows, holes: holes, bw: bw, bd: bd,
+    home: { x: bw * 0.24, y: TOP_REST + 1.4, z: backZ - 3.3 }
+  };
+}
+function fitCamera(w, h) {
+  var asp = w / h, L = makeLayout(asp);
+  camera.aspect = asp;
+  camera.fov = L.portrait ? 42 : 30;
+  var t = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  var uiTop = L.portrait ? 5.7 : 3.6;                     // 畫面上方留給標題與之後的題目列（世界單位）
+  var needW = L.bw + 0.9;
+  var needH = L.bd * Math.sin(CAM_ELEV) + 2.8 * Math.cos(CAM_ELEV) + uiTop + 1.2;
+  camDist = Math.max((needW / 2) / (t * asp), (needH / 2) / t);
+  TARGET.set(0, 0.6, -(uiTop * 0.5) / Math.sin(CAM_ELEV));
+  camera.updateProjectionMatrix();
+  placeCamera();
+  return L;
+}
+
+/* ---------- 燈光與環境反射（只在啟動時算一次） ---------- */
+scene.add(new THREE.HemisphereLight(0xfff4e2, 0xa9b6c8, 0.38));
+var key = new THREE.DirectionalLight(0xffffff, 0.78); key.position.set(4, 8, 6); scene.add(key);
+var rimL = new THREE.DirectionalLight(0xcfe2ff, 0.38); rimL.position.set(-6, 3, -4); scene.add(rimL);
+
+var envRT = null;
+(function makeEnv() {
+  try {
+    var es = new THREE.Scene();
+    var sg = new THREE.SphereGeometry(30, 24, 14);
+    var cols = [], p = sg.attributes.position;
+    for (var i = 0; i < p.count; i++) {
+      var yy = p.getY(i) / 30;
+      var c = yy > 0 ? new THREE.Color(0.78, 0.86, 1.0).lerp(new THREE.Color(1.0, 0.97, 0.9), 1 - yy)
+                     : new THREE.Color(1.0, 0.97, 0.9).lerp(new THREE.Color(0.45, 0.36, 0.3), -yy);
+      cols.push(c.r * 0.55, c.g * 0.55, c.b * 0.55);
+    }
+    sg.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+    es.add(new THREE.Mesh(sg, new THREE.MeshBasicMaterial({ side: THREE.BackSide, vertexColors: true })));
+    function panel(w, h, c, x, y, z) {
+      var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(c[0], c[1], c[2]), side: THREE.DoubleSide }));
+      m.position.set(x, y, z); m.lookAt(0, 0, 0); es.add(m);
+    }
+    panel(11, 7, [3.0, 2.9, 2.7], 7, 9, 12);      // 主柔光箱
+    panel(3, 9, [1.8, 2.0, 2.4], -13, 5, -4);      // 冷色背光條
+    panel(6, 2.4, [2.0, 1.8, 1.5], 0, 14, -2);     // 頂光
+    var pm = new THREE.PMREMGenerator(renderer);
+    envRT = pm.fromScene(es, 0.03);
+    pm.dispose();
+    es.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); });
+    scene.environment = envRT.texture;
+  } catch (e) { envRT = null; }
+})();
+
+/* ---------- 讓材質邊緣有「透光」感的小補丁（假的次表面散射） ---------- */
+function patchRim(mat, keyName, rgb, power, strength) {
+  mat.customProgramCacheKey = function () { return keyName; };
+  mat.onBeforeCompile = function (sh) {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\n' +
+      'float rimF = pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), ' + power.toFixed(2) + ');\n' +
+      'totalEmissiveRadiance += vec3(' + rgb.map(function (n) { return n.toFixed(3); }).join(',') + ') * rimF * ' + strength.toFixed(3) + ';');
+  };
+}
+
+/* ---------- 布丁輪廓（旋轉體的剖面） ---------- */
+function buildProfile() {
+  var P = [], FB = 0.3, FT = 0.3, i, a, s;
+  for (i = 0; i <= 3; i++) P.push([(RB - FB) * i / 3, 0]);
+  for (i = 1; i <= 6; i++) { a = -Math.PI / 2 + (Math.PI / 2) * (i / 6); P.push([RB - FB + Math.cos(a) * FB, FB + Math.sin(a) * FB]); }
+  var y0 = FB, y1 = H - FT;
+  for (i = 1; i <= 16; i++) { s = i / 17; P.push([RB + (RT - RB) * s + 0.04 * Math.sin(Math.PI * s), y0 + (y1 - y0) * s]); }
+  var iFillet = P.length;
+  for (i = 0; i <= 10; i++) { a = (Math.PI / 2) * (i / 10); P.push([RT - FT + Math.cos(a) * FT, H - FT + Math.sin(a) * FT]); }
+  var rc = RT - FT;
+  for (i = 1; i <= 10; i++) { var r = rc * (1 - i / 10); P.push([r, H + 0.05 * (1 - (r / rc) * (r / rc))]); }
+  for (var k = 0; k < 2; k++) {
+    var Q = P.map(function (p) { return p.slice(); });
+    for (i = 1; i < P.length - 1; i++) {
+      Q[i][0] = (P[i - 1][0] + 2 * P[i][0] + P[i + 1][0]) / 4;
+      Q[i][1] = (P[i - 1][1] + 2 * P[i][1] + P[i + 1][1]) / 4;
+    }
+    for (i = 1; i < P.length - 1; i++) P[i] = Q[i];
+  }
+  return { P: P, iFillet: iFillet };
+}
+var PROF = buildProfile();
+
+function radiusAtY(y) {
+  var P = PROF.P;
+  for (var i = 10; i < PROF.iFillet; i++) {
+    if (P[i][1] >= y) { var f = (y - P[i - 1][1]) / (P[i][1] - P[i - 1][1]); return lerp(P[i - 1][0], P[i][0], f); }
+  }
+  return RT;
+}
+
+/* ---------- 網格幾何：自己算法線，沒有接縫 ---------- */
+function makeGrid(nu, nv, fill) {
+  var W = nu + 1, count = W * nv;
+  var pos = new Float32Array(count * 3), nor = new Float32Array(count * 3);
+  fill(pos);
+  var idx = [];
+  for (var j = 0; j < nv - 1; j++) {
+    for (var i = 0; i < nu; i++) {
+      var a = j * W + i, b = a + 1, c = a + W, d = c + 1;
+      idx.push(a, c, b, b, c, d);
+    }
+  }
+  var g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3).setUsage(THREE.DynamicDrawUsage));
+  g.setIndex(idx);
+  return g;
+}
+
+function gridNormals(P, N, nu, nv, poles) {
+  var W = nu + 1, i, j;
+  for (j = 0; j < nv; j++) {
+    var jm = j > 0 ? j - 1 : 0, jp = j < nv - 1 ? j + 1 : nv - 1;
+    for (i = 0; i < nu; i++) {
+      var im = (i - 1 + nu) % nu, ip = (i + 1) % nu;
+      var a0 = (j * W + im) * 3, a1 = (j * W + ip) * 3, b0 = (jm * W + i) * 3, b1 = (jp * W + i) * 3;
+      var ax = P[a1] - P[a0], ay = P[a1 + 1] - P[a0 + 1], az = P[a1 + 2] - P[a0 + 2];
+      var bx = P[b1] - P[b0], by = P[b1 + 1] - P[b0 + 1], bz = P[b1 + 2] - P[b0 + 2];
+      var nx = by * az - bz * ay, ny = bz * ax - bx * az, nz = bx * ay - by * ax;
+      var l = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+      var o = (j * W + i) * 3;
+      N[o] = nx / l; N[o + 1] = ny / l; N[o + 2] = nz / l;
+    }
+    var o0 = (j * W) * 3, o1 = (j * W + nu) * 3;
+    N[o1] = N[o0]; N[o1 + 1] = N[o0 + 1]; N[o1 + 2] = N[o0 + 2];
+  }
+  for (var q = 0; q < poles.length; q++) {
+    var pj = poles[q], nj = pj === 0 ? 1 : nv - 2, sx = 0, sy = 0, sz = 0;
+    for (i = 0; i < nu; i++) { var t = (nj * W + i) * 3; sx += N[t]; sy += N[t + 1]; sz += N[t + 2]; }
+    var sl = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1;
+    for (i = 0; i <= nu; i++) { var u = (pj * W + i) * 3; N[u] = sx / sl; N[u + 1] = sy / sl; N[u + 2] = sz / sl; }
+  }
+}
+
+/* ---------- 形變的權重：只算一次，所有布丁共用 ---------- */
+function makeTemplate(geo, nu, nv, poles) {
+  var pos = geo.attributes.position.array, count = pos.length / 3;
+  var T = {
+    geo: geo, base: new Float32Array(pos), count: count, nu: nu, nv: nv, poles: poles,
+    hp: new Float32Array(count), h2: new Float32Array(count), sp: new Float32Array(count),
+    w: new Float32Array(count), dw: new Float32Array(count)
+  };
+  for (var k = 0; k < count; k++) {
+    var hc = clamp(T.base[k * 3 + 1] / H, 0, 1);
+    T.hp[k] = Math.pow(hc, 1.35);
+    T.h2[k] = hc * hc;
+    T.sp[k] = Math.sin(Math.PI * hc);
+    T.w[k] = 0.3 + 0.7 * Math.sin(Math.PI * Math.pow(hc, 0.8));
+    var q = clamp((hc - 0.55) / 0.45, 0, 1);
+    T.dw[k] = q * q * (3 - 2 * q);
+  }
+  gridNormals(geo.attributes.position.array, geo.attributes.normal.array, nu, nv, poles);
+  return T;
+}
+function cloneDeformable(T) {
+  var g = T.geo.clone();
+  return {
+    geo: g, pos: g.attributes.position.array, nor: g.attributes.normal.array,
+    base: T.base, hp: T.hp, h2: T.h2, sp: T.sp, w: T.w, dw: T.dw, count: T.count, nu: T.nu, nv: T.nv, poles: T.poles
+  };
+}
+
+/* ---------- 布丁本體與焦糖的幾何模板 ---------- */
+var nvBody = PROF.P.length;
+var bodyGeoT = makeGrid(NU, nvBody, function (pos) {
+  var W = NU + 1;
+  for (var j = 0; j < nvBody; j++) for (var i = 0; i <= NU; i++) {
+    var th = (i % NU) / NU * Math.PI * 2, r = PROF.P[j][0], y = PROF.P[j][1], o = (j * W + i) * 3;
+    pos[o] = r * Math.cos(th); pos[o + 1] = y; pos[o + 2] = r * Math.sin(th);
+  }
+});
+(function paintBody() {
+  var p = bodyGeoT.attributes.position.array, n = p.length / 3, col = new Float32Array(n * 3);
+  var cA = lin('#f0a91a'), cB = lin('#fbc43f'), cC = lin('#ffdc7c'), c = new THREE.Color();
+  for (var k = 0; k < n; k++) {
+    var h = clamp(p[k * 3 + 1] / H, 0, 1);
+    if (h < 0.5) c.copy(cA).lerp(cB, h / 0.5); else c.copy(cB).lerp(cC, (h - 0.5) / 0.5);
+    col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b;
+  }
+  bodyGeoT.setAttribute('color', new THREE.BufferAttribute(col, 3));
+})();
+var bodyT = makeTemplate(bodyGeoT, NU, nvBody, [0, nvBody - 1]);
+
+var CP = PROF.P.slice().reverse();                 // 從頂部中心往下
+var cum = [0], cn = [], ci;
+for (ci = 1; ci < CP.length; ci++) cum.push(cum[ci - 1] + Math.hypot(CP[ci][0] - CP[ci - 1][0], CP[ci][1] - CP[ci - 1][1]));
+for (ci = 0; ci < CP.length; ci++) {
+  var pa = CP[Math.max(ci - 1, 0)], pb = CP[Math.min(ci + 1, CP.length - 1)];
+  var tr = pb[0] - pa[0], ty = pb[1] - pa[1], tl = Math.hypot(tr, ty) || 1;
+  cn.push([-ty / tl, tr / tl]);
+}
+var L_TOP = cum[CP.length - 1 - PROF.iFillet];
+var CARAMEL_TOP_T = 0.045;
+function posAt(s) {
+  s = clamp(s, 0, cum[cum.length - 1]);
+  var i = 0;
+  while (i < cum.length - 2 && cum[i + 1] < s) i++;
+  var f = (s - cum[i]) / ((cum[i + 1] - cum[i]) || 1);
+  var nr = lerp(cn[i][0], cn[i + 1][0], f), ny = lerp(cn[i][1], cn[i + 1][1], f), nl = Math.hypot(nr, ny) || 1;
+  return { r: lerp(CP[i][0], CP[i + 1][0], f), y: lerp(CP[i][1], CP[i + 1][1], f), nr: nr / nl, ny: ny / nl };
+}
+function angDiff(a, b) { return Math.atan2(Math.sin(a - b), Math.cos(a - b)); }
+function dripLen(th) {   // th = π/2 是正對鏡頭的臉，要保持較短
+  var L = 0.11 + 0.05 * Math.sin(2 * th + 0.8) + 0.035 * Math.sin(5 * th + 2.1);
+  function lobe(c, w, hh) { var d = angDiff(th, c); return hh * Math.exp(-d * d / (w * w)); }
+  return L + lobe(0.15, 0.2, 0.55) + lobe(2.55, 0.17, 0.4) + lobe(-1.25, 0.2, 0.6) + lobe(4.0, 0.16, 0.34) + lobe(-0.55, 0.12, 0.25);
+}
+var NVC = 28;
+var caramelGeoT = makeGrid(NU, NVC, function (pos) {
+  var W = NU + 1;
+  for (var j = 0; j < NVC; j++) for (var i = 0; i <= NU; i++) {
+    var th = (i % NU) / NU * Math.PI * 2, L = dripLen(th), S = L_TOP + L, tt = 1 - j / (NVC - 1), s = tt * S;
+    var p = posAt(s), thk;
+    if (s <= L_TOP) thk = lerp(0.06, CARAMEL_TOP_T, s / L_TOP);
+    else { var u = clamp((s - L_TOP) / L, 0, 1); thk = 0.05 * Math.sqrt(Math.max(0, 1 - u * u * u)) + 0.004; }
+    var rr = p.r + p.nr * thk, o = (j * W + i) * 3;
+    pos[o] = rr * Math.cos(th); pos[o + 1] = p.y + p.ny * thk; pos[o + 2] = rr * Math.sin(th);
+  }
+});
+var caramelT = makeTemplate(caramelGeoT, NU, NVC, [NVC - 1]);
+
+/* ---------- 共用材質（裁切平面讓布丁從洞裡「長」出來） ---------- */
+var CLIP = [new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)];
+var bodyMatT = new THREE.MeshPhysicalMaterial({
+  color: 0xffffff, vertexColors: true, roughness: 0.42, metalness: 0,
+  clearcoat: 0.5, clearcoatRoughness: 0.28, envMapIntensity: 0.55, clippingPlanes: CLIP
+});
+var caramelMatT = new THREE.MeshPhysicalMaterial({
+  color: lin('#8c3604'), roughness: 0.12, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05,
+  envMapIntensity: 1.1, emissive: lin('#3d1500'), transparent: true, opacity: 0.86, clippingPlanes: CLIP
+});
+var faceMat = new THREE.MeshStandardMaterial({ color: lin('#3a1c10'), roughness: 0.28, envMapIntensity: 1, clippingPlanes: CLIP });
+var mouthInMat = new THREE.MeshStandardMaterial({ color: lin('#8c2b2b'), roughness: 0.4, clippingPlanes: CLIP });
+var hiMat = new THREE.MeshBasicMaterial({ color: 0xffffff, clippingPlanes: CLIP });
+var cheekMat = new THREE.MeshBasicMaterial({ color: lin('#ff7f9d'), transparent: true, opacity: 0.55, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2, clippingPlanes: CLIP });
+var sphereG = new THREE.SphereGeometry(1, 16, 12);
+var arcEyeG = new THREE.TorusGeometry(0.085, 0.02, 6, 14, Math.PI);
+var arcMouthG = new THREE.TorusGeometry(0.05, 0.016, 6, 12, Math.PI); arcMouthG.rotateZ(Math.PI);
+var cheekG = new THREE.CircleGeometry(0.13, 20);
+var EYE_Y = 0.98, EYE_X = 0.4, MOUTH_Y = 0.83, CHEEK_Y = 0.86, CHEEK_X = 0.64;
+var caramelMats = [];
+
+/* ---------- 一顆布丁：彈簧、形變、臉、彈出狀態各自一份 ---------- */
+var puddings = [], proxies = [];
+function makePudding(idx) {
+  var P = {
+    idx: idx, x: 0, z: 0,
+    state: 'hidden', timer: 0, alive: false,
+    riseY: HIDE_Y, riseV: 0, riseTarget: HIDE_Y, kR: 300, cR: 30,
+    S: { sq: 0, sqv: 0, m2: 0, m2v: 0, shx: 0, shxv: 0, shz: 0, shzv: 0, tw: 0, twv: 0,
+         dn: [{ v: 0, vv: 0, x: 0, z: 0 }, { v: 0, vv: 0, x: 0, z: 0 }], squint: 0, flash: 0 },
+    E: { sq: 0, m2: 0, shx: 0, shz: 0, tw: 0, dn: [{ v: 0, x: 0, z: 0 }, { v: 0, x: 0, z: 0 }] },
+    ph: Math.random() * 6.28, busy: 0, group: new THREE.Group(), FACE: []
+  };
+  P.bodyMat = bodyMatT.clone();
+  patchRim(P.bodyMat, 'pl-body', [lin('#ffd66e').r, lin('#ffd66e').g, lin('#ffd66e').b], 2.4, 0.3);
+  P.caramelMat = caramelMatT.clone();
+  patchRim(P.caramelMat, 'pl-caramel', [lin('#ff8a14').r, lin('#ff8a14').g, lin('#ff8a14').b], 2.0, 1.1);
+  caramelMats.push(P.caramelMat);
+  P.bodyD = cloneDeformable(bodyT);
+  P.caramelD = cloneDeformable(caramelT);
+  var bm = new THREE.Mesh(P.bodyD.geo, P.bodyMat); bm.frustumCulled = false;
+  var cm = new THREE.Mesh(P.caramelD.geo, P.caramelMat); cm.frustumCulled = false; cm.renderOrder = 2;
+  P.group.add(bm); P.group.add(cm);
+
+  function addFace(mesh, x, y, kind) {
+    var rr = radiusAtY(y) + 0.012, z = Math.sqrt(Math.max(rr * rr - x * x, 0.05));
+    mesh.frustumCulled = false; P.group.add(mesh);
+    P.FACE.push({ mesh: mesh, x: x, y: y, z: z, kind: kind });
+  }
+  [-1, 1].forEach(function (sx) {
+    var eye = new THREE.Mesh(sphereG, faceMat); eye.scale.set(0.085, 0.12, 0.05);
+    var hi = new THREE.Mesh(sphereG, hiMat); hi.scale.set(0.3, 0.26, 0.35); hi.position.set(0.28, 0.4, 0.8); eye.add(hi);
+    addFace(eye, sx * EYE_X, EYE_Y, 'eye');
+    addFace(new THREE.Mesh(arcEyeG, faceMat), sx * EYE_X, EYE_Y - 0.035, 'arc');
+    addFace(new THREE.Mesh(arcMouthG, faceMat), sx * 0.052, MOUTH_Y, 'smile');
+    addFace(new THREE.Mesh(cheekG, cheekMat), sx * CHEEK_X, CHEEK_Y, 'cheek');
+  });
+  var mo = new THREE.Mesh(sphereG, mouthInMat); mo.scale.set(0.055, 0.07, 0.03);
+  addFace(mo, 0, MOUTH_Y - 0.01, 'open');
+
+  // 點擊用的代理圓柱：比布丁略胖，手指比較好點
+  var px = new THREE.Mesh(new THREE.CylinderGeometry(1.95, 1.95, 2.8, 16), new THREE.MeshBasicMaterial());
+  px.position.y = 1.1; px.visible = false; px.userData.P = P; P.group.add(px); P.proxy = px; proxies.push(px);
+
+  P.group.visible = false;
+  P.group.position.y = HIDE_Y;
+  scene.add(P.group);
+  puddings.push(P);
+  return P;
+}
+for (var pi = 0; pi < 6; pi++) makePudding(pi);   // 版面最多用到 6 個洞
+
+/* ---------- 木槌 ---------- */
+var mallet = new THREE.Group();
+(function buildMallet() {
+  var wood = new THREE.MeshStandardMaterial({ color: lin('#f0c27c'), roughness: 0.5, envMapIntensity: 0.7 });
+  var handleMat = new THREE.MeshStandardMaterial({ color: lin('#d99a55'), roughness: 0.55, envMapIntensity: 0.6 });
+  var band = new THREE.MeshStandardMaterial({ color: lin('#ff6f61'), roughness: 0.4, envMapIntensity: 0.7 });
+  function lathe(pts, seg) { return new THREE.LatheGeometry(pts.map(function (p) { return new THREE.Vector2(p[0], p[1]); }), seg || 64); }
+  var hp = [[0, -0.5]], i, a;
+  for (i = 0; i <= 5; i++) { a = (Math.PI / 2) * (i / 5); hp.push([0.26 + Math.sin(a) * 0.08, -0.5 + 0.08 - Math.cos(a) * 0.08]); }
+  for (i = 0; i <= 5; i++) { a = (Math.PI / 2) * (i / 5); hp.push([0.26 + Math.cos(a) * 0.08, 0.42 + Math.sin(a) * 0.08]); }
+  hp.push([0, 0.5]);
+  var headG = lathe(hp, 28); headG.scale(1, 0.95 / 1.0, 1); headG.rotateZ(Math.PI / 2);
+  var headGrp = new THREE.Group(); headGrp.scale.setScalar(1.25); mallet.add(headGrp);
+  headGrp.add(new THREE.Mesh(headG, wood));
+  var bandG = new THREE.TorusGeometry(0.343, 0.03, 8, 28); bandG.rotateY(Math.PI / 2);
+  [-0.29, 0.29].forEach(function (x) { var b = new THREE.Mesh(bandG, band); b.position.x = x; headGrp.add(b); });
+  var hdl = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.115, 1.7, 14), handleMat); hdl.position.y = 1.0; mallet.add(hdl);
+  var knob = new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 12), band); knob.position.y = 1.88; mallet.add(knob);
+})();
+mallet.scale.setScalar(MALLET_S);
+mallet.rotation.order = 'YZX';   // 先繞 Z 擺角度，再繞 Y 轉向：握柄朝向鏡頭
+scene.add(mallet);
+
+/* ---------- 展示台：有洞的檯面（版面改變時重建） ---------- */
+var boardGrp = new THREE.Group(); scene.add(boardGrp);
+var boardTopMat = new THREE.MeshStandardMaterial({ color: lin('#dce7f2'), roughness: 0.5, envMapIntensity: 0.35 });
+var boardSideMat = new THREE.MeshStandardMaterial({ color: lin('#8aa1bb'), roughness: 0.6, envMapIntensity: 0.25 });
+var holeFloorMat = new THREE.MeshBasicMaterial({ color: lin('#35475f') });
+var rimMat = new THREE.MeshBasicMaterial({ color: lin('#79cdb4') });
+var holeRingG = new THREE.RingGeometry(HOLE_R + 0.03, HOLE_R + 0.2, 64); holeRingG.rotateX(-Math.PI / 2);
+var holeFloorG = new THREE.CircleGeometry(HOLE_R + 0.05, 48); holeFloorG.rotateX(-Math.PI / 2);
+
+function disposeGroup(g) {
+  for (var i = g.children.length - 1; i >= 0; i--) {
+    var o = g.children[i];
+    if (o.geometry && o.geometry !== holeRingG && o.geometry !== holeFloorG) o.geometry.dispose();
+    g.remove(o);
+  }
+}
+function buildBoard(L) {
+  disposeGroup(boardGrp);
+  var w = L.bw, d = L.bd, r = 1.4, sh = new THREE.Shape(), hx = w / 2, hz = d / 2;
+  sh.moveTo(-hx + r, -hz); sh.lineTo(hx - r, -hz); sh.absarc(hx - r, -hz + r, r, -Math.PI / 2, 0, false);
+  sh.lineTo(hx, hz - r); sh.absarc(hx - r, hz - r, r, 0, Math.PI / 2, false);
+  sh.lineTo(-hx + r, hz); sh.absarc(-hx + r, hz - r, r, Math.PI / 2, Math.PI, false);
+  sh.lineTo(-hx, -hz + r); sh.absarc(-hx + r, -hz + r, r, Math.PI, Math.PI * 1.5, false);
+  L.holes.forEach(function (h) { var p = new THREE.Path(); p.absarc(h.x, -h.z, HOLE_R, 0, Math.PI * 2, true); sh.holes.push(p); });
+  var g = new THREE.ExtrudeGeometry(sh, { depth: BOARD_T, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelOffset: -0.1, bevelSegments: 2, curveSegments: 36 });
+  g.rotateX(-Math.PI / 2); g.translate(0, -(BOARD_T + 0.1), 0);   // 倒角讓頂面多出 0.1，這裡扣回來，頂面剛好在 y=0
+  boardGrp.add(new THREE.Mesh(g, [boardTopMat, boardSideMat]));
+  L.holes.forEach(function (h) {
+    var ring = new THREE.Mesh(holeRingG, rimMat); ring.position.set(h.x, 0.012, h.z); boardGrp.add(ring);
+    var fl = new THREE.Mesh(holeFloorG, holeFloorMat); fl.position.set(h.x, -BOARD_T + 0.06, h.z); boardGrp.add(fl);
+  });
+}
+
+function applyLayout(L) {
+  layout = L;
+  buildBoard(L);
+  puddings.forEach(function (P, i) {
+    var h = L.holes[i];
+    P.used = !!h;
+    if (h) { P.x = h.x; P.z = h.z; P.group.position.x = h.x; P.group.position.z = h.z; }
+    else { P.state = 'hidden'; P.alive = false; P.riseY = HIDE_Y; P.riseV = 0; P.riseTarget = HIDE_Y; P.group.visible = false; }
+    P.proxy.visible = false;
+  });
+  HOME.x = L.home.x; HOME.y = L.home.y; HOME.z = L.home.z;
+  if (!mallet.userData.placed) { M.x = HOME.x; M.y = HOME.y; M.z = HOME.z; Dp.x = M.x; Dp.y = M.y; Dp.z = M.z; M.r = R_IDLE; Dp.r = R_IDLE; mallet.userData.placed = true; }
+}
+
+/* ---------- 粒子、星芒、點擊的視覺回饋 ---------- */
+var NP = 44, pDummy = new THREE.Object3D();
+var partMat = new THREE.MeshStandardMaterial({ roughness: 0.35, envMapIntensity: 0.8 });
+var partMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), partMat, NP);
+partMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); partMesh.frustumCulled = false;
+var PART = [], PCOL = [lin('#c4651a'), lin('#ffc94d'), lin('#fff0b5'), lin('#e08a2d')], DUST = [lin('#f4f8fc'), lin('#d3deea'), lin('#bccbdc')], pCursor = 0;
+(function initParticles() {
+  for (var i = 0; i < NP; i++) {
+    PART.push({ life: 0, max: 1, x: 0, y: -9, z: 0, vx: 0, vy: 0, vz: 0, s: 0.08 });
+    partMesh.setColorAt(i, PCOL[1]);
+    pDummy.position.set(0, -9, 0); pDummy.scale.setScalar(0); pDummy.updateMatrix(); partMesh.setMatrixAt(i, pDummy.matrix);
+  }
+  partMesh.instanceColor.needsUpdate = true;
+})();
+scene.add(partMesh);
+function emit(x, y, z, n, soft) {
+  var cols = soft ? DUST : PCOL, spd = soft ? 0.55 : 1;
+  for (var k = 0; k < n; k++) {
+    var idx = pCursor, p = PART[idx], ang = Math.random() * Math.PI * 2, sp = (1.4 + Math.random() * 2.6) * spd;
+    pCursor = (pCursor + 1) % NP;
+    p.life = p.max = 0.5 + Math.random() * 0.45;
+    p.x = x + Math.cos(ang) * 0.2; p.y = y + 0.04; p.z = z + Math.sin(ang) * 0.2;
+    p.vx = Math.cos(ang) * sp; p.vz = Math.sin(ang) * sp; p.vy = (3.5 + Math.random() * 3.6) * (soft ? 0.55 : 1);
+    p.s = (0.05 + Math.random() * 0.07) * (soft ? 1.15 : 1);
+    partMesh.setColorAt(idx, cols[(Math.random() * cols.length) | 0]);
+  }
+  partMesh.instanceColor.needsUpdate = true;
+}
+function updateParticles(dt) {
+  for (var i = 0; i < NP; i++) {
+    var p = PART[i];
+    if (p.life > 0) {
+      p.life -= dt; p.vy -= 17 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      var k = clamp(p.life / p.max, 0, 1);
+      pDummy.position.set(p.x, p.y, p.z); pDummy.scale.setScalar(p.life > 0 ? p.s * Math.min(1, k * 3) : 0);
+    } else { pDummy.position.set(0, -9, 0); pDummy.scale.setScalar(0); }
+    pDummy.updateMatrix(); partMesh.setMatrixAt(i, pDummy.matrix);
+  }
+  partMesh.instanceMatrix.needsUpdate = true;
+}
+
+var starTex = (function () {
+  var c = document.createElement('canvas'); c.width = c.height = 128;
+  var g = c.getContext('2d'), grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(255,244,200,.95)'); grd.addColorStop(0.35, 'rgba(255,200,90,.45)'); grd.addColorStop(1, 'rgba(255,170,60,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+  g.fillStyle = '#fffbe6'; g.beginPath();
+  for (var i = 0; i < 16; i++) { var r = i % 2 ? 11 : 60, a = i / 16 * Math.PI * 2; g.lineTo(64 + Math.cos(a) * r, 64 + Math.sin(a) * r); }
+  g.closePath(); g.fill();
+  var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+})();
+var SPR = [];
+for (var si = 0; si < 3; si++) {
+  var sm = new THREE.SpriteMaterial({ map: starTex, transparent: true, depthTest: false, depthWrite: false, opacity: 0 });
+  var sp = new THREE.Sprite(sm); sp.visible = false; sp.renderOrder = 10; scene.add(sp); SPR.push({ s: sp, t: 1, rot: 0 });
+}
+var sprCursor = 0;
+function flash(x, y, z) {
+  var f = SPR[sprCursor]; sprCursor = (sprCursor + 1) % SPR.length;
+  f.t = 0; f.rot = (Math.random() - 0.5) * 1.2; f.s.position.set(x, y + 0.12, z); f.s.visible = true;
+}
+function updateFlash(dt) {
+  for (var i = 0; i < SPR.length; i++) {
+    var f = SPR[i]; if (f.t >= 1) continue;
+    f.t = Math.min(1, f.t + dt / 0.26);
+    var k = 1 - Math.pow(1 - f.t, 3);
+    f.s.scale.setScalar(0.35 + k * 1.2); f.s.material.opacity = 0.85 * (1 - f.t); f.s.material.rotation = f.rot + k * 0.5;
+    if (f.t >= 1) f.s.visible = false;
+  }
+}
+
+var fx = $('#fx'), HIT_WORDS = ['啵！', 'Q彈！', '噗啾！', '啪！', '咚！'], lastWord = -1;
+function popWord(x, y, z) {
+  var v = new THREE.Vector3(x, y, z).project(camera), w = stage.clientWidth, h = stage.clientHeight;
+  var el = document.createElement('div'), wi;
+  do { wi = (Math.random() * HIT_WORDS.length) | 0; } while (wi === lastWord);
+  lastWord = wi;
+  el.className = 'pop'; el.textContent = HIT_WORDS[wi];
+  el.style.left = clamp((v.x * 0.5 + 0.5) * w, 40, w - 40) + 'px'; el.style.top = ((-v.y * 0.5 + 0.5) * h) + 'px';
+  el.style.setProperty('--rot', ((Math.random() - 0.5) * 22).toFixed(1) + 'deg');
+  el.addEventListener('animationend', function () { if (el.parentNode) el.parentNode.removeChild(el); });
+  while (fx.children.length > 3) fx.removeChild(fx.firstChild);
+  fx.appendChild(el);
+}
+
+/* ---------- 音效（Web Audio 合成，沒有外部檔案） ---------- */
+var ac = null, master = null, soundOn = true;
+try { if (window.localStorage.getItem('pudding-sound') === 'off') soundOn = false; } catch (e) {}
+function ensureAudio() {
+  if (!ac) {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { ac = new AC(); master = ac.createGain(); master.gain.value = 0.6; master.connect(ac.destination); } catch (e) { ac = null; return null; }
+  }
+  if (ac.state === 'suspended') { try { ac.resume(); } catch (e) {} }
+  return ac;
+}
+function playHit(power) {
+  if (!soundOn) return;
+  var a = ensureAudio(); if (!a) return;
+  var t = a.currentTime, r = 0.92 + Math.random() * 0.16, o, g;
+  o = a.createOscillator(); g = a.createGain(); o.type = 'sine';
+  o.frequency.setValueAtTime(250 * r, t); o.frequency.exponentialRampToValueAtTime(70 * r, t + 0.14);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.55 * power, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.25);
+  var b = a.createOscillator(), bg = a.createGain(), lfo = a.createOscillator(), lg = a.createGain();
+  b.type = 'triangle'; b.frequency.setValueAtTime(340 * r, t + 0.02); b.frequency.exponentialRampToValueAtTime(175 * r, t + 0.5);
+  lfo.frequency.value = 16; lg.gain.value = 20; lfo.connect(lg); lg.connect(b.frequency);
+  bg.gain.setValueAtTime(0.0001, t + 0.02); bg.gain.exponentialRampToValueAtTime(0.16 * power, t + 0.05); bg.gain.exponentialRampToValueAtTime(0.0001, t + 0.52);
+  b.connect(bg); bg.connect(master); b.start(t + 0.02); lfo.start(t + 0.02); b.stop(t + 0.55); lfo.stop(t + 0.55);
+  var k = a.createOscillator(), kg = a.createGain(); k.type = 'square';
+  k.frequency.setValueAtTime(950 * r, t); k.frequency.exponentialRampToValueAtTime(260, t + 0.03);
+  kg.gain.setValueAtTime(0.14, t); kg.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+  k.connect(kg); kg.connect(master); k.start(t); k.stop(t + 0.06);
+}
+function playThud() {   // 敲到空洞：悶悶的一聲
+  if (!soundOn) return;
+  var a = ensureAudio(); if (!a) return;
+  var t = a.currentTime, o = a.createOscillator(), g = a.createGain(); o.type = 'sine';
+  o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(55, t + 0.1);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.3, t + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.16);
+}
+function playPop() {    // 布丁冒出來：很輕的一聲
+  if (!soundOn) return;
+  var a = ensureAudio(); if (!a || a.state !== 'running') return;
+  var t = a.currentTime, o = a.createOscillator(), g = a.createGain(); o.type = 'sine';
+  var f = 330 * (0.9 + Math.random() * 0.25);
+  o.frequency.setValueAtTime(f, t); o.frequency.exponentialRampToValueAtTime(f * 1.9, t + 0.07);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.07, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.11);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.13);
+}
+
+/* ---------- 布丁的彈簧、形變與臉 ---------- */
+var SQ_MAX = 0.5;
+var K_SQ = 300, C_SQ = 7.5, K_M2 = 700, C_M2 = 6, K_SH = 170, C_SH = 4.2, K_TW = 200, C_TW = 3.2, K_D = 520, C_D = 9;
+
+function stepPhysics(P, dt) {
+  var S = P.S;
+  S.sqv += (-K_SQ * S.sq - C_SQ * S.sqv) * dt; S.sq += S.sqv * dt;
+  S.m2v += (-K_M2 * S.m2 - C_M2 * S.m2v) * dt; S.m2 += S.m2v * dt;
+  S.shxv += (-K_SH * S.shx - C_SH * S.shxv) * dt; S.shx += S.shxv * dt;
+  S.shzv += (-K_SH * S.shz - C_SH * S.shzv) * dt; S.shz += S.shzv * dt;
+  S.twv += (-K_TW * S.tw - C_TW * S.twv) * dt; S.tw += S.twv * dt;
+  for (var i = 0; i < 2; i++) { var d = S.dn[i]; d.vv += (-K_D * d.v - C_D * d.vv) * dt; d.v += d.vv * dt; }
+  P.riseV += (-P.kR * (P.riseY - P.riseTarget) - P.cR * P.riseV) * dt; P.riseY += P.riseV * dt;
+}
+function computeEffective(P, t0) {
+  var S = P.S, E = P.E, t = t0 + P.ph;
+  E.sq = SQ_MAX * Math.tanh(S.sq / SQ_MAX) + 0.012 * Math.sin(t * 2.3) + 0.006 * Math.sin(t * 3.9 + 1);
+  E.m2 = S.m2 + 0.01 * Math.sin(t * 3.1 + 0.6);
+  E.shx = S.shx + 0.018 * Math.sin(t * 1.5);
+  E.shz = S.shz + 0.012 * Math.sin(t * 1.1 + 1.4);
+  E.tw = S.tw + 0.012 * Math.sin(t * 1.3);
+  for (var i = 0; i < 2; i++) { E.dn[i].v = S.dn[i].v; E.dn[i].x = S.dn[i].x; E.dn[i].z = S.dn[i].z; }
+}
+
+var OUT = { x: 0, y: 0, z: 0 };
+// 非等比例縮放 + 頂點形變：垂直壓縮（越高越多）、橫向鼓起（腰部最多）、
+// 第二個高頻模態（肚子抖動）、頂部剪切與扭轉、命中點的局部凹陷
+function deformCore(P, x, y, z, hp, h2, sp, w, dw, out) {
+  var E = P.E;
+  var rs = 1 + E.sq * 0.52 * w + E.m2 * 0.28 * sp;
+  var ny = y - E.sq * H * 0.7 * hp - E.m2 * H * 0.06 * hp;
+  var nx = x * rs, nz = z * rs;
+  nx += E.shx * h2; nz += E.shz * h2;
+  var a = E.tw * h2, tx = nx - nz * a, tz = nz + nx * a;
+  for (var i = 0; i < 2; i++) {
+    var d = E.dn[i];
+    if (d.v > 1e-4 || d.v < -1e-4) {
+      var dx = x - d.x, dz = z - d.z;
+      ny -= d.v * 0.55 * Math.exp(-(dx * dx + dz * dz) * 1.6) * dw;
+    }
+  }
+  out.x = tx; out.y = ny; out.z = tz;
+}
+function updateDeformable(P, D) {
+  var b = D.base, p = D.pos, n = D.count;
+  for (var k = 0; k < n; k++) {
+    var o = k * 3;
+    deformCore(P, b[o], b[o + 1], b[o + 2], D.hp[k], D.h2[k], D.sp[k], D.w[k], D.dw[k], OUT);
+    p[o] = OUT.x; p[o + 1] = OUT.y; p[o + 2] = OUT.z;
+  }
+  gridNormals(p, D.nor, D.nu, D.nv, D.poles);
+  D.geo.attributes.position.needsUpdate = true;
+  D.geo.attributes.normal.needsUpdate = true;
+}
+function topYAt(P, x, z) {   // 布丁局部座標下，頂面在 (x, z) 的高度
+  var rr = Math.hypot(x, z), rc = RT - 0.3, q = Math.min(1, rr / rc);
+  var yb = H + 0.05 * (1 - q * q) + 0.055;
+  deformCore(P, x, yb, z, 1, 1, 0, 0.3, 1, OUT);
+  return OUT.y;
+}
+var fz = new THREE.Vector3(0, 0, 1), fn = new THREE.Vector3();
+function updateFace(P, t) {
+  var blink = ((t + P.ph) % 3.8) < 0.11, sq = P.S.squint > 0.3;
+  for (var i = 0; i < P.FACE.length; i++) {
+    var f = P.FACE[i], hc = clamp(f.y / H, 0, 1);
+    var hp = Math.pow(hc, 1.35), sp = Math.sin(Math.PI * hc), w = 0.3 + 0.7 * Math.sin(Math.PI * Math.pow(hc, 0.8));
+    deformCore(P, f.x, f.y, f.z, hp, hc * hc, sp, w, 0, OUT);
+    fn.set(OUT.x, 0.18, OUT.z).normalize();
+    f.mesh.position.set(OUT.x, OUT.y, OUT.z);
+    f.mesh.quaternion.setFromUnitVectors(fz, fn);
+    if (f.kind === 'eye') { f.mesh.visible = !sq; f.mesh.scale.y = blink ? 0.014 : 0.12; }
+    else if (f.kind === 'arc') f.mesh.visible = sq;
+    else if (f.kind === 'smile') f.mesh.visible = !sq;
+    else if (f.kind === 'open') f.mesh.visible = sq;
+  }
+}
+
+/* ---------- 布丁的彈出 / 縮回 ---------- */
+var hitCount = 0, lastHitAt = -9, T = 0;
+function popUp(P, life) {
+  var S = P.S;
+  P.state = 'up'; P.timer = life; P.riseTarget = 0; P.kR = 330; P.cR = 15;   // 欠阻尼：會稍微衝過頭再落回
+  P.busy = 1.2;
+  S.m2v += (Math.random() < 0.5 ? -1 : 1) * 2.4;
+  S.shxv += (Math.random() - 0.5) * 1.6; S.shzv += (Math.random() - 0.5) * 1.2;
+  S.squint = 0; S.flash = 0;
+  playPop();
+}
+function sink(P) {
+  P.state = 'sinking'; P.riseTarget = HIDE_Y; P.kR = 300; P.cR = 36;       // 過阻尼：乾脆縮回去
+  P.busy = 1.0;
+}
+function updateStates(dt) {
+  for (var i = 0; i < puddings.length; i++) {
+    var P = puddings[i]; if (!P.used) continue;
+    P.alive = P.riseY > -1.3;
+    if (P.hold) { /* 題目進行中：留在上面 */ }
+    else if (P.state === 'up') { P.timer -= dt; if (P.timer <= 0) sink(P); }
+    else if (P.state === 'hit') { P.timer -= dt; if (P.timer <= 0) sink(P); }
+    else if (P.state === 'sinking' && P.riseY < HIDE_Y + 0.1 && Math.abs(P.riseV) < 0.6) {
+      P.state = 'hidden'; P.riseY = HIDE_Y; P.riseV = 0; P.alive = false;
+    }
+    P.group.visible = P.state !== 'hidden';
+    P.group.position.y = P.riseY;
+  }
+}
+
+var Game = { paused: false, next: 0.2, last: -1, maxUp: 3 };
+function updateGame(dt) {
+  if (Game.paused) return;
+  Game.next -= dt;
+  if (Game.next > 0) return;
+  var upN = 0, free = [];
+  puddings.forEach(function (P) {
+    if (!P.used) return;
+    if (P.state === 'up' || P.state === 'hit') upN++;
+    else if (P.state === 'hidden' && P.idx !== Game.last) free.push(P);
+  });
+  if (upN < Game.maxUp && free.length) {
+    var P = free[(Math.random() * free.length) | 0];
+    popUp(P, rnd(2.2, 3.6)); Game.last = P.idx;
+  }
+  Game.next = rnd(0.45, 0.85);
+}
+
+/* ---------- 命中：把衝量打進彈簧，連打時只會疊加、不會歸零 ---------- */
+function applyHit(P, h) {
+  var S = P.S, p = h.power, hx = h.hx, hz = h.hz, r = Math.hypot(hx, hz) || 1;
+  S.sqv = Math.min(S.sqv + 11 * p, 17);
+  S.m2v += (Math.random() < 0.5 ? -1 : 1) * 3.2 * p;
+  S.shxv += (-hx / r * 0.5 + (Math.random() - 0.5) * 0.5) * 3.4 * Math.min(1, r * 2 + 0.3);
+  S.shzv += (-hz / r * 0.5 + (Math.random() - 0.5) * 0.5) * 2.4 * Math.min(1, r * 2 + 0.3);
+  S.twv += (Math.random() - 0.5) * 1.8 + hx * 0.5;
+  var d0 = S.dn[0], d1 = S.dn[1], dd = (Math.abs(d0.v) + Math.abs(d0.vv) * 0.05) <= (Math.abs(d1.v) + Math.abs(d1.vv) * 0.05) ? d0 : d1;
+  dd.x = hx; dd.z = hz; dd.vv += 9 * p;
+  S.flash = 1; S.squint = 1; shake = Math.min(1.4, shake + 0.9);
+  P.busy = 1.4;
+  if (P.state === 'up') { P.state = 'hit'; P.timer = 0.6; } else if (P.state === 'hit') P.timer = 0.6;   // 連續敲同一顆：多留一會兒
+  var wy = P.riseY + topYAt(P, hx, hz), wx = P.x + hx, wz = P.z + hz;
+  emit(wx, wy, wz, 10); flash(wx, wy, wz); popWord(wx + (hx < 0 ? -1 : 1) * 0.9, wy + 0.3, wz);
+  playHit(p);
+  hitCount++; lastHitAt = T;
+  if (hitCount === 1) $('#hint').classList.add('gone');
+  quizHit(P);
+}
+function whiff(h) {   // 敲到空洞：灰塵與悶響
+  shake = Math.min(1.4, shake + 0.35);
+  emit(h.tx, 0.05, h.tz, 6, true);
+  playThud();
+  lastHitAt = T;
+}
+
+/* ---------- 木槌：揮下與收回，握柄朝向鏡頭，端面敲下 ---------- */
+// 姿態角 a：握柄方向 = (0, cos a, sin a)。a 越大握柄越水平，槌頭端面越朝下。
+// 舉起與敲下的角度差只留 0.35 rad：握柄尖端離槌頭中心約 2，轉得越多，連擊時一幀之內掃過的弧越長，看起來就像兩支柄。
+var A_IDLE = 0.8, A_WIND = 1.12, A_HIT = 1.47;
+// 轉向 r：繞垂直軸。-π/2 = 握柄朝向鏡頭（敲擊時）；待機時轉成斜向右側，這樣一眼就看得出是木槌。
+var R_HIT = -Math.PI / 2, R_IDLE = -0.55;
+var HOME = { x: 3, y: TOP_REST + 1, z: 6 };
+var M = { x: 3, y: TOP_REST + 1, z: 6, a: A_IDLE, r: R_IDLE };
+var Dp = { x: M.x, y: M.y, z: M.z, a: M.a, r: M.r };
+var seg = null, pending = null, hover = null;
+var ease = {
+  outCubic: function (k) { return 1 - Math.pow(1 - k, 3); },
+  inQuad: function (k) { return k * k; },
+  smooth: function (k) { return k * k * (3 - 2 * k); },   // 起步緩，第一幀不會跳很遠
+  travel: function (k) { return 0.5 * k + 0.5 * k * k * (3 - 2 * k); }   // 跨洞移動：速度峰值只有平均的 1.25 倍（smooth 是 1.5 倍）
+};
+function offs(a) { return MALLET_R * Math.cos(a) + MALLET_HL * Math.sin(a); }
+function windPose(h) { return { x: h.tx, y: h.top + offs(A_WIND) + 1.3, z: h.tz - 0.95, a: A_WIND, r: R_HIT }; }
+function idlePose(t, o) {
+  var b = (hover && (T - lastHitAt) < 1.1) ? hover : { x: HOME.x, y: HOME.y, z: HOME.z, a: A_IDLE, r: R_IDLE };
+  o.x = b.x; o.y = b.y + 0.07 * Math.sin(t * 2.1); o.z = b.z; o.a = b.a + 0.035 * Math.sin(t * 1.7); o.r = b.r;
+  return o;
+}
+function startSeg(tag, to, dur, fn, from) {
+  seg = { tag: tag, from: { x: from.x, y: from.y, z: from.z, a: from.a, r: from.r }, to: to, t: 0, dur: dur, fn: fn };
+}
+function land() {
+  if (!pending || pending.landed) return;
+  pending.landed = true;
+  if (pending.P.alive) applyHit(pending.P, pending); else whiff(pending);
+  startSeg('press', { x: M.x, y: pending.top + offs(A_HIT) - 1.0, z: M.z, a: A_HIT, r: R_HIT }, 0.11, ease.outCubic, M);
+}
+function queueHit(P, hx, hz) {
+  if (!P || !P.used) return;
+  if (pending && !pending.landed) land();
+  var r = Math.hypot(hx, hz), mr = 0.95;
+  if (r > mr) { hx *= mr / r; hz *= mr / r; }
+  var recent = (T - lastHitAt) < 0.14;
+  pending = {
+    P: P, hx: hx, hz: hz, tx: P.x + hx, tz: P.z + hz, landed: false,
+    top: P.alive ? TOP_REST : 0.05,
+    power: (0.92 + Math.random() * 0.2) * (recent ? 0.9 : 1)
+  };
+  var wind = windPose(pending);
+  var dist = Math.hypot(wind.x - Dp.x, wind.y - Dp.y, wind.z - Dp.z);
+  // 時間 = 距離 / 速度上限（約 52 單位/秒）：跨很遠的洞時拉長，手機上單幀位移才不會超過畫面寬度的一成多，不然會看成兩支木槌
+  startSeg('wind', wind, clamp(dist / 52, 0.035, 0.19), ease.travel, Dp);
+}
+var tmpPose = { x: 0, y: 0, z: 0, a: 0, r: 0 };
+function updateMallet(dt) {
+  var clamped = false, i;
+  if (seg) {
+    seg.t += dt;
+    var k = Math.min(1, seg.t / seg.dur), e = seg.fn(k);
+    M.x = lerp(seg.from.x, seg.to.x, e); M.y = lerp(seg.from.y, seg.to.y, e);
+    M.z = lerp(seg.from.z, seg.to.z, e); M.a = lerp(seg.from.a, seg.to.a, e); M.r = lerp(seg.from.r, seg.to.r, e);
+  } else {
+    var ip = idlePose(T, tmpPose), f = 1 - Math.exp(-dt * 9);
+    M.x = lerp(M.x, ip.x, f); M.y = lerp(M.y, ip.y, f); M.z = lerp(M.z, ip.z, f); M.a = lerp(M.a, ip.a, f); M.r = lerp(M.r, ip.r, f);
+  }
+  // 接觸約束：木槌不能穿進台面，也不能穿進（正在形變的）布丁表面
+  var vy = M.y, lim = offs(M.a) + 0.04;
+  if (vy < lim) { vy = lim; clamped = true; }
+  for (i = 0; i < puddings.length; i++) {
+    var P = puddings[i];
+    if (!P.used || P.riseY < -1.2) continue;
+    var dx = M.x - P.x, dz = M.z - P.z;
+    if (dx * dx + dz * dz < (RT - 0.1) * (RT - 0.1)) {
+      var l2 = P.riseY + topYAt(P, dx, dz) + offs(M.a) - 0.02;
+      if (vy < l2) { vy = l2; clamped = true; }
+    }
+  }
+  if (seg && seg.tag === 'strike' && clamped) land();
+  if (seg && seg.t >= seg.dur) {
+    var tag = seg.tag, cur = seg;
+    if (tag === 'wind') {
+      startSeg('strike', { x: pending.tx, y: pending.top + offs(A_HIT) - 0.3, z: pending.tz, a: A_HIT, r: R_HIT }, 0.045, ease.inQuad, M);
+    } else if (tag === 'strike') {
+      land();
+    } else if (tag === 'press') {
+      hover = windPose(pending);
+      startSeg('retract', { x: hover.x, y: hover.y, z: hover.z, a: hover.a, r: hover.r }, 0.34, ease.outCubic, Dp);
+    } else if (tag === 'retract') {
+      seg = null;
+    }
+    if (cur === seg) seg = null;
+  }
+  Dp.x = M.x; Dp.y = vy; Dp.z = M.z; Dp.a = M.a; Dp.r = M.r;
+  mallet.position.set(Dp.x, Dp.y, Dp.z);
+  mallet.rotation.set(0, Dp.r, -Dp.a);
+}
+
+/* ---------- 輸入：滑鼠與觸控都走 pointerdown，不需要等動畫結束 ---------- */
+var ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), tmpV = new THREE.Vector3();
+function pickAt(clientX, clientY) {
+  var r = canvas.getBoundingClientRect();
+  ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  scene.updateMatrixWorld(true);
+  var list = [];
+  for (var i = 0; i < puddings.length; i++) if (puddings[i].used && puddings[i].alive) list.push(puddings[i].proxy);
+  var hit = list.length ? ray.intersectObjects(list, false)[0] : null;
+  if (hit) { var P = hit.object.userData.P; queueHit(P, hit.point.x - P.x, hit.point.z - P.z); return true; }
+  // 沒打到布丁：找最近的洞（空洞也會被敲一下，有灰塵與悶響）
+  if (ray.ray.intersectPlane(floorPlane, tmpV)) {
+    var best = null, bd = 2.3 * 2.3;
+    for (var j = 0; j < puddings.length; j++) {
+      var Q = puddings[j]; if (!Q.used) continue;
+      var d2 = (tmpV.x - Q.x) * (tmpV.x - Q.x) + (tmpV.z - Q.z) * (tmpV.z - Q.z);
+      if (d2 < bd) { bd = d2; best = Q; }
+    }
+    if (best) { queueHit(best, tmpV.x - best.x, tmpV.z - best.z); return true; }
+  }
+  return false;
+}
+function onPointerDown(e) {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  e.preventDefault();
+  canvas.setAttribute('data-pointer', '');
+  if (document.activeElement !== canvas) canvas.focus({ preventScroll: true });   // 點過之後，Enter / 空白鍵才接得到
+  ensureAudio();
+  pickAt(e.clientX, e.clientY);
+}
+function onKey(e) {
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault(); ensureAudio();
+    var cand = puddings.filter(function (P) { return P.used && P.alive; });
+    if (!cand.length) cand = puddings.filter(function (P) { return P.used; });
+    var P = cand[(Math.random() * cand.length) | 0];
+    queueHit(P, rnd(-0.4, 0.4), rnd(-0.4, 0.4));
+  }
+}
+// iOS Safari 只承認 click / touchend 這類手勢來解鎖 AudioContext，所以手指抬起時再 resume 一次。
+function onPointerUp() { if (soundOn) ensureAudio(); }
+function onContextMenu(e) { e.preventDefault(); }   // 長按不要跳出選單
+function onAnyKey() { canvas.removeAttribute('data-pointer'); }   // 一按鍵盤，焦點框就恢復顯示
+document.addEventListener('keydown', onAnyKey, true);
+canvas.addEventListener('pointerdown', onPointerDown);
+canvas.addEventListener('pointerup', onPointerUp);
+canvas.addEventListener('contextmenu', onContextMenu);
+canvas.addEventListener('keydown', onKey);
+
+/* ---------- 控制面板 ---------- */
+var btnSound = $('#btn-sound'), sndLabel = $('#snd-label'), sndWave = $('#snd-wave');
+function syncSound() {
+  btnSound.setAttribute('aria-pressed', String(soundOn));
+  sndLabel.textContent = soundOn ? '音效 開' : '音效 關';
+  sndWave.style.display = soundOn ? '' : 'none';
+}
+syncSound();
+btnSound.addEventListener('click', function () {
+  soundOn = !soundOn; syncSound();
+  try { window.localStorage.setItem('pudding-sound', soundOn ? 'on' : 'off'); } catch (e) {}
+  if (soundOn) ensureAudio();
+});
+var btnPerf = $('#btn-perf'), perfEl = $('#perf');
+btnPerf.addEventListener('click', function () {
+  var open = perfEl.hidden; perfEl.hidden = !open; btnPerf.setAttribute('aria-expanded', String(open));
+});
+var optTrans = $('#opt-trans'), optHires = $('#opt-hires'), optAuto = $('#opt-auto');
+optTrans.addEventListener('change', function () {
+  caramelMats.forEach(function (m) { m.transparent = optTrans.checked; m.opacity = optTrans.checked ? 0.86 : 1; m.needsUpdate = true; });
+});
+var autoId = 0;
+optAuto.addEventListener('change', function () {
+  clearInterval(autoId);
+  if (optAuto.checked) autoId = setInterval(function () {
+    var alive = puddings.filter(function (P) { return P.used && P.alive; });
+    var P = alive.length ? alive[(Math.random() * alive.length) | 0] : puddings[0];
+    var a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * 0.9;
+    queueHit(P, Math.cos(a) * r, Math.sin(a) * r);
+  }, 110);
+});
+function dpr() { return optHires.checked ? Math.min(window.devicePixelRatio || 1, 2) : 1; }
+function resize() {
+  var w = Math.max(1, stage.clientWidth), h = Math.max(1, stage.clientHeight);
+  renderer.setPixelRatio(dpr()); renderer.setSize(w, h, false);
+  var L = fitCamera(w, h);
+  if (!layout || layout.key !== L.key) applyLayout(L); else { layout.home = L.home; }
+  $('#st-dpr').textContent = '×' + dpr().toFixed(2).replace(/\.?0+$/, '');
+}
+optHires.addEventListener('change', resize);
+var ro = new ResizeObserver(resize); ro.observe(stage);
+window.addEventListener('orientationchange', resize);
+
+/* ---------- 主迴圈 ---------- */
+var raf = 0, last = performance.now(), acc = 0, running = true, frameNo = 0;
+var fpsN = 0, fpsT = 0, msSum = 0;
+function frame(now) {
+  if (!running) return;
+  raf = requestAnimationFrame(frame);
+  var rawDt = (now - last) / 1000; last = now;
+  var dt = Math.min(rawDt, 0.05);
+  T += dt; frameNo++;
+  acc += dt;
+  while (acc >= STEP) { for (var q = 0; q < puddings.length; q++) stepPhysics(puddings[q], STEP); acc -= STEP; }
+  updateStates(dt);
+  updateGame(dt);
+  updateQuiz(dt);
+  for (var i = 0; i < puddings.length; i++) computeEffective(puddings[i], T);
+  updateMallet(dt);
+  shake = Math.max(0, shake - dt * 7);
+  for (i = 0; i < puddings.length; i++) {
+    var P = puddings[i]; if (!P.used || P.state === 'hidden') continue;
+    var S = P.S;
+    S.flash = Math.max(0, S.flash - dt * 4.5);
+    S.squint = Math.max(0, S.squint - dt * 2.8);
+    P.bodyMat.emissive.setRGB(S.flash * 0.16, S.flash * 0.11, S.flash * 0.04);
+    // 正在動的每幀都更新；靜靜待著的只做慢速待機晃動，三幀更新一次就夠（手機省電）
+    P.busy = Math.max(0, P.busy - dt);
+    if (P.busy > 0 || ((frameNo + i) % 3) === 0) {
+      computeEffective(P, T);
+      updateDeformable(P, P.bodyD); updateDeformable(P, P.caramelD); updateFace(P, T);
+    }
+  }
+  updateParticles(dt); updateFlash(dt);
+  placeCamera();
+  updateLabels();
+  var t0 = performance.now();
+  renderer.render(scene, camera);
+  msSum += performance.now() - t0; fpsN++; fpsT += rawDt;
+  if (fpsT >= 0.5) {
+    if (!perfEl.hidden) {
+      $('#st-fps').textContent = Math.round(fpsN / fpsT);
+      $('#st-ms').textContent = (msSum / fpsN).toFixed(1) + 'ms';
+      $('#st-calls').textContent = renderer.info.render.calls;
+      $('#st-tris').textContent = Math.round(renderer.info.render.triangles / 100) / 10 + 'k';
+    }
+    fpsN = 0; fpsT = 0; msSum = 0;
+  }
+}
+function onVisibility() {
+  if (document.hidden) { running = false; cancelAnimationFrame(raf); }
+  else if (!running) { running = true; last = performance.now(); raf = requestAnimationFrame(frame); }
+}
+document.addEventListener('visibilitychange', onVisibility);
+
+/* ---------- 資源釋放 ---------- */
+var disposed = false;
+function disposeAll() {
+  if (disposed) return; disposed = true;
+  running = false; cancelAnimationFrame(raf); clearInterval(autoId);
+  ro.disconnect();
+  canvas.removeEventListener('pointerdown', onPointerDown); canvas.removeEventListener('pointerup', onPointerUp);
+  canvas.removeEventListener('contextmenu', onContextMenu); canvas.removeEventListener('keydown', onKey);
+  document.removeEventListener('keydown', onAnyKey, true);
+  document.removeEventListener('visibilitychange', onVisibility);
+  scene.traverse(function (o) {
+    if (o.geometry) o.geometry.dispose();
+    var m = o.material;
+    if (m) (Array.isArray(m) ? m : [m]).forEach(function (x) {
+      for (var k in x) { var v = x[k]; if (v && v.isTexture) v.dispose(); }
+      x.dispose();
+    });
+    if (o.isInstancedMesh && o.dispose) o.dispose();
+  });
+  [bodyMatT, caramelMatT].forEach(function (m) { m.dispose(); });
+  if (envRT) envRT.dispose();
+  if (ac) { try { ac.close(); } catch (e) {} }
+  renderer.dispose();
+}
+window.addEventListener('pagehide', disposeAll);
+window.addEventListener('pageshow', function (e) { if (e.persisted && disposed) location.reload(); });
+
+/* ---------- 第 2 階段：單字層 ---------- */
+var ITEMS = window.PUDDING_ITEMS || [];
+var pool = 'all';
+try { pool = window.localStorage.getItem('pudding-colloc-pool') || 'all'; } catch (e) {}
+var QN = 10, CHOICES = 4;
+var Quiz = { state: 'intro', round: [], idx: 0, cur: null, right: 0, wrong: [], t: 0, queue: [], later: [], answered: false, hintAt: 8 };
+var stats = {};   // 每個單字答對/答錯幾次，只存在這台裝置的瀏覽器裡
+try { stats = JSON.parse(window.localStorage.getItem('pudding-colloc') || '{}') || {}; } catch (e) { stats = {}; }
+var autoNext = true;   // 預設：答完一題停幾秒自動繼續
+try { if (window.localStorage.getItem('pudding-mode') === 'manual') autoNext = false; } catch (e) {}
+var AUTO_OK = 4.5, AUTO_BAD = 6;   // 看完單字與例句的時間（秒）；答錯多給一點
+var segEls = Array.prototype.slice.call(document.querySelectorAll('.seg'));
+function syncMode() {
+  segEls.forEach(function (seg) {
+    Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) { b.setAttribute('aria-checked', String((b.getAttribute('data-mode') === 'auto') === autoNext)); });
+    seg.nextElementSibling.textContent = autoNext ? '答完一題停幾秒，自動出下一題；想快一點可以點「下一題」。' : '看完單字和例句，自己按「下一題」才繼續。';
+  });
+}
+segEls.forEach(function (seg) {
+  seg.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    autoNext = b.getAttribute('data-mode') === 'auto'; syncMode();
+    try { window.localStorage.setItem('pudding-mode', autoNext ? 'auto' : 'manual'); } catch (e2) {}
+  });
+});
+syncMode();
+function saveStats() { try { window.localStorage.setItem('pudding-colloc', JSON.stringify(stats)); } catch (e) {} }
+function poolItems() { return pool === 'all' ? ITEMS : ITEMS.filter(function (it) { return it.kind === pool; }); }
+var poolEl = $('#pool');
+function syncPool() {
+  Array.prototype.forEach.call(poolEl.querySelectorAll('button'), function (b) { b.setAttribute('aria-checked', String(b.getAttribute('data-pool') === pool)); });
+  var n = poolItems().length;
+  $('#pool-note').textContent = pool === '搭配詞' ? '詞彙題考過的搭配詞，共 ' + n + ' 題。' : pool === '片語' ? '綜合測驗考過的慣用片語，共 ' + n + ' 題。' : '詞彙題搭配詞＋綜合測驗片語，共 ' + n + ' 題。';
+}
+poolEl.addEventListener('click', function (e) {
+  var b = e.target.closest('button'); if (!b) return;
+  pool = b.getAttribute('data-pool'); syncPool();
+  try { window.localStorage.setItem('pudding-colloc-pool', pool); } catch (e2) {}
+});
+if (!/^(all|搭配詞|片語)$/.test(pool)) pool = 'all';
+syncPool();
+function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = (Math.random() * (i + 1)) | 0, t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+function later(sec, fn) { Quiz.later.push({ at: Quiz.t + sec, fn: fn }); }
+
+var labelsEl = $('#labels'), labelEls = [];
+puddings.forEach(function () {
+  var el = document.createElement('div'); el.className = 'lbl'; el.hidden = true; el._v = false; labelsEl.appendChild(el); labelEls.push(el);
+});
+function setLabel(P, word, mark) {
+  var el = labelEls[P.idx];
+  P.word = word || null;
+  el.textContent = word ? word.w : '';
+  var n = word ? word.w.length : 0;
+  el.className = 'lbl' + (n > 15 ? ' xlong' : n > 11 ? ' long' : '') + (mark ? ' ' + mark : '');
+}
+var lblV = new THREE.Vector3();
+function updateLabels() {
+  var w = stage.clientWidth, h = stage.clientHeight;
+  camera.updateMatrixWorld();
+  for (var i = 0; i < puddings.length; i++) {
+    var P = puddings[i], el = labelEls[i];
+    var show = P.used && P.word && P.state !== 'hidden' && P.riseY > -0.9;
+    if (!show) { if (el._v) { el.hidden = true; el._v = false; } continue; }
+    lblV.set(P.x, P.riseY + topYAt(P, 0, 0) + 0.15, P.z).project(camera);   // 貼在焦糖頂面中央，布丁被壓扁時會一起往下
+    el.style.transform = 'translate3d(' + ((lblV.x * 0.5 + 0.5) * w).toFixed(1) + 'px,' + ((-lblV.y * 0.5 + 0.5) * h).toFixed(1) + 'px,0) translate(-50%,-50%)';
+    if (!el._v) { el.hidden = false; el._v = true; }
+  }
+}
+
+function playGood() {
+  if (!soundOn) return;
+  var a = ensureAudio(); if (!a) return;
+  var t = a.currentTime;
+  [523.25, 659.25, 783.99].forEach(function (f, i) {
+    var o = a.createOscillator(), g = a.createGain(); o.type = 'sine';
+    o.frequency.value = f; var s = t + 0.09 + i * 0.075;
+    g.gain.setValueAtTime(0.0001, s); g.gain.exponentialRampToValueAtTime(0.16, s + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, s + 0.22);
+    o.connect(g); g.connect(master); o.start(s); o.stop(s + 0.24);
+  });
+}
+function playBad() {
+  if (!soundOn) return;
+  var a = ensureAudio(); if (!a) return;
+  var t = a.currentTime + 0.08, o = a.createOscillator(), g = a.createGain(); o.type = 'triangle';
+  o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(130, t + 0.22);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.3);
+}
+
+var quizEl = $('#quiz'), qProg = $('#q-prog'), qPos = $('#q-pos'), qMain = $('#q-main'), qFb = $('#q-fb');
+qMain.classList.add('frame');
+function fillFrame(el, frame) {   // ___ 換成一條底線
+  var i = frame.indexOf('___'), b = document.createElement('span');
+  b.className = 'blank'; b.setAttribute('aria-label', '空格');
+  el.textContent = '';
+  el.appendChild(document.createTextNode(frame.slice(0, i))); el.appendChild(b); el.appendChild(document.createTextNode(frame.slice(i + 3)));
+}
+var introEl = $('#intro'), summaryEl = $('#summary'), btnNext = $('#btn-next');
+
+function clearBoard() {
+  puddings.forEach(function (P) {
+    P.hold = false; setLabel(P, null);
+    if (P.used && P.state !== 'hidden' && P.state !== 'sinking') sink(P);
+  });
+}
+function pickRound() {
+  var all = poolItems();
+  var missed = shuffle(all.filter(function (w) { var s = stats[w.id]; return s && s.miss > s.ok; })).slice(0, 3);
+  var rest = shuffle(all.filter(function (w) { return missed.indexOf(w) < 0; }));
+  return shuffle(missed.concat(rest).slice(0, QN));
+}
+function startRound() {
+  Quiz.round = pickRound(); Quiz.idx = 0; Quiz.right = 0; Quiz.wrong = []; Quiz.later = []; Quiz.queue = [];
+  Game.paused = true;
+  introEl.hidden = true; summaryEl.hidden = true; quizEl.hidden = false;
+  $('#hint').classList.add('gone');
+  clearBoard();
+  ask();
+}
+function ask() {
+  var c = Quiz.cur = Quiz.round[Quiz.idx];
+  Quiz.state = 'asking'; Quiz.answered = false; Quiz.t = 0; Quiz.later = []; Quiz.queue = [];
+  var opts = shuffle(c.options.map(function (o) { return { w: o }; }));   // 當年的四個選項
+  var holes = shuffle(puddings.filter(function (P) { return P.used; })).slice(0, opts.length);
+  clearBoard();
+  holes.forEach(function (P, i) { Quiz.queue.push({ at: 0.4 + i * 0.15, P: P, word: opts[i], done: false }); });
+  quizEl.className = '';
+  qProg.textContent = (Quiz.idx + 1) + ' / ' + QN;
+  qPos.textContent = c.kind;
+  fillFrame(qMain, c.frame);
+  qMain.hidden = false; qFb.hidden = true;
+}
+function fillExample(el, c) {   // 原句，空格填回答案並標色
+  var i = c.sentence.indexOf('___'), m = document.createElement('mark');
+  m.textContent = c.answer; el.textContent = '';
+  el.appendChild(document.createTextNode(c.sentence.slice(0, i))); el.appendChild(m); el.appendChild(document.createTextNode(c.sentence.slice(i + 3)));
+}
+function isRight(word, c) { return !!word && word.w === c.answer; }
+function quizHit(P) {   // 由 applyHit 呼叫
+  if (Quiz.state !== 'asking' || Quiz.answered || !P.word) return;
+  Quiz.answered = true; Quiz.state = 'feedback';
+  var c = Quiz.cur, ok = isRight(P.word, c), st = stats[c.id] = stats[c.id] || { ok: 0, miss: 0 };
+  if (ok) { st.ok++; Quiz.right++; } else { st.miss++; Quiz.wrong.push(c); }
+  saveStats();
+  setLabel(P, P.word, ok ? 'good' : 'bad');
+  puddings.forEach(function (Q) {
+    if (!Q.used || !Q.word) return;
+    if (isRight(Q.word, c)) { setLabel(Q, Q.word, 'good'); return; }      // 正確答案留下來
+    if (Q === P) { Q.hold = false; return; }                              // 敲錯的那顆照原本流程縮回去
+    later(0.45, function () { Q.hold = false; sink(Q); setLabel(Q, null); });
+  });
+  quizEl.className = ok ? 'good' : 'bad';
+  qMain.hidden = true; qFb.hidden = false;
+  $('#fb-word').textContent = c.chunk; $('#fb-pos').textContent = c.id.replace(/學測-0?(\d+)$/, ' 學測 第 $1 題');
+  $('#fb-zh').textContent = c.zh; fillExample($('#fb-ex'), c);
+  btnNext.textContent = Quiz.idx + 1 >= QN ? '看結果' : '下一題';
+  btnNext.classList.toggle('auto', autoNext); btnNext.style.setProperty('--p', '0');
+  Quiz.autoAt = autoNext ? Quiz.t + (ok ? AUTO_OK : AUTO_BAD) : -1; Quiz.autoFrom = Quiz.t;
+  if (ok) playGood(); else playBad();
+  later(0.25, function () { try { btnNext.focus({ preventScroll: true }); } catch (e) {} });
+}
+function nextQuestion() {
+  if (Quiz.state !== 'feedback') return;
+  Quiz.autoAt = -1; btnNext.classList.remove('auto');
+  Quiz.idx++;
+  if (Quiz.idx >= QN) showSummary(); else ask();
+}
+function showSummary() {
+  Quiz.state = 'summary'; Quiz.later = []; Quiz.queue = [];
+  clearBoard(); quizEl.hidden = true;
+  $('#sum-n').textContent = Quiz.right;
+  $('#sum-msg').textContent = Quiz.wrong.length ? '這幾個下一局會優先再出現：' : '全部答對了！';
+  var ul = $('#sum-list'); ul.textContent = '';
+  Quiz.wrong.forEach(function (c) {
+    var li = document.createElement('li'), b = document.createElement('b'), s = document.createElement('span');
+    b.textContent = c.chunk; s.textContent = c.zh; li.appendChild(b); li.appendChild(s); ul.appendChild(li);
+  });
+  Game.paused = false; Game.next = 0.4;
+  summaryEl.hidden = false;
+  try { $('#btn-again').focus({ preventScroll: true }); } catch (e) {}
+}
+function updateQuiz(dt) {
+  if (Quiz.state === 'intro' || Quiz.state === 'summary') return;
+  Quiz.t += dt;
+  var i;
+  for (i = 0; i < Quiz.queue.length; i++) {
+    var q = Quiz.queue[i];
+    if (!q.done && Quiz.t >= q.at) { q.done = true; setLabel(q.P, q.word); q.P.hold = true; popUp(q.P, 1e9); }
+  }
+  for (i = Quiz.later.length - 1; i >= 0; i--) {
+    if (Quiz.t >= Quiz.later[i].at) { var f = Quiz.later[i].fn; Quiz.later.splice(i, 1); f(); }
+  }
+  if (Quiz.state === 'feedback' && Quiz.autoAt > 0) {
+    var p = (Quiz.t - Quiz.autoFrom) / (Quiz.autoAt - Quiz.autoFrom);
+    btnNext.style.setProperty('--p', Math.min(1, p).toFixed(3));
+    if (p >= 1) { Quiz.autoAt = -1; nextQuestion(); return; }
+  }
+  // 太久沒敲：正確答案那顆輕輕晃動提示（不倒數、不扣分）
+  if (Quiz.state === 'asking' && !Quiz.answered && Quiz.t > Quiz.hintAt) {
+    var ph = (Quiz.t - Quiz.hintAt) % 2.6;
+    if (ph < dt) puddings.forEach(function (P) {
+      if (isRight(P.word, Quiz.cur) && P.alive) { P.S.m2v += 3.4; P.S.shxv += (Math.random() - 0.5) * 2.4; P.busy = 1; }
+    });
+  }
+}
+$('#btn-start').addEventListener('click', function () { ensureAudio(); startRound(); });
+$('#btn-again').addEventListener('click', function () { ensureAudio(); startRound(); });
+btnNext.addEventListener('click', nextQuestion);
+
+/* ---------- 開始：先讓幾顆布丁已經冒出來，第一眼就有東西可以敲 ---------- */
+resize();
+(function seed() {
+  var order = puddings.filter(function (P) { return P.used; }).sort(function () { return Math.random() - 0.5; });
+  for (var i = 0; i < Math.min(3, order.length); i++) {
+    var P = order[i]; P.state = 'up'; P.timer = rnd(2.4, 3.8) + i * 0.6; P.riseY = 0; P.riseTarget = 0; P.alive = true; P.group.visible = true; P.group.position.y = 0; Game.last = P.idx;
+  }
+  Game.next = 0.5;
+})();
+puddings.forEach(function (P) { if (P.used) { computeEffective(P, 0); updateDeformable(P, P.bodyD); updateDeformable(P, P.caramelD); updateFace(P, 0); } });
+raf = requestAnimationFrame(frame);
+window.__pudding = {
+  puddings: puddings, game: Game, mallet: mallet, M: M, scene: scene, camera: camera, renderer: renderer,
+  get layout() { return layout; },
+  get seg() { return seg ? seg.tag : null; },
+  hit: function (i, x, z) { queueHit(puddings[i], x || 0, z || 0); },
+  spawn: function (i, life) { popUp(puddings[i], life || 3); },
+  pick: pickAt,
+  quiz: Quiz, setAuto: function (v) { autoNext = v; syncMode(); }, items: ITEMS, start: startRound, ask: ask, next: nextQuestion, stats: stats
+};
+})();
+
+</script>
+
+</body></html>
