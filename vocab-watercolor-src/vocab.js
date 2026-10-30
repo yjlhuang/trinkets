@@ -50,8 +50,10 @@ const ALL_IDS=Object.keys(WORDS).map(Number);
 const overlap=(a,b)=>a.some(x=>b.includes(x));
 
 /* ================= state ================= */
-// 新學生預設勾最新的四回（同 one-drop.html）
-let sel=UNITS.slice(-4).map(u=>u.unit), modes={e2c:true,c2e:true,spell:false}, weakOnly=false;
+// ★ 考試範圍（換考試只改這一行，跟 one-drop.html 的 EXAM_RANGE 一起改，再升 build.py 的 PAGE_VERSION 重 build）
+// [第幾回, 到第幾回]：第 9–16 回＝p.17-32。選單上的「考試範圍」鈕和新學生的預設範圍都用它；舊學生照自己存的範圍
+const EXAM_RANGE=[9,16];
+let sel=UNITS.filter(u=>u.unit>=EXAM_RANGE[0]&&u.unit<=EXAM_RANGE[1]).map(u=>u.unit), modes={e2c:true,c2e:true,spell:false}, weakOnly=false;
 let stats={};             // id → [streak, right, wrong]
 let order=[], qi=-1, Q=null, again=false, answered=false, shown=0;
 let retry=[];             // [{id, due}]
@@ -381,30 +383,55 @@ function updateScope(){
   const ids=selIds(), m=ids.filter(mastered).length;
   $('q-scope').textContent=pageSpan(sel)+' · 熟 '+m+'/'+ids.length;
 }
+/* 「點頭點尾」選連續一段（同 one-drop.html、班網 vocabulary_hub）：第 1 下＝單回；第 2 下＝從頭到尾整段；第 3 下重新開始。
+   這份狀態只屬於選單（draft）；draft.sel 由它算出來，按「開始」才寫回 sel。
+   舊存檔若是跳著選的（改版前可以），打開選單時照原樣顯示，點了才換成一段，不會自己偷改。 */
 let draft=null;
+const unitIdx=u=>UNITS.findIndex(x=>x.unit===u);
+function rangeSel(lo,hi){ return UNITS.slice(Math.min(lo,hi),Math.max(lo,hi)+1).map(x=>x.unit); }
+function setDraftRange(lo,hi){ draft.anchor=lo; draft.head=hi; draft.closed=true; draft.sel=rangeSel(lo,hi); }
+function isRun(s){ const ix=s.map(unitIdx); return ix.every((v,k)=>v>=0&&(k===0||v===ix[k-1]+1)); }
 function openPick(){
-  draft={sel:[...sel],modes:{...modes},weakOnly};
+  draft={sel:[...sel],modes:{...modes},weakOnly,anchor:null,head:null,closed:true};
+  if(sel.length && isRun(sel)) setDraftRange(unitIdx(sel[0]),unitIdx(sel[sel.length-1]));
   renderPick();
   $('q-quiz').hidden=true; $('q-pick').hidden=false; $('vw-quiz').scrollTop=0;
 }
+function tapUnit(i){
+  if(draft.anchor===null||draft.closed){ draft.anchor=i; draft.head=null; draft.closed=false; draft.sel=rangeSel(i,i); }
+  else setDraftRange(draft.anchor,i);
+  renderPick();
+}
 function renderPick(){
   const box=$('q-units'); box.innerHTML='';
-  UNITS.forEach(un=>{
-    const ids=UNIT_IDS[un.unit], m=ids.filter(mastered).length;
+  const run=draft.sel.length && isRun(draft.sel);
+  const lo=run?unitIdx(draft.sel[0]):-1, hi=run?unitIdx(draft.sel[draft.sel.length-1]):-1;
+  UNITS.forEach((un,i)=>{
+    const ids=UNIT_IDS[un.unit], m=ids.filter(mastered).length, on=draft.sel.includes(un.unit);
     const b=document.createElement('button');
     b.type='button';
-    b.className='q-unit'; b.setAttribute('aria-pressed',draft.sel.includes(un.unit));
+    b.className='q-unit'+(on&&run&&hi>lo?(i===lo||i===hi?' end':' mid'):'')+(!draft.closed&&i===draft.anchor?' anchor':'');
+    b.setAttribute('aria-pressed',on);
     b.innerHTML='<span class="pg"></span><span class="meta"></span><span class="bar"><i></i></span>';
     b.querySelector('.pg').textContent=un.unit_label||('Unit '+un.unit);
-    b.querySelector('.meta').textContent=ids.length+' 字 · 熟 '+m;
+    b.querySelector('.meta').textContent='熟 '+m+'/'+ids.length;
     b.querySelector('i').style.width=(ids.length?m/ids.length*100:0)+'%';
-    b.onclick=()=>{
-      const i=draft.sel.indexOf(un.unit);
-      if(i>=0) draft.sel.splice(i,1); else draft.sel.push(un.unit);
-      draft.sel.sort((a,b)=>a-b); renderPick();
-    };
+    b.onclick=()=>tapUnit(i);
     box.appendChild(b);
   });
+  const words=draft.sel.flatMap(u=>UNIT_IDS[u]||[]).length;
+  let v='還沒選範圍', h='點一回＝單回；點「頭」再點「尾」，中間整段一起選。';
+  if(draft.sel.length){
+    const cnt=draft.sel.length;
+    v=pageSpan(draft.sel)+' · '+(cnt===1?'單回':cnt+' 回')+' · '+words+' 字';
+    h=!run?'這是之前跳著選的範圍。點任何一回就重新選一段。'
+      :!draft.closed?'再點另一回當結尾就能選整段，或直接開始。'
+      :'再點一下就重新選。';
+  }
+  $('q-rsum-v').textContent=v; $('q-rsum-h').textContent=h;
+  $('q-exam').textContent='考試範圍 '+pageSpan(rangeSel(unitIdx(EXAM_RANGE[0]),unitIdx(EXAM_RANGE[1])));
+  $('q-exam').setAttribute('aria-pressed',run&&lo===unitIdx(EXAM_RANGE[0])&&hi===unitIdx(EXAM_RANGE[1]));
+  $('q-all').setAttribute('aria-pressed',run&&lo===0&&hi===UNITS.length-1);
   document.querySelectorAll('#q-modes .q-chip').forEach(c=>{
     c.setAttribute('aria-pressed',!!draft.modes[c.dataset.m]);
     c.onclick=()=>{draft.modes[c.dataset.m]=!draft.modes[c.dataset.m];renderPick()};
@@ -418,8 +445,8 @@ function renderPick(){
   go.textContent=!n?'至少選一個範圍':!anyMode?'至少選一種題型':'開始（'+pageSpan(draft.sel)+'，共 '+n+' 字）';
 }
 $('q-weak').onclick=()=>{draft.weakOnly=!draft.weakOnly;renderPick()};
-$('q-all').onclick=()=>{draft.sel=UNITS.map(u=>u.unit);renderPick()};
-$('q-none').onclick=()=>{draft.sel=[];renderPick()};
+$('q-exam').onclick=()=>{setDraftRange(unitIdx(EXAM_RANGE[0]),unitIdx(EXAM_RANGE[1]));renderPick()};
+$('q-all').onclick=()=>{setDraftRange(0,UNITS.length-1);renderPick()};
 $('q-range').onclick=openPick;
 function closePick(apply){
   if(apply){
@@ -620,7 +647,21 @@ window.__vwBackup={make:makeBackup, restore};   // 測試用：在 console 匯�
 /* ================= start ================= */
 $('q-ver').textContent='版本 '+PAGE_VERSION;
 $('vw-ver').textContent='版本 '+PAGE_VERSION+'。';
-const resumed=load();
+let resumed=load();
+// 從班網單字 hub 帶範圍過來：vocab-watercolor.html?units=9-16（或 ?units=9）。跟存檔的範圍不同就換過去、從新範圍出題。
+// 用完就從網址拿掉，之後重新整理才不會又蓋掉學生自己選的範圍（同 one-drop.html）
+(function(){
+  const p=new URLSearchParams(location.search), m=(p.get('units')||'').match(/^(\d+)(?:-(\d+))?$/);
+  if(!m) return;
+  const a=unitIdx(+m[1]), b=unitIdx(+(m[2]||m[1]));
+  p.delete('units'); history.replaceState(null,'',location.pathname+(p.toString()?'?'+p:'')+location.hash);
+  if(a<0||b<0) return;
+  const want=rangeSel(a,b);
+  if(resumed && JSON.stringify(want)===JSON.stringify(sel)) return;
+  sel=want; order=[]; qi=-1; Q=null; answered=false;
+  const inSel=new Set(selIds()); retry=retry.filter(x=>inSel.has(x.id));
+  resumed='next'; toast('範圍：'+pageSpan(sel));
+})();
 if(resumed==='question'){ $('q-quiz').hidden=false; showQuestion(); }
 else if(resumed==='next'){ $('q-quiz').hidden=false; nextQuestion(); }
 else openPick();

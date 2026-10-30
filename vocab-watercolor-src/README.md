@@ -87,3 +87,5 @@ node --test same_page.test.js           # leak.js 的「點擊後網址檢查」
 - 已經把舊版塗完的學生，不會收到「有新版」的提示。
 
 > 2026-10-19：單字資料（UNITS）現在帶 `example`／`example_zh`（藍鵝本例句，來源 longjin2026 `data/blue_examples.xlsx`），答題後字卡顯示（`vocab.js` 的 `ex`/`ez`、`vocab.css` 的 `.q-ex`）。改例句要走班網 → `tools/sync_blue.py` → 重跑 `build.py`，不要手改。
+
+> 2026-10-30：單字改成藍鵝本全本 24 回（p.1–48、3155 字；`sync_blue.py` 會自動補缺的回數）。範圍選單改「點頭點尾」選連續一段（同班網 vocabulary_hub、one-drop.html）。**換考試範圍**：`vocab.js` 和 `../one-drop.html` 各有一行 `const EXAM_RANGE=[頭回, 尾回]`，兩邊一起改，再升 `build.py` 的 `PAGE_VERSION`、one-drop 的 `PAGE_VERSION`，重跑 `build.py`。網址可帶 `?units=9-16` 直接換範圍（班網 hub 用這個連過來，用完會從網址拿掉）。

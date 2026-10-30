@@ -30,18 +30,18 @@
 
       <section id="q-pick" hidden>
         <div class="q-head"><h2>要練哪幾頁？</h2><button type="button" class="q-range" id="q-back" hidden>回到題目</button></div>
-        <p class="q-sub">可以選一個，也可以多選一起考。</p>
+        <div class="q-rsum" aria-live="polite"><div class="v" id="q-rsum-v"></div><div class="h" id="q-rsum-h"></div></div>
+        <div class="q-quick">
+          <button type="button" class="q-chip" id="q-exam">考試範圍</button>
+          <button type="button" class="q-chip" id="q-all">全本</button>
+          <button type="button" class="q-chip" id="q-weak">只出還不熟的字</button>
+        </div>
         <div class="q-units" id="q-units"></div>
-        <div class="q-quick"><button type="button" id="q-all">全選</button><button type="button" id="q-none">全不選</button></div>
         <h3>題型（可複選，會隨機出）</h3>
         <div class="q-chips" id="q-modes">
           <button type="button" class="q-chip" data-m="e2c">看英文選中文</button>
           <button type="button" class="q-chip" data-m="c2e">看中文選英文</button>
           <button type="button" class="q-chip" data-m="spell">看中文拼英文<small>可塗兩倍</small></button>
-        </div>
-        <h3>出題方式</h3>
-        <div class="q-chips">
-          <button type="button" class="q-chip" id="q-weak">只出還不熟的字</button>
         </div>
         <button type="button" class="q-next q-go" id="q-go">開始</button>
         <div class="q-fine">
