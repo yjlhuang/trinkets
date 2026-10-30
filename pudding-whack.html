@@ -354,8 +354,8 @@ body{
       </div>
       <p class="seg-note" id="pool-note"></p>
       <div class="seg" role="radiogroup" aria-label="答完一題之後">
-        <button type="button" role="radio" aria-checked="true" data-mode="auto">自動繼續</button>
-        <button type="button" role="radio" aria-checked="false" data-mode="manual">手動繼續</button>
+        <button type="button" role="radio" aria-checked="false" data-mode="auto">自動繼續</button>
+        <button type="button" role="radio" aria-checked="true" data-mode="manual">手動繼續</button>
       </div>
       <p class="seg-note"></p>
       <button id="btn-start" class="btn" type="button">開始（10 題）</button>
@@ -369,8 +369,8 @@ body{
       <p id="sum-msg"></p>
       <ul id="sum-list" class="sum-list"></ul>
       <div class="seg" role="radiogroup" aria-label="答完一題之後">
-        <button type="button" role="radio" aria-checked="true" data-mode="auto">自動繼續</button>
-        <button type="button" role="radio" aria-checked="false" data-mode="manual">手動繼續</button>
+        <button type="button" role="radio" aria-checked="false" data-mode="auto">自動繼續</button>
+        <button type="button" role="radio" aria-checked="true" data-mode="manual">手動繼續</button>
       </div>
       <p class="seg-note"></p>
       <button id="btn-rev" class="btn ghost" type="button">檢討這一局</button>
@@ -1397,8 +1397,8 @@ var QN = 10, CHOICES = 4;
 var Quiz = { state: 'intro', round: [], idx: 0, cur: null, right: 0, wrong: [], t: 0, queue: [], later: [], answered: false, zhAt: 8, zhShown: false, noHint: 0 };
 var stats = {};   // 每個單字答對/答錯幾次，只存在這台裝置的瀏覽器裡
 try { stats = JSON.parse(window.localStorage.getItem('pudding-colloc') || '{}') || {}; } catch (e) { stats = {}; }
-var autoNext = true;   // 預設：答完一題停幾秒自動繼續
-try { if (window.localStorage.getItem('pudding-mode') === 'manual') autoNext = false; } catch (e) {}
+var autoNext = false;   // 預設手動：學生反映自動跳太快，整句還沒看完。存檔換成 -v2，以前選過自動的也先回到手動
+try { if (window.localStorage.getItem('pudding-mode-v2') === 'auto') autoNext = true; } catch (e) {}
 var AUTO_OK = 4.5, AUTO_BAD = 6;   // 看完單字與例句的時間（秒）；答錯多給一點
 var segEls = Array.prototype.slice.call(document.querySelectorAll('.seg'));
 function syncMode() {
@@ -1411,7 +1411,7 @@ segEls.forEach(function (seg) {
   seg.addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (!b) return;
     autoNext = b.getAttribute('data-mode') === 'auto'; syncMode();
-    try { window.localStorage.setItem('pudding-mode', autoNext ? 'auto' : 'manual'); } catch (e2) {}
+    try { window.localStorage.setItem('pudding-mode-v2', autoNext ? 'auto' : 'manual'); } catch (e2) {}
   });
 });
 syncMode();
