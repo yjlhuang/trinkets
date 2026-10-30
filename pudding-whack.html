@@ -463,10 +463,10 @@ function placeCamera() {
   camera.lookAt(TARGET);
 }
 
-/* ---------- 版面：直向 2x3，橫向 3x2 ---------- */
+/* ---------- 版面：四個選項就四個洞，直向 2x2，橫向 4x1 ---------- */
 var layout = null;      // { key, cols, rows, holes:[{x,z}], bw, bd, home }
 function makeLayout(aspect) {
-  var portrait = aspect < 0.95, cols = portrait ? 2 : 3, rows = portrait ? 3 : 2, holes = [];
+  var portrait = aspect < 0.95, cols = portrait ? 2 : 4, rows = portrait ? 2 : 1, holes = [];
   for (var r = 0; r < rows; r++) for (var c = 0; c < cols; c++) holes.push({ x: (c - (cols - 1) / 2) * SPX, z: (r - (rows - 1) / 2) * SPZ });
   var margin = HOLE_R + 0.95;
   var bw = (cols - 1) * SPX + 2 * margin, bd = (rows - 1) * SPZ + 2 * margin;
@@ -768,7 +768,7 @@ function makePudding(idx) {
   puddings.push(P);
   return P;
 }
-for (var pi = 0; pi < 6; pi++) makePudding(pi);   // 版面最多用到 6 個洞
+for (var pi = 0; pi < 4; pi++) makePudding(pi);   // 版面固定 4 個洞
 
 /* ---------- 木槌 ---------- */
 var mallet = new THREE.Group();
@@ -1394,7 +1394,7 @@ var ITEMS = window.PUDDING_ITEMS || [];
 var pool = 'all';
 try { pool = window.localStorage.getItem('pudding-colloc-pool') || 'all'; } catch (e) {}
 var QN = 10, CHOICES = 4;
-var Quiz = { state: 'intro', round: [], idx: 0, cur: null, right: 0, wrong: [], t: 0, queue: [], later: [], answered: false, hintAt: 8, zhAt: 4, zhShown: false, noHint: 0 };
+var Quiz = { state: 'intro', round: [], idx: 0, cur: null, right: 0, wrong: [], t: 0, queue: [], later: [], answered: false, zhAt: 4, zhShown: false, noHint: 0 };
 var stats = {};   // 每個單字答對/答錯幾次，只存在這台裝置的瀏覽器裡
 try { stats = JSON.parse(window.localStorage.getItem('pudding-colloc') || '{}') || {}; } catch (e) { stats = {}; }
 var autoNext = true;   // 預設：答完一題停幾秒自動繼續
@@ -1611,15 +1611,9 @@ function updateQuiz(dt) {
     btnNext.style.setProperty('--p', Math.min(1, p).toFixed(3));
     if (p >= 1) { Quiz.autoAt = -1; nextQuestion(); return; }
   }
-  // 太久沒敲：正確答案那顆輕輕晃動提示（不倒數、不扣分）
-  if (Quiz.state === 'asking' && !Quiz.answered && !Quiz.zhShown && Quiz.t > Quiz.zhAt) {   // 4 秒還沒敲：浮出中文
+  // 4 秒還沒敲：浮出中文（不倒數、不扣分）。正確那顆不再晃動提示，學生反映會直接看出答案
+  if (Quiz.state === 'asking' && !Quiz.answered && !Quiz.zhShown && Quiz.t > Quiz.zhAt) {
     Quiz.zhShown = true; $('#q-hint').hidden = false;
-  }
-  if (Quiz.state === 'asking' && !Quiz.answered && Quiz.t > Quiz.hintAt) {
-    var ph = (Quiz.t - Quiz.hintAt) % 2.6;
-    if (ph < dt) puddings.forEach(function (P) {
-      if (isRight(P.word, Quiz.cur) && P.alive) { P.S.m2v += 3.4; P.S.shxv += (Math.random() - 0.5) * 2.4; P.busy = 1; }
-    });
   }
 }
 $('#btn-start').addEventListener('click', function () { ensureAudio(); startRound(); });
