@@ -186,7 +186,7 @@ body{
 .q-prog{font:500 13px/1 var(--f-display);letter-spacing:.08em;color:var(--ink-2);font-variant-numeric:tabular-nums}
 .q-main{margin-top:8px;font-weight:700;font-size:28px;line-height:1.2;text-wrap:balance}
 .q-fb{margin-top:6px}
-/* 中文提示：出題 4 秒還沒敲才淡淡浮出來，程度好的學生不用看 */
+/* 中文提示：出題 8 秒還沒敲才淡淡浮出來，程度好的學生不用看 */
 .q-hint{display:flex;align-items:center;gap:8px;margin-top:8px;font-weight:700;font-size:17px;line-height:1.3;color:var(--ink-2);animation:hint-in .5s ease both}
 .q-hint .tag{flex:none}
 @keyframes hint-in{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
@@ -346,7 +346,7 @@ body{
     <div class="sheet-card">
       <h2>布丁打地鼠</h2>
       <p class="alt">不想玩遊戲、只想刷題？<a href="pudding-practice.html">用刷題模式 →</a></p>
-      <p>看句子，敲下空格裡該填的那顆布丁。題目都是 100–115 學測考過的搭配詞和片語，四顆布丁就是當年的四個選項。想不出來？等 4 秒會出現中文提示。</p>
+      <p>看句子，敲下空格裡該填的那顆布丁。題目都是 100–115 學測考過的搭配詞和片語，四顆布丁就是當年的四個選項。想不出來？等 8 秒會出現中文提示。</p>
       <div class="seg seg3" id="pool" role="radiogroup" aria-label="題目範圍">
         <button type="button" role="radio" aria-checked="true" data-pool="all">全部</button>
         <button type="button" role="radio" aria-checked="false" data-pool="搭配詞">搭配詞</button>
@@ -1394,7 +1394,7 @@ var ITEMS = window.PUDDING_ITEMS || [];
 var pool = 'all';
 try { pool = window.localStorage.getItem('pudding-colloc-pool') || 'all'; } catch (e) {}
 var QN = 10, CHOICES = 4;
-var Quiz = { state: 'intro', round: [], idx: 0, cur: null, right: 0, wrong: [], t: 0, queue: [], later: [], answered: false, zhAt: 4, zhShown: false, noHint: 0 };
+var Quiz = { state: 'intro', round: [], idx: 0, cur: null, right: 0, wrong: [], t: 0, queue: [], later: [], answered: false, zhAt: 8, zhShown: false, noHint: 0 };
 var stats = {};   // 每個單字答對/答錯幾次，只存在這台裝置的瀏覽器裡
 try { stats = JSON.parse(window.localStorage.getItem('pudding-colloc') || '{}') || {}; } catch (e) { stats = {}; }
 var autoNext = true;   // 預設：答完一題停幾秒自動繼續
@@ -1611,7 +1611,7 @@ function updateQuiz(dt) {
     btnNext.style.setProperty('--p', Math.min(1, p).toFixed(3));
     if (p >= 1) { Quiz.autoAt = -1; nextQuestion(); return; }
   }
-  // 4 秒還沒敲：浮出中文（不倒數、不扣分）。正確那顆不再晃動提示，學生反映會直接看出答案
+  // 8 秒還沒敲：浮出中文（不倒數、不扣分；原本 4 秒，學生看題目比較慢）。正確那顆不再晃動提示，學生反映會直接看出答案
   if (Quiz.state === 'asking' && !Quiz.answered && !Quiz.zhShown && Quiz.t > Quiz.zhAt) {
     Quiz.zhShown = true; $('#q-hint').hidden = false;
   }
