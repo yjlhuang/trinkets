@@ -11,7 +11,7 @@
    內部資料已經是多地圖的形狀（maps + activeMap），目前只有 home 一張。 */
 (function(){
 'use strict';
-const VERSION='1.4';
+const VERSION='1.6';
 
 function create(cfg){
 const $=id=>document.getElementById(id);
@@ -62,6 +62,14 @@ const TAU=Math.PI*2;
 // v1.3：今天的日期（南瓜只在 10～11 月長）；測試可以用 cfg.today() 注入
 const today=()=>cfg.today?cfg.today():new Date();
 const autumn=()=>{const m=today().getMonth();return m===9||m===10};
+// v1.5：南瓜上限 6 顆只算橘的（v1.3 連白的一起算，而且南瓜不會消失，6 顆橘的長滿後白南瓜就永遠出不來）。
+// 橘的還沒滿：照舊，每顆 3% 是白的；橘的滿了：之後的南瓜機會只會長白南瓜（50%），白的最多 2 顆。
+// 回傳要長的顏色，不長就回傳 null。
+function pumpkinColor(){
+  let o=0,w=0; for(const p of plants) if(p.type==='pumpkin') p.color===5?w++:o++;
+  if(o<6) return w<2&&chance(.03)?5:Math.floor(Math.random()*5);
+  return w<2&&chance(.5)?5:null;
+}
 // v1.3：植物分組。outcome() 用它決定「從這株長出什麼」；不在分組裡的會被當成樹（舊程式的 else 分支）
 const GRASSY={grass:1,mushroom:1,clover:1,pumpkin:1}, FLOWERY={flower:1,sunflower:1,tulip:1};
 // v1.3：新植物的圖鑑格。min＝長到第幾階才登錄；稀有＝color 5（跟紫花同一個機率）
@@ -116,8 +124,26 @@ function makePond(x,y){
 }
 
 /* ---------- plants ---------- */
+// v1.5：土地長滿（超過 FULL 株）以後，只有特殊植物還能長：換掉附近一株普通的草或花，總數不變。
+// 普通版在地上已經有 ROOM_CAP 株以上就不換（免得整片草地慢慢變成三葉草），稀有版（color 5）一律可以換。
+// 南瓜的數量由 pumpkinColor() 管。
+const FULL=900, ROOM_CAP={clover:40,sunflower:12,tulip:12,pumpkin:Infinity};
+const plainPlant=q=>(q.type==='grass'||q.type==='flower')&&q.color!==5;
+function dropPlant(q){const i=plants.indexOf(q);if(i>=0)plants.splice(i,1)}
+// 南瓜很矮，擋在它前面（畫在它後面、y 比較大）的普通草花最多換掉 2 株，讓它看得到
+function clearFront(x,y){
+  const blk=plants.filter(q=>plainPlant(q)&&q.y>y&&(q.y-y)*H<Math.min(PLANT_BOX[q.type][1],30)*S&&Math.abs(q.x-x)*W<(PLANT_BOX[q.type][0]+10)*S)
+    .sort((a,b)=>dist(a.x,a.y,x,y)-dist(b.x,b.y,x,y)).slice(0,2);
+  blk.forEach(dropPlant); return blk.length;
+}
+function makeRoom(x,y){
+  let best=null,bd=.08*U;
+  for(const q of plants){ if(!plainPlant(q)) continue; const d=dist(q.x,q.y,x,y); if(d<bd){bd=d;best=q} }
+  if(best) dropPlant(best); return !!best;
+}
 function addPlant(type,x,y,opts={}){
-  if(plants.length>900) return null;
+  const full=plants.length>FULL;
+  if(full && !(type in ROOM_CAP)) return null;
   x=Math.max(.02,Math.min(.98,x)); y=Math.max(.05,Math.min(.99,y));
   const pd=pondAt(x,y,1.05);
   if(type==='lily'){ if(!pd) return null; }
@@ -125,6 +151,10 @@ function addPlant(type,x,y,opts={}){
   [x,y]=clearOfCritters(type,x,y);
   let color=opts.color;
   if(color===undefined) color = chance(.03) ? 5 : Math.floor(Math.random()*5);
+  if(full){
+    if(color!==5 && plants.filter(q=>q.type===type&&q.color!==5).length>=ROOM_CAP[type]) return null;
+    if(!(type==='pumpkin'&&clearFront(x,y)) && !makeRoom(x,y)) return null;
+  }else if(type==='pumpkin') clearFront(x,y);
   const p={type,x,y,stage:opts.stage||1,v:0,born:now(),seed:Math.random(),color};
   plants.push(p);
   if(type==='flower'&&color===5) record('violet');
@@ -172,7 +202,7 @@ function outcome(x,y){
 
   const fresh=()=>{
     // v1.3：秋天（10～11 月）空地偶爾冒出南瓜藤
-    if(autumn() && plants.filter(p=>p.type==='pumpkin').length<6 && chance(.05)){ acts.push(()=>addPlant('pumpkin',x,y)); return; }
+    if(autumn() && chance(.05)){ const pc=pumpkinColor(); if(pc!==null){ acts.push(()=>addPlant('pumpkin',x,y,{color:pc})); return; } }
     const lush=near.length>=4, t=Math.random();
     if(t<(lush?.62:.72)) acts.push(()=>addPlant('grass',x,y));
     else if(t<(lush?.88:.94)) acts.push(()=>addPlant('flower',x,y));
@@ -198,7 +228,7 @@ function outcome(x,y){
         const sprout=()=>(src.type==='clover'&&chance(.45))||(nG>=5&&chance(.12))?'clover':'grass';
         for(let i=0,k=1+Math.floor(Math.random()*3);i<k;i++){const [a,b]=around(x,y,.02,.07),ty=sprout();acts.push(()=>addPlant(ty,a,b))}
         if(chance(.12)){const [a,b]=around(x,y,.02,.06);acts.push(()=>addPlant('flower',a,b))}
-        if(autumn() && plants.filter(p=>p.type==='pumpkin').length<6 && chance(.03)){const [a,b]=around(x,y,.03,.07);acts.push(()=>addPlant('pumpkin',a,b))}
+        if(autumn() && chance(.03)){const pc=pumpkinColor();if(pc!==null){const [a,b]=around(x,y,.03,.07);acts.push(()=>addPlant('pumpkin',a,b,{color:pc}))}}
       }else if(FLOWERY[src.type]){
         const fc=src.type==='flower'?src.color:src.type==='sunflower'?1:undefined;
         for(let i=0,k=1+(chance(.4)?1:0);i<k;i++){const [a,b]=around(src.x,src.y,.025,.07);acts.push(()=>addPlant('flower',a,b,{color:fc!==undefined&&chance(.8)?fc:undefined}))}
@@ -797,6 +827,13 @@ const GUIDE_CSS=`
 .g-head{display:flex;align-items:flex-start;gap:1rem;padding:1.2rem 1.5rem 1rem;border-bottom:1px solid var(--line)}
 .g-head h2{margin:0;font-size:1.45rem}
 .g-prog{display:flex;align-items:center;gap:.65rem;margin-top:.4rem;color:var(--muted);font-size:.9rem}
+.g-land{margin:.35rem 0 0;color:var(--muted);font-size:.85rem}
+.g-foot{border-top:1px solid var(--line);padding:.7rem 1.5rem .9rem;display:flex;flex-wrap:wrap;align-items:center;gap:.4rem .9rem;font-size:.85rem}
+.g-bk{display:flex;gap:.6rem;align-items:baseline;flex-wrap:wrap;color:var(--muted)}
+.g-bk b{color:var(--ink)}
+.g-bkbtns{display:flex;gap:.5rem;margin-left:auto}
+.g-bkbtns button{border:1px solid var(--line);background:var(--opt);color:var(--ink);border-radius:999px;padding:.35rem .9rem;font:inherit;cursor:pointer}
+.g-bknote{flex-basis:100%;margin:0;color:var(--muted);font-size:.78rem;line-height:1.5}
 .g-track{width:9rem;height:6px;border-radius:3px;background:var(--line);overflow:hidden}
 .g-track i{display:block;height:100%;background:var(--right);border-radius:3px;transition:width .6s}
 .g-close{margin-left:auto;flex:none;width:2.4rem;height:2.4rem;border-radius:50%;border:1px solid var(--line);background:var(--opt);color:var(--ink);font-size:1.35rem;line-height:1;cursor:pointer}
@@ -825,7 +862,7 @@ const GUIDE_CSS=`
 @media (max-width:600px){
   .guide{padding:0;place-items:end stretch}
   .g-sheet{max-height:92vh;border-radius:18px 18px 0 0}
-  .g-head{padding:1rem 1rem .8rem}.g-body{padding:.25rem 1rem 1.2rem}
+  .g-head{padding:1rem 1rem .8rem}.g-body{padding:.25rem 1rem 1.2rem}.g-foot{padding:.6rem 1rem calc(.8rem + env(safe-area-inset-bottom,0px))}.g-bkbtns{margin-left:0}
   .g-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:.55rem}
   .g-text{padding:.5rem .6rem .65rem}.g-desc{font-size:.8rem}.g-text h4{font-size:1rem}
 }
@@ -845,12 +882,17 @@ const G={};   // 圖鑑的 DOM（元素參考，不靠 getElementById）
   dlg.className='guide'; dlg.id='guide'; dlg.hidden=true;
   dlg.setAttribute('role','dialog'); dlg.setAttribute('aria-modal','true'); dlg.setAttribute('aria-labelledby','gTitle');
   dlg.innerHTML='<div class="g-sheet"><header class="g-head"><div><h2 id="gTitle">土地圖鑑</h2>'+
-    '<div class="g-prog"><span class="g-track"><i id="gBar"></i></span><span id="gSub"></span></div></div>'+
+    '<div class="g-prog"><span class="g-track"><i id="gBar"></i></span><span id="gSub"></span></div><p class="g-land" id="gLand"></p></div>'+
     '<button class="g-close" id="gClose" aria-label="關閉圖鑑">×</button></header>'+
-    '<div class="g-body" id="gBody"></div></div>';
+    '<div class="g-body" id="gBody"></div>'+
+    '<footer class="g-foot"><div class="g-bk"><b>備份</b><span id="gBkInfo"></span></div>'+
+    '<div class="g-bkbtns"><button type="button" id="gBkSave">下載備份</button><button type="button" id="gBkLoad">從備份還原</button>'+
+    '<input type="file" id="gBkFile" accept=".json,application/json" hidden></div><p class="g-bknote" id="gBkNote"></p></footer></div>';
   document.body.appendChild(dlg);
   Object.assign(G,{guideBtn:btn, gcount:btn.querySelector('.gc'), gdot:btn.querySelector('.dot'), guide:dlg,
-    gBar:dlg.querySelector('#gBar'), gSub:dlg.querySelector('#gSub'), gClose:dlg.querySelector('.g-close'), gBody:dlg.querySelector('.g-body')});
+    gBar:dlg.querySelector('#gBar'), gSub:dlg.querySelector('#gSub'), gLand:dlg.querySelector('#gLand'), gClose:dlg.querySelector('.g-close'), gBody:dlg.querySelector('.g-body'),
+    gBkInfo:dlg.querySelector('#gBkInfo'), gBkSave:dlg.querySelector('#gBkSave'), gBkLoad:dlg.querySelector('#gBkLoad'),
+    gBkFile:dlg.querySelector('#gBkFile'), gBkNote:dlg.querySelector('#gBkNote')});
 })();
 let found={}, newFound={};
 const GUIDE=[
@@ -1093,6 +1135,9 @@ function openGuide(){
   const n=G_ITEMS.filter(e=>found[e.k]).length;
   G.gSub.textContent='已發現 '+n+' / '+G_ITEMS.length;
   G.gBar.style.width=(n/G_ITEMS.length*100)+'%';
+  // v1.5：這塊地有幾株植物（上限 FULL）；長滿了就說明特殊植物會換掉普通草花
+  showBackupInfo();
+  G.gLand.textContent=plants.length>FULL?'這塊地長滿了（'+plants.length+' 株）・新的特殊植物會取代普通花草':'這塊地 '+plants.length+'／'+FULL+' 株';
   let grid=null;
   for(const e of GUIDE){
     if(e.sec){
@@ -1643,6 +1688,63 @@ const SNAP=cfg.snapshotPrefix||'我的小土地-';
     };
   }
 })();
+
+/* ================= v1.5 進度備份 =================
+   手機容量不夠時瀏覽器可能清掉 localStorage（iPAS 花園就這樣不見過）。
+   備份檔＝這一頁存檔 key 的原始字串（頁面自己的欄位，例如 iPAS 的 starred/picks，也原樣帶著），外面包一層說明。
+   還原：先 frozen 擋住 pagehide 的 writeNow（不然記憶體裡的舊土地會把剛寫進去的備份蓋回去），寫入後重新載入。 */
+const BK_APP='one-drop-backup', BK_AT=KEY+'.backupAt';
+const BK_NAME={'pg.drop.v1':'GRE','drop-vocab-v1':'單字','ipas-drop-v1':'iPAS'};
+const bkName=k=>BK_NAME[k]||k;
+const fmtDay=ms=>{const d=new Date(ms);return d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate()};
+function showBackupInfo(){
+  let at=null; try{ at=+localStorage.getItem(BK_AT)||null }catch(e){}
+  G.gBkInfo.textContent=at?'上次下載備份：'+fmtDay(at):'還沒有下載過備份';
+  G.gBkNote.textContent='備份檔包含這塊地和這一頁的答題紀錄。手機容量不夠時，瀏覽器可能會把資料清掉，偶爾下載一份比較安心。'+(cfg.backupNote?' '+cfg.backupNote:'');
+}
+function downloadBackup(){
+  writeNow();                                   // 先把還沒寫出去的變動寫進存檔
+  let raw=null; try{ raw=localStorage.getItem(KEY) }catch(e){}
+  if(!raw){ alert('這塊地還沒有存檔，先滴幾滴水再備份。'); return; }
+  const file={app:BK_APP, key:KEY, world:VERSION, savedAt:new Date().toISOString(), plants:plants.length, data:raw};
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(file)],{type:'application/json'}));
+  a.download='一滴水備份-'+bkName(KEY)+'-'+stamp()+'.json';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  try{ localStorage.setItem(BK_AT,String(Date.now())) }catch(e){}
+  showBackupInfo();
+}
+function restoreBackup(text){
+  let b=null, d=null;
+  try{ b=JSON.parse(text) }catch(e){}
+  // v1.6：Painless 首頁「匯出進度」的完整備份（schema_version＋progress）放錯入口時，說清楚要去哪裡匯入
+  if(b&&typeof b==='object'&&b.schema_version&&b.progress&&typeof b.progress==='object'){
+    alert(KEY==='pg.drop.v1'
+      ?'這是 Painless 的完整備份（單字進度＋一滴水花園），要從 Painless 首頁的「匯出／匯入」→「匯入」放回去，單字進度和花園會一起回來。'
+      :'這是 Painless GRE 的備份，不能還原到這一頁。');
+    return false;
+  }
+  if(!b||b.app!==BK_APP||typeof b.data!=='string'){ alert('這不是一滴水的備份檔。'); return false; }
+  if(b.key!==KEY){ alert('這是「'+bkName(b.key)+'」那一頁的備份，不能還原到「'+bkName(KEY)+'」這一頁。'); return false; }
+  try{ d=JSON.parse(b.data) }catch(e){}
+  if(!d||!Array.isArray(d.plants)){ alert('備份檔壞掉了，讀不出土地。'); return false; }
+  const when=b.savedAt?fmtDay(Date.parse(b.savedAt)):'不明日期';
+  if(!confirm('要用 '+when+' 的備份（'+d.plants.length+' 株）換掉現在的土地（'+plants.length+' 株）嗎？\n這一頁的答題紀錄也會一起換成備份裡的。')) return false;
+  frozen=true; clearTimeout(saveT);
+  try{ localStorage.setItem(KEY,b.data) }
+  catch(e){ frozen=false; alert('寫不進去（手機空間可能不夠），土地沒有改變。'); return false; }
+  location.reload();
+  return true;
+}
+G.gBkSave.onclick=()=>{
+  // 請瀏覽器不要在空間不夠時自動清掉這個網站的資料。只在使用者自己按備份時才請求（Firefox 會跳權限詢問，不要一開頁就問）；
+  // 瀏覽器可以不答應，真正的保險是備份檔
+  try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{}); }catch(e){}
+  downloadBackup();
+};
+G.gBkLoad.onclick=()=>{ G.gBkFile.value=''; G.gBkFile.click(); };
+G.gBkFile.onchange=()=>{ const f=G.gBkFile.files&&G.gBkFile.files[0]; if(!f) return; f.text().then(restoreBackup); };
 
 /* ================= start ================= */
 function themeChanged(){ wetColor=cssVar('--wet'); buildGround(); }
