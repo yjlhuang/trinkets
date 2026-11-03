@@ -134,6 +134,10 @@ canvas{display:block;width:100%;height:100%;touch-action:manipulation;cursor:def
 .opt.wrong{border-color:var(--wrong);opacity:.8}
 .opt.wrong .k{color:var(--wrong)}
 .opt.dim{opacity:.5}
+.opt .txt{display:flex;flex-direction:column;min-width:0}
+.opt .gloss{display:none;color:var(--muted);font-size:.85rem}
+.opt .gloss.en{font-size:.95rem}
+.opts.done .opt .gloss{display:block}
 
 .spell{display:flex;flex-direction:column;gap:.6rem}
 .spell[hidden]{display:none}
@@ -433,7 +437,7 @@ function showQuestion(){
   }else{
     const s=document.createElement('span'); s.className='mean'; s.textContent=w.meaning; pr.append(s);
   }
-  const ul=$('opts'); ul.innerHTML='';
+  const ul=$('opts'); ul.innerHTML=''; ul.classList.remove('done');
   $('spell').hidden=Q.type!=='spell';
   if(Q.type==='spell'){
     const t=$('typed'); t.value=''; t.disabled=false; t.className='';
@@ -447,8 +451,10 @@ function showQuestion(){
       const li=document.createElement('li');
       const b=document.createElement('button');
       b.className='opt'+(Q.type==='c2e'?' en':'');
-      b.innerHTML='<span class="k">'+'ABCD'[i]+'</span><span></span>';
-      b.lastChild.textContent=Q.type==='c2e'?o.word:o.meaning;
+      b.innerHTML='<span class="k">'+'ABCD'[i]+'</span><span class="txt"><span class="main"></span><span class="gloss"></span></span>';
+      // 答完才顯示每個選項的另一面（英文選項補中文、中文選項補英文）
+      b.querySelector('.main').textContent=Q.type==='c2e'?o.word:o.meaning;
+      const gl=b.querySelector('.gloss'); gl.textContent=Q.type==='c2e'?o.meaning:o.word; if(Q.type!=='c2e') gl.className='gloss en';
       b.onclick=()=>answer(i);
       li.appendChild(b); ul.appendChild(li);
     });
@@ -489,6 +495,7 @@ function finish(ok,badText){
 function answer(i){
   if(answered||Q.type==='spell'||i>=Q.opts.length) return;
   answered=true;
+  $('opts').classList.add('done');
   [...document.querySelectorAll('.opt')].forEach((b,k)=>{
     b.disabled=true;
     if(k===Q.a) b.classList.add('right');
@@ -684,7 +691,7 @@ world.on('saveerror',()=>{ saveFailed=true; showBanners(); });
 world.on('saved',()=>{ if(saveFailed){ saveFailed=false; showBanners(); } });
 function save(){ world.save(); }
 // 版本號（範圍選單底部）：頁面改了就更新 PAGE_VERSION；world 的版本由載入的 world 檔自己報
-const PAGE_VERSION='2026-10-30a';
+const PAGE_VERSION='2026-11-03';
 $('ver').textContent='版本 '+PAGE_VERSION+' · world '+OneDropWorld.VERSION;
 
 /* ================= 讀檔（題庫進度） ================= */
