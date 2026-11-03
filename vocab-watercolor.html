@@ -369,6 +369,10 @@ body[data-tool="clear"] .hint::before { background: transparent; border: 1.5px s
   .q-opt { font-size: 14.5px; padding: 7px 10px; }
   .q-after .q-next, .q-spell .q-next { align-self: stretch; padding: 10px 18px; }   /* 手機：下一題、送出都是滿版長條（同一滴水） */
 }
+/* iPad 橫放等觸控裝置（不吃上面的直立／760px 規則）：下一題、送出一樣滿版 */
+@media (pointer: coarse) {
+  .q-after .q-next, .q-spell .q-next { align-self: stretch; padding: 10px 18px; }
+}
 @media (orientation: portrait) and (min-width: 700px) {
   .tray { padding: 0; }
   .vw-pane { padding: 16px; }
@@ -520,7 +524,7 @@ window.__VW_ART=[{"id":"vw-tools-v2","name":"畫具桌","latin":"入門 · 約 5
    引擎在使用者用「上色」點到一個區塊時，先問 window.__vwGate(畫作 id, 區塊編號)，回傳 false 就不上色。
    unlocked / done / IndexedDB 都以畫作 id 為 key，線稿一改區塊編號就變，所以改線稿要用新 id（舊版標 legacy，見檔案最後一段與 README.md）。 */
 (() => {
-const PAGE_VERSION = '2026-11-03a';
+const PAGE_VERSION = '2026-11-03b';
 const REWARD = { e2c: 1, c2e: 1, spell: 2 };
 // github.io 上所有 trinkets 頁面共用同一個 localStorage / IndexedDB：key 一律帶頁名
 const SAVE_KEY = 'vocab-watercolor-v1';
