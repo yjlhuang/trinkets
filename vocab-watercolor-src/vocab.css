@@ -151,6 +151,10 @@
   .q-opt { font-size: 14.5px; padding: 7px 10px; }
   .q-after .q-next, .q-spell .q-next { align-self: stretch; padding: 10px 18px; }   /* 手機：下一題、送出都是滿版長條（同一滴水） */
 }
+/* iPad 橫放等觸控裝置（不吃上面的直立／760px 規則）：下一題、送出一樣滿版 */
+@media (pointer: coarse) {
+  .q-after .q-next, .q-spell .q-next { align-self: stretch; padding: 10px 18px; }
+}
 @media (orientation: portrait) and (min-width: 700px) {
   .tray { padding: 0; }
   .vw-pane { padding: 16px; }

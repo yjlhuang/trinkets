@@ -216,6 +216,8 @@ button:focus-visible,.unit:focus-visible,.chip:focus-visible{outline:3px solid v
   .opt{font-size:.97rem}
   .after .next,.spell .next{align-self:stretch;padding:.8rem 1.2rem}   /* 手機：下一題、送出都是滿版長條，左右手都好按（同 Painless GRE 一滴水） */
 }
+/* iPad 等觸控裝置（螢幕較寬，不吃上面的 760px 規則）：下一題、送出一樣滿版 */
+@media (pointer:coarse){ .after .next,.spell .next{align-self:stretch;padding:.8rem 1.2rem} }
 @media (max-width:480px){ .water-label{display:none} }
 @media (prefers-reduced-motion:reduce){.pop{animation:none}}
 </style>
@@ -759,7 +761,7 @@ world.on('saveerror',()=>{ saveFailed=true; showBanners(); });
 world.on('saved',()=>{ if(saveFailed){ saveFailed=false; showBanners(); } });
 function save(){ world.save(); }
 // 版本號（範圍選單底部）：頁面改了就更新 PAGE_VERSION；world 的版本由載入的 world 檔自己報
-const PAGE_VERSION='2026-11-03d';
+const PAGE_VERSION='2026-11-03e';
 $('ver').textContent='版本 '+PAGE_VERSION+' · world '+OneDropWorld.VERSION;
 
 /* ================= 讀檔（題庫進度） ================= */
