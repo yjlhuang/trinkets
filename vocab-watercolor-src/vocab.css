@@ -71,7 +71,6 @@
 .q-spell input:focus { outline: none; border-color: var(--accent); }
 .q-spell input.ok { border-color: var(--right); }
 .q-spell input.no { border-color: var(--wrong); }
-.q-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .q-after { margin-top: 14px; display: none; flex-direction: column; gap: 10px; }
 .q-after.on { display: flex; }
 .q-msg { font-size: 14.5px; line-height: 1.6; margin: 0; }
@@ -150,6 +149,7 @@
   .q-prompt .word { font-size: 25px; }
   .q-prompt .mean { font-size: 16px; }
   .q-opt { font-size: 14.5px; padding: 7px 10px; }
+  .q-after .q-next, .q-spell .q-next { align-self: stretch; padding: 10px 18px; }   /* 手機：下一題、送出都是滿版長條（同一滴水） */
 }
 @media (orientation: portrait) and (min-width: 700px) {
   .tray { padding: 0; }
