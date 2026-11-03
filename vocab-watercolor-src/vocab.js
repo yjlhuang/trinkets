@@ -365,17 +365,56 @@ function submitSpell(){
 $('q-spell').onsubmit=e=>{e.preventDefault();submitSpell()};
 $('q-typed').addEventListener('input',armHear);        // 打字就重新計時
 $('q-nextq').onclick=nextQuestion;
+/* ---------- 鍵盤（電腦）：同 one-drop.html。選擇題 ↑↓ 移焦點、Enter 作答；A–D／1–4 直接作答；
+   拼字 Enter 送出；答完後 Enter 下一題。觸控與滑鼠不經過這裡。
+   capture 階段統一處理 Enter：一次按下只算一次（連發、長按一律吞掉，連原生按鈕觸發也擋），
+   避免「作答那一下」的連發接著把下一題也跳掉。Ctrl／⌘＋Z（畫作復原）不攔。 */
+let enterDown=false;                                   // keyup 才解鎖
+document.addEventListener('keyup',e=>{ if(e.key==='Enter') enterDown=false; },true);
+addEventListener('blur',()=>{ enterDown=false; });
 document.addEventListener('keydown',e=>{
-  if(tab!=='quiz' || !$('q-pick').hidden || $('q-quiz').hidden) return;
-  if(e.metaKey||e.ctrlKey||e.altKey) return;
-  const dlg=$('dialog'); if(dlg && !dlg.hidden) return;
-  if(e.target.tagName==='INPUT') return;
-  if(e.target.tagName==='BUTTON' && (e.key==='Enter'||e.key===' ')) return;
+  if(e.isComposing||e.keyCode===229) return;           // 輸入法組字中：交給輸入法
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  if(e.key==='Enter'){
+    if(e.repeat||enterDown){ e.preventDefault(); e.stopPropagation(); return; }
+    enterDown=true;
+  }
+  // 在調色分頁、範圍選單或對話框開著、資料過期，或還沒有題目：鍵盤照瀏覽器原生行為
+  const dlg=$('dialog');
+  if(!Q || tab!=='quiz' || $('q-quiz').hidden || !$('q-pick').hidden || (dlg && !dlg.hidden) || stale) return;
+  const t=e.target;
+  // 焦點在題目區以外的控制項（分頁、範圍、發音鈕…）：不攔，讓 Enter 觸發它本身
+  // （剛關掉的範圍選單裡的「開始」鈕若還留著焦點，也算題目區；點了畫紙也算）
+  const ours = t===document.body || t===$('paper') || !!t.closest('[hidden]') || ($('q-quiz').contains(t) && !t.matches('.q-say,.q-range'));
+  if(!ours) return;
+  if(answered){
+    if(e.key==='Enter'){ e.preventDefault(); nextQuestion(); }
+    return;
+  }
+  if(Q.type==='spell'){
+    const inp=$('q-typed');
+    if(e.key==='Enter' && t===inp){ e.preventDefault(); submitSpell(); }
+    else if(t!==inp && /^[a-z]$/i.test(e.key)) inp.focus({preventScroll:true});   // 焦點跑掉（例如點了畫紙）：打字導回輸入框
+    return;
+  }
+  const opts=[...document.querySelectorAll('#q-opts .q-opt')];
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault();
+    const n=opts.length, cur=opts.indexOf(t), down=e.key==='ArrowDown';
+    opts[cur<0 ? (down?0:n-1) : (cur+(down?1:n-1))%n].focus({preventScroll:true});
+    return;
+  }
+  if(e.key==='Enter'){
+    e.preventDefault();
+    const i=opts.indexOf(t);
+    if(i>=0) answer(i);                                // 沒有選中任何選項時 Enter 不作答
+    return;
+  }
+  if(e.repeat) return;
   const k=e.key.toUpperCase();
   const idx='ABCD'.indexOf(k)>=0?'ABCD'.indexOf(k):'1234'.indexOf(k);
-  if(!answered && Q && Q.type!=='spell' && idx>=0 && k.length===1){answer(idx)}
-  else if(answered && e.key==='Enter'){nextQuestion()}
-});
+  if(idx>=0 && k.length===1) answer(idx);
+},true);
 
 /* ---------- speech ---------- */
 const canSpeak='speechSynthesis' in window && typeof SpeechSynthesisUtterance!=='undefined';
