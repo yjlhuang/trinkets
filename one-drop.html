@@ -151,7 +151,6 @@ canvas{display:block;width:100%;height:100%;touch-action:manipulation;cursor:def
 .spell input:focus{outline:none;border-color:var(--water)}
 .spell input.ok{border-color:var(--right)}
 .spell input.no{border-color:var(--wrong)}
-.spell-row{display:flex;gap:.5rem;flex-wrap:wrap}
 
 .after{margin-top:1rem;display:none;flex-direction:column;gap:.75rem}
 .after.on{display:flex}
@@ -215,7 +214,7 @@ button:focus-visible,.unit:focus-visible,.chip:focus-visible{outline:3px solid v
   .prompt .word{font-size:1.7rem}
   .prompt .mean{font-size:1.1rem}
   .opt{font-size:.97rem}
-  .after .next{align-self:stretch;padding:.8rem 1.2rem}   /* 手機：下一題滿版長條，左右手都好按（同 Painless GRE 一滴水） */
+  .after .next,.spell .next{align-self:stretch;padding:.8rem 1.2rem}   /* 手機：下一題、送出都是滿版長條，左右手都好按（同 Painless GRE 一滴水） */
 }
 @media (max-width:480px){ .water-label{display:none} }
 @media (prefers-reduced-motion:reduce){.pop{animation:none}}
@@ -246,10 +245,7 @@ button:focus-visible,.unit:focus-visible,.chip:focus-visible{outline:3px solid v
     <form class="spell" id="spell" hidden autocomplete="off">
       <p class="letters" id="letters"></p>
       <input id="typed" type="text" inputmode="latin" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="輸入英文拼法">
-      <div class="spell-row">
-        <button class="next" type="submit" id="check">送出</button>
-        <button class="ghost" type="button" id="giveup">不會，看答案</button>
-      </div>
+      <button class="next" type="submit" id="check">送出</button>
     </form>
     <div class="after" id="after">
       <p class="msg" id="msg"></p>
@@ -463,7 +459,7 @@ function showQuestion(){
   $('spell').hidden=Q.type!=='spell';
   if(Q.type==='spell'){
     const t=$('typed'); t.value=''; t.disabled=false; t.className='';
-    $('check').disabled=false; $('giveup').disabled=false;
+    $('check').disabled=false;
     $('letters').textContent=w.spell.split('').map((c,i)=>i===0?c:c===' '?' ':c==='-'||c==="'"?c:'_').join(' ');
     const cnt=document.createElement('small'); cnt.textContent='（'+w.spell.replace(/[^a-z]/g,'').length+' 個字母）'; $('letters').append(cnt);
     if(matchMedia('(pointer:fine)').matches) t.focus({preventScroll:true});
@@ -528,18 +524,17 @@ function answer(i){
   finish(i===Q.a,'答案是 '+'ABCD'[Q.a]+'。');
 }
 const tidy=s=>s.toLowerCase().replace(/[’‘`]/g,"'").replace(/\s+/g,' ').trim();
-function submitSpell(giveUp){
+function submitSpell(){
   if(answered||Q.type!=='spell') return;
   const w=WORDS[Q.id], t=$('typed'), v=tidy(t.value);
-  if(!giveUp && !v){ t.focus(); return; }
+  if(!v){ t.focus(); return; }   // 空白不送（2026-11-03 拿掉「不會，看答案」，同 GRE 版）
   answered=true; disarmHear();
-  const ok=!giveUp && v===w.spell;
+  const ok=v===w.spell;
   t.disabled=true; t.className=ok?'ok':'no';
-  $('check').disabled=true; $('giveup').disabled=true; $('hear').disabled=true;
-  finish(ok, giveUp?'沒關係，記一下拼法。':'正確拼法是 '+w.spell+'。');
+  $('check').disabled=true; $('hear').disabled=true;
+  finish(ok, '正確拼法是 '+w.spell+'。');
 }
-$('spell').onsubmit=e=>{e.preventDefault();submitSpell(false)};
-$('giveup').onclick=()=>submitSpell(true);
+$('spell').onsubmit=e=>{e.preventDefault();submitSpell()};
 $('typed').addEventListener('input',armHear);        // 打字就重新計時
 $('next').onclick=nextQuestion;
 /* ---------- 鍵盤（電腦）：選擇題 ↑↓ 移焦點、Enter 作答；A–D／1–4 直接作答；
@@ -569,7 +564,7 @@ document.addEventListener('keydown',e=>{
   }
   if(Q.type==='spell'){
     const inp=$('typed');
-    if(e.key==='Enter' && t===inp){ e.preventDefault(); submitSpell(false); }
+    if(e.key==='Enter' && t===inp){ e.preventDefault(); submitSpell(); }
     else if(t!==inp && /^[a-z]$/i.test(e.key)) inp.focus({preventScroll:true});   // 焦點跑掉（例如點了土地）：打字導回輸入框
     return;
   }
@@ -597,6 +592,15 @@ const canSpeak='speechSynthesis' in window && typeof SpeechSynthesisUtterance!==
 let enVoice=null;
 function pickVoice(){ try{const vs=speechSynthesis.getVoices(); enVoice=vs.find(v=>/^en-US/i.test(v.lang))||vs.find(v=>/^en/i.test(v.lang))||null;}catch(e){} }
 if(canSpeak){ pickVoice(); try{speechSynthesis.addEventListener('voiceschanged',pickVoice)}catch(e){} }
+/* iOS：第一次發音必須在使用者點擊當下發生，之後計時器（拼字題 3 秒自動唸）才唸得出來。
+   第一次點畫面時先靜音唸一個空白把發音解鎖；自動重整後要再點一次（點「下一題」就算）。 */
+let speechUnlocked=false;
+function unlockSpeech(){
+  if(speechUnlocked||!canSpeak) return;
+  speechUnlocked=true;
+  try{ const u=new SpeechSynthesisUtterance(' '); u.volume=0; speechSynthesis.speak(u); }catch(e){}
+}
+['touchend','click','keydown'].forEach(ev=>document.addEventListener(ev,unlockSpeech,{capture:true,passive:true}));
 function speak(t){
   if(!canSpeak) return;
   try{
@@ -755,7 +759,7 @@ world.on('saveerror',()=>{ saveFailed=true; showBanners(); });
 world.on('saved',()=>{ if(saveFailed){ saveFailed=false; showBanners(); } });
 function save(){ world.save(); }
 // 版本號（範圍選單底部）：頁面改了就更新 PAGE_VERSION；world 的版本由載入的 world 檔自己報
-const PAGE_VERSION='2026-11-03c';
+const PAGE_VERSION='2026-11-03d';
 $('ver').textContent='版本 '+PAGE_VERSION+' · world '+OneDropWorld.VERSION;
 
 /* ================= 讀檔（題庫進度） ================= */

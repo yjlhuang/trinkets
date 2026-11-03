@@ -186,6 +186,7 @@ function setTab(t){
   document.querySelectorAll('[data-vwtab]').forEach(b=>b.setAttribute('aria-selected', String(b.dataset.vwtab===t)));
   $('vw-quiz').hidden=t!=='quiz';
   $('vw-paint').hidden=t!=='paint';
+  if(t==='quiz') armHear(); else disarmHear();   // 從調色切回答題：拼字題重新計時
   save();
 }
 document.querySelectorAll('[data-vwtab]').forEach(b=>b.addEventListener('click',()=>setTab(b.dataset.vwtab)));
@@ -248,9 +249,24 @@ function sayBtn(word){
   return b;
 }
 const KIND={e2c:'看英文選中文',c2e:'看中文選英文',spell:'看中文拼英文'};
+// 拼字題：一段時間沒動靜（沒打字）就自動唸一次單字；每題最多一次，按過喇叭也算聽過了（同 one-drop.html）。
+// 打字、答題、換題會重新計時或取消；時間到時若不在答題分頁、開著範圍、分頁在背景，就不唸。
+const HEAR_IDLE=3000;
+let hearTimer=0, autoHeard=false;
+function disarmHear(){ clearTimeout(hearTimer); hearTimer=0; }
+function armHear(){
+  disarmHear();
+  if(autoHeard||answered||!Q||Q.type!=='spell') return;
+  const id=Q.id;
+  hearTimer=setTimeout(()=>{
+    hearTimer=0;
+    if(autoHeard||answered||!Q||Q.id!==id||Q.type!=='spell'||document.hidden||tab!=='quiz'||!$('q-pick').hidden||$('q-quiz').hidden) return;
+    autoHeard=true; speak(WORDS[id].word);
+  },HEAR_IDLE);
+}
 function showQuestion(){
   const w=WORDS[Q.id];
-  answered=false;
+  answered=false; autoHeard=false;
   $('q-kind').textContent=KIND[Q.type];
   $('q-again').hidden=!again;
   updateScope();
@@ -259,12 +275,18 @@ function showQuestion(){
     const s=document.createElement('span'); s.className='word'; s.textContent=w.word; pr.append(s, sayBtn(w.word));
   }else{
     const s=document.createElement('span'); s.className='mean'; s.textContent=w.meaning; pr.append(s);
+    if(Q.type==='spell'){
+      // 不確定時聽發音：只放喇叭圖示。只唸、不算答題；標籤不能寫出單字（螢幕閱讀器會洩漏答案）
+      const h=sayBtn(w.word); h.id='q-hear'; h.title='不確定？聽發音'; h.setAttribute('aria-label','不確定？聽發音');
+      h.onclick=()=>{ autoHeard=true; disarmHear(); speak(w.word); $('q-typed').focus({preventScroll:true}); };
+      pr.append(h);
+    }
   }
   const ul=$('q-opts'); ul.innerHTML='';
   $('q-spell').hidden=Q.type!=='spell';
   if(Q.type==='spell'){
     const t=$('q-typed'); t.value=''; t.disabled=false; t.className='';
-    $('q-check').disabled=false; $('q-giveup').disabled=false;
+    $('q-check').disabled=false;
     $('q-letters').textContent=w.spell.split('').map((c,i)=>i===0?c:c===' '?' ':c==='-'||c==="'"?c:'_').join(' ');
     const cnt=document.createElement('small'); cnt.textContent='（'+w.spell.replace(/[^a-z]/g,'').length+' 個字母）'; $('q-letters').append(cnt);
     if(matchMedia('(pointer:fine)').matches && tab==='quiz') t.focus({preventScroll:true});
@@ -283,6 +305,7 @@ function showQuestion(){
   }
   $('q-after').classList.remove('on');
   $('vw-quiz').scrollTop=0;
+  armHear();
 }
 function record(id,ok){
   const s=stats[id]||[0,0,0];
@@ -329,18 +352,18 @@ function answer(i){
   finish(i===Q.a,'答案是 '+'ABCD'[Q.a]+'。');
 }
 const tidy=s=>s.toLowerCase().replace(/[’‘`]/g,"'").replace(/\s+/g,' ').trim();
-function submitSpell(giveUp){
+function submitSpell(){
   if(answered||Q.type!=='spell') return;
   const w=WORDS[Q.id], t=$('q-typed'), v=tidy(t.value);
-  if(!giveUp && !v){ t.focus(); return; }
-  answered=true;
-  const ok=!giveUp && v===w.spell;
+  if(!v){ t.focus(); return; }   // 空白不送（2026-11-03 拿掉「不會，看答案」，同一滴水）
+  answered=true; disarmHear();
+  const ok=v===w.spell;
   t.disabled=true; t.className=ok?'ok':'no';
-  $('q-check').disabled=true; $('q-giveup').disabled=true;
-  finish(ok, giveUp?'沒關係，記一下拼法。':'正確拼法是 '+w.spell+'。');
+  $('q-check').disabled=true; $('q-hear').disabled=true;
+  finish(ok, '正確拼法是 '+w.spell+'。');
 }
-$('q-spell').onsubmit=e=>{e.preventDefault();submitSpell(false)};
-$('q-giveup').onclick=()=>submitSpell(true);
+$('q-spell').onsubmit=e=>{e.preventDefault();submitSpell()};
+$('q-typed').addEventListener('input',armHear);        // 打字就重新計時
 $('q-nextq').onclick=nextQuestion;
 document.addEventListener('keydown',e=>{
   if(tab!=='quiz' || !$('q-pick').hidden || $('q-quiz').hidden) return;
@@ -359,6 +382,15 @@ const canSpeak='speechSynthesis' in window && typeof SpeechSynthesisUtterance!==
 let enVoice=null;
 function pickVoice(){ try{const vs=speechSynthesis.getVoices(); enVoice=vs.find(v=>/^en-US/i.test(v.lang))||vs.find(v=>/^en/i.test(v.lang))||null;}catch(e){} }
 if(canSpeak){ pickVoice(); try{speechSynthesis.addEventListener('voiceschanged',pickVoice)}catch(e){} }
+/* iOS：第一次發音必須在使用者點擊當下發生，之後計時器（拼字題 3 秒自動唸）才唸得出來。
+   第一次點畫面時先靜音唸一個空白把發音解鎖（同 one-drop.html）。 */
+let speechUnlocked=false;
+function unlockSpeech(){
+  if(speechUnlocked||!canSpeak) return;
+  speechUnlocked=true;
+  try{ const u=new SpeechSynthesisUtterance(' '); u.volume=0; speechSynthesis.speak(u); }catch(e){}
+}
+['touchend','click','keydown'].forEach(ev=>document.addEventListener(ev,unlockSpeech,{capture:true,passive:true}));
 function speak(t){
   if(!canSpeak) return;
   try{
