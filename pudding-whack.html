@@ -60,7 +60,7 @@ body{
 }
 #gl:focus-visible{outline:3px solid var(--accent);outline-offset:-3px}
 #gl[data-pointer]:focus-visible{outline:none}   /* 滑鼠或觸控點擊取得的焦點不畫框，只有鍵盤操作才畫 */
-#fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+#fx{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:3}   /* 敲擊字浮在題目卡上面，不然手機上會被卡片蓋住 */
 .pop{
   position:absolute;white-space:nowrap;
   font-family:var(--f-display);font-weight:600;font-size:clamp(24px,5vmin,42px);
@@ -159,16 +159,19 @@ body{
 }
 #ui{z-index:2}
 #labels{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:0}
+.lblw{position:absolute;left:0;top:0;will-change:transform}
 .lbl{
-  position:absolute;left:0;top:0;white-space:nowrap;
+  position:relative;white-space:nowrap;
   font-family:var(--f-display);font-weight:600;font-size:17px;line-height:1;letter-spacing:.01em;
   color:var(--ink);background:var(--lbl-bg);
   border:2px solid var(--line);border-radius:999px;padding:7px 13px 8px;
   box-shadow:0 3px 0 rgba(29,50,72,.18);
-  will-change:transform;
 }
 .lbl.good{color:var(--good);background:var(--good-bg);border-color:var(--good)}
 .lbl.bad{color:var(--bad);background:var(--bad-bg);border-color:var(--bad)}
+.lbl.pulse{animation:lbl-pulse 1.1s ease-out}
+@keyframes lbl-pulse{0%{scale:1;box-shadow:0 3px 0 rgba(29,50,72,.18),0 0 0 0 var(--good)}30%{scale:1.32}55%{scale:1}75%{scale:1.14}100%{scale:1;box-shadow:0 3px 0 rgba(29,50,72,.18),0 0 0 16px transparent}}
+@media (prefers-reduced-motion: reduce){ .lbl.pulse{animation:none} }
 .tag{
   display:inline-block;font:500 12px/1 var(--f-body);letter-spacing:.06em;
   color:var(--ink-2);border:1px solid var(--line);border-radius:999px;padding:4px 9px 5px;
@@ -716,6 +719,19 @@ var sphereG = new THREE.SphereGeometry(1, 16, 12);
 var arcEyeG = new THREE.TorusGeometry(0.085, 0.02, 6, 14, Math.PI);
 var arcMouthG = new THREE.TorusGeometry(0.05, 0.016, 6, 12, Math.PI); arcMouthG.rotateZ(Math.PI);
 var cheekG = new THREE.CircleGeometry(0.13, 20);
+/* 敲錯頭暈：蚊香眼＋頭上繞圈的星星（純幾何、不用貼圖；啟動時先編譯好，敲錯那一刻才不會頓） */
+var swirlG = (function () {
+  var pts = [];
+  for (var k = 0; k <= 48; k++) { var u = k / 48, a = u * Math.PI * 4.2, r = 0.014 + 0.135 * u; pts.push(new THREE.Vector3(Math.cos(a) * r, Math.sin(a) * r, 0)); }
+  return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 48, 0.025, 5, false);
+})();
+var starG = (function () {
+  var sh = new THREE.Shape();
+  for (var k = 0; k < 10; k++) { var a = Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? 0.15 : 0.34; sh[k ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); }
+  var g = new THREE.ExtrudeGeometry(sh, { depth: 0.07, bevelEnabled: true, bevelThickness: 0.035, bevelSize: 0.03, bevelSegments: 2 });
+  g.center(); return g;
+})();
+var starMat = new THREE.MeshStandardMaterial({ color: lin('#ffd23f'), emissive: lin('#ffb100'), emissiveIntensity: 0.55, roughness: 0.35, envMapIntensity: 0.8, clippingPlanes: CLIP });
 var EYE_Y = 0.98, EYE_X = 0.4, MOUTH_Y = 0.83, CHEEK_Y = 0.86, CHEEK_X = 0.64;
 var caramelMats = [];
 
@@ -757,6 +773,9 @@ function makePudding(idx) {
   });
   var mo = new THREE.Mesh(sphereG, mouthInMat); mo.scale.set(0.055, 0.07, 0.03);
   addFace(mo, 0, MOUTH_Y - 0.01, 'open');
+  [-1, 1].forEach(function (sx) { var sw = new THREE.Mesh(swirlG, faceMat); sw.scale.x = sx; addFace(sw, sx * EYE_X, EYE_Y, 'swirl'); });
+  P.stars = new THREE.Group(); P.stars.visible = false; P.group.add(P.stars);
+  for (var k = 0; k < 3; k++) { var st = new THREE.Mesh(starG, starMat); st.frustumCulled = false; P.stars.add(st); }
 
   // 點擊用的代理圓柱：比布丁略胖，手指比較好點
   var px = new THREE.Mesh(new THREE.CylinderGeometry(1.95, 1.95, 2.8, 16), new THREE.MeshBasicMaterial());
@@ -912,12 +931,12 @@ function updateFlash(dt) {
 }
 
 var fx = $('#fx'), HIT_WORDS = ['啵！', 'Q彈！', '噗啾！', '啪！', '咚！'], lastWord = -1;
-function popWord(x, y, z) {
+function popWord(x, y, z, text) {
   var v = new THREE.Vector3(x, y, z).project(camera), w = stage.clientWidth, h = stage.clientHeight;
   var el = document.createElement('div'), wi;
   do { wi = (Math.random() * HIT_WORDS.length) | 0; } while (wi === lastWord);
   lastWord = wi;
-  el.className = 'pop'; el.textContent = HIT_WORDS[wi];
+  el.className = 'pop'; el.textContent = text || HIT_WORDS[wi];
   el.style.left = clamp((v.x * 0.5 + 0.5) * w, 40, w - 40) + 'px'; el.style.top = ((-v.y * 0.5 + 0.5) * h) + 'px';
   el.style.setProperty('--rot', ((Math.random() - 0.5) * 22).toFixed(1) + 'deg');
   el.addEventListener('animationend', function () { if (el.parentNode) el.parentNode.removeChild(el); });
@@ -994,6 +1013,7 @@ function computeEffective(P, t0) {
   E.shx = S.shx + 0.018 * Math.sin(t * 1.5);
   E.shz = S.shz + 0.012 * Math.sin(t * 1.1 + 1.4);
   E.tw = S.tw + 0.012 * Math.sin(t * 1.3);
+  if (P.dizzyAt != null) { var dg = t0 - P.dizzyAt; E.shx += 0.07 * Math.sin(dg * 3.4); E.shz += 0.05 * Math.cos(dg * 3.4); E.tw += 0.04 * Math.sin(dg * 3.4 + 0.6); }
   for (var i = 0; i < 2; i++) { E.dn[i].v = S.dn[i].v; E.dn[i].x = S.dn[i].x; E.dn[i].z = S.dn[i].z; }
 }
 
@@ -1034,8 +1054,22 @@ function topYAt(P, x, z) {   // 布丁局部座標下，頂面在 (x, z) 的高�
   return OUT.y;
 }
 var fz = new THREE.Vector3(0, 0, 1), fn = new THREE.Vector3();
+function updateStars(P, t) {   // 三顆星星在頭頂斜斜地繞圈，跟著布丁頭部的歪斜走
+  var g = P.stars; g.visible = P.dizzyAt != null;
+  if (!g.visible) return;
+  var age = t - P.dizzyAt, E = P.E;
+  var grow = Math.min(1, age / 0.25) * clamp(1 + P.riseY / 1.2, 0, 1);   // 暈倒沉下去時星星跟著縮掉，不會留在洞口
+  g.position.set(E.shx * 1.6, TOP_REST + 1.15 - E.sq * 0.9, E.shz * 1.6);
+  for (var k = 0; k < 3; k++) {
+    var a = age * 3.4 + k * Math.PI * 2 / 3, st = g.children[k];
+    st.position.set(Math.cos(a) * 1.35, 0.14 * Math.sin(a * 2) + 0.12 * Math.sin(a), Math.sin(a) * 0.75);
+    st.quaternion.copy(camera.quaternion); st.rotateZ(Math.sin(age * 4 + k) * 0.5);   // 正面朝鏡頭才看得出是星星，左右搖擺
+    st.scale.setScalar(grow * (0.85 + 0.2 * Math.sin(a)));
+  }
+}
 function updateFace(P, t) {
-  var blink = ((t + P.ph) % 3.8) < 0.11, sq = P.S.squint > 0.3;
+  updateStars(P, t);
+  var blink = ((t + P.ph) % 3.8) < 0.11, dz = P.dizzyAt != null, sq = P.S.squint > 0.3 && !dz;
   for (var i = 0; i < P.FACE.length; i++) {
     var f = P.FACE[i], hc = clamp(f.y / H, 0, 1);
     var hp = Math.pow(hc, 1.35), sp = Math.sin(Math.PI * hc), w = 0.3 + 0.7 * Math.sin(Math.PI * Math.pow(hc, 0.8));
@@ -1043,10 +1077,11 @@ function updateFace(P, t) {
     fn.set(OUT.x, 0.18, OUT.z).normalize();
     f.mesh.position.set(OUT.x, OUT.y, OUT.z);
     f.mesh.quaternion.setFromUnitVectors(fz, fn);
-    if (f.kind === 'eye') { f.mesh.visible = !sq; f.mesh.scale.y = blink ? 0.014 : 0.12; }
-    else if (f.kind === 'arc') f.mesh.visible = sq;
-    else if (f.kind === 'smile') f.mesh.visible = !sq;
-    else if (f.kind === 'open') f.mesh.visible = sq;
+    if (f.kind === 'eye') { f.mesh.visible = !sq && !dz; f.mesh.scale.y = blink ? 0.014 : 0.12; }
+    else if (f.kind === 'arc') f.mesh.visible = sq && !dz;
+    else if (f.kind === 'smile') f.mesh.visible = !sq && !dz;
+    else if (f.kind === 'open') f.mesh.visible = sq || dz;
+    else if (f.kind === 'swirl') { f.mesh.visible = dz; if (dz) f.mesh.rotateZ(-(t - P.dizzyAt) * 7 * f.mesh.scale.x); }
   }
 }
 
@@ -1054,12 +1089,27 @@ function updateFace(P, t) {
 var hitCount = 0, lastHitAt = -9, T = 0;
 function popUp(P, life) {
   var S = P.S;
+  P.dizzyAt = null;
   P.state = 'up'; P.timer = life; P.riseTarget = 0; P.kR = 330; P.cR = 15;   // 欠阻尼：會稍微衝過頭再落回
   P.busy = 1.2;
   S.m2v += (Math.random() < 0.5 ? -1 : 1) * 2.4;
   S.shxv += (Math.random() - 0.5) * 1.6; S.shzv += (Math.random() - 0.5) * 1.2;
   S.squint = 0; S.flash = 0;
   playPop();
+}
+function makeDizzy(P) {
+  P.dizzyAt = T;
+  playDizzy();
+}
+function faint(P) {   // 頭暈約 1 秒後暈倒，連標籤一起沉回洞裡，畫面上只剩正解
+  P.hold = false; setLabel(P, null);
+  P.S.shxv += 2.6; P.S.twv += 1.6;
+  sink(P);
+}
+function spotlight(P) {   // 正解：布丁不動，只強調字卡（放大兩下＋綠色光圈）
+  if (!P.alive) return;
+  var el = labelEls[P.idx]; el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
+  playChime();
 }
 function sink(P) {
   P.state = 'sinking'; P.riseTarget = HIDE_Y; P.kR = 300; P.cR = 36;       // 過阻尼：乾脆縮回去
@@ -1334,7 +1384,7 @@ function frame(now) {
     S.squint = Math.max(0, S.squint - dt * 2.8);
     P.bodyMat.emissive.setRGB(S.flash * 0.16, S.flash * 0.11, S.flash * 0.04);
     // 正在動的每幀都更新；靜靜待著的只做慢速待機晃動，三幀更新一次就夠（手機省電）
-    P.busy = Math.max(0, P.busy - dt);
+    P.busy = Math.max(P.dizzyAt != null ? 0.1 : 0, P.busy - dt);
     if (P.busy > 0 || ((frameNo + i) % 3) === 0) {
       computeEffective(P, T);
       updateDeformable(P, P.bodyD); updateDeformable(P, P.caramelD); updateFace(P, T);
@@ -1433,9 +1483,11 @@ syncPool();
 function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = (Math.random() * (i + 1)) | 0, t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
 function later(sec, fn) { Quiz.later.push({ at: Quiz.t + sec, fn: fn }); }
 
-var labelsEl = $('#labels'), labelEls = [];
-puddings.forEach(function () {
-  var el = document.createElement('div'); el.className = 'lbl'; el.hidden = true; el._v = false; labelsEl.appendChild(el); labelEls.push(el);
+var labelsEl = $('#labels'), labelEls = [], labelWraps = [];
+puddings.forEach(function () {   // 外層 .lblw 只管位置，裡面的 .lbl 字卡才能自己放大（放大時不會跑位）
+  var wrap = document.createElement('div'), el = document.createElement('div');
+  wrap.className = 'lblw'; wrap.hidden = true; wrap._v = false; el.className = 'lbl';
+  wrap.appendChild(el); labelsEl.appendChild(wrap); labelEls.push(el); labelWraps.push(wrap);
 });
 function setLabel(P, word, mark) {
   var el = labelEls[P.idx];
@@ -1449,7 +1501,7 @@ function updateLabels() {
   var w = stage.clientWidth, h = stage.clientHeight;
   camera.updateMatrixWorld();
   for (var i = 0; i < puddings.length; i++) {
-    var P = puddings[i], el = labelEls[i];
+    var P = puddings[i], el = labelWraps[i];
     var show = P.used && P.word && P.state !== 'hidden' && P.riseY > -0.9;
     if (!show) { if (el._v) { el.hidden = true; el._v = false; } continue; }
     lblV.set(P.x, P.riseY + topYAt(P, 0, 0) + 0.15, P.z).project(camera);   // 貼在焦糖頂面中央，布丁被壓扁時會一起往下
@@ -1458,6 +1510,16 @@ function updateLabels() {
   }
 }
 
+function playChime() {
+  if (!soundOn) return;
+  var a = ensureAudio(); if (!a) return;
+  [1047, 1568].forEach(function (f, i) {
+    var t = a.currentTime + i * 0.09, o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine'; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.09, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.5);
+  });
+}
 function playGood() {
   if (!soundOn) return;
   var a = ensureAudio(); if (!a) return;
@@ -1467,6 +1529,16 @@ function playGood() {
     o.frequency.value = f; var s = t + 0.09 + i * 0.075;
     g.gain.setValueAtTime(0.0001, s); g.gain.exponentialRampToValueAtTime(0.16, s + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, s + 0.22);
     o.connect(g); g.connect(master); o.start(s); o.stop(s + 0.24);
+  });
+}
+function playDizzy() {
+  if (!soundOn) return;
+  var a = ensureAudio(); if (!a) return;
+  [0, 0.16, 0.32].forEach(function (d, i) {
+    var t = a.currentTime + 0.05 + d, o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(1900 + i * 120, t); o.frequency.exponentialRampToValueAtTime(2700 + i * 120, t + 0.06); o.frequency.exponentialRampToValueAtTime(2100, t + 0.11);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.07, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.14);
   });
 }
 function playBad() {
@@ -1551,13 +1623,14 @@ function quizHit(P) {   // 由 applyHit 呼叫
   Quiz.answered = true; Quiz.state = 'feedback';
   var c = Quiz.cur, ok = isRight(P.word, c), st = stats[c.id] = stats[c.id] || { ok: 0, miss: 0 };
   if (ok) { st.ok++; Quiz.right++; if (!Quiz.zhShown) Quiz.noHint++; } else { st.miss++; Quiz.wrong.push(c); }
+  if (!ok) while (fx.firstChild) fx.removeChild(fx.firstChild);   // 敲錯不出字：applyHit 剛放的「啵！」同一幀就收掉，不會被畫出來
   Quiz.history.push({ c: c, n: Quiz.idx + 1, ok: ok, pick: P.word.w, hint: Quiz.zhShown });
   saveStats();
   setLabel(P, P.word, ok ? 'good' : 'bad');
   puddings.forEach(function (Q) {
     if (!Q.used || !Q.word) return;
-    if (isRight(Q.word, c)) { setLabel(Q, Q.word, 'good'); return; }      // 正確答案留下來
-    if (Q === P) { Q.hold = false; return; }                              // 敲錯的那顆照原本流程縮回去
+    if (isRight(Q.word, c)) { setLabel(Q, Q.word, 'good'); if (!ok) later(1.05, function () { spotlight(Q); }); return; }   // 正確答案留下來；敲錯時等錯的倒下再跳一下
+    if (Q === P) { Q.hold = true; later(0.12, function () { makeDizzy(Q); }); later(0.8, function () { faint(Q); }); return; }   // 敲錯的那顆：頭暈一下就暈倒
     later(0.45, function () { Q.hold = false; sink(Q); setLabel(Q, null); });
   });
   quizEl.className = ok ? 'good' : 'bad';
@@ -1758,6 +1831,14 @@ resize();
   Game.next = 0.5;
 })();
 puddings.forEach(function (P) { if (P.used) { computeEffective(P, 0); updateDeformable(P, P.bodyD); updateDeformable(P, P.caramelD); updateFace(P, 0); } });
+(function precompile() {
+  var P = puddings[0], gv = P.group.visible;
+  P.group.visible = true; P.stars.visible = true;
+  P.FACE.forEach(function (f) { f.vis = f.mesh.visible; f.mesh.visible = true; });
+  try { renderer.compile(scene, camera); } catch (e) {}
+  P.FACE.forEach(function (f) { f.mesh.visible = f.vis; });
+  P.stars.visible = false; P.group.visible = gv;
+})();
 raf = requestAnimationFrame(frame);
 window.__pudding = {
   puddings: puddings, game: Game, mallet: mallet, M: M, scene: scene, camera: camera, renderer: renderer,
