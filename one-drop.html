@@ -134,6 +134,7 @@ canvas{display:block;width:100%;height:100%;touch-action:manipulation;cursor:def
 .opt.wrong{border-color:var(--wrong);opacity:.8}
 .opt.wrong .k{color:var(--wrong)}
 .opt.dim{opacity:.5}
+.opt:focus-visible{outline:none;border-color:var(--water);background:var(--opt-hover);box-shadow:0 0 0 3px color-mix(in srgb,var(--water) 16%,transparent)}
 .opt .txt{display:flex;flex-direction:column;min-width:0}
 .opt .gloss{display:none;color:var(--muted);font-size:.85rem}
 .opt .gloss.en{font-size:.95rem}
@@ -518,15 +519,55 @@ function submitSpell(giveUp){
 $('spell').onsubmit=e=>{e.preventDefault();submitSpell(false)};
 $('giveup').onclick=()=>submitSpell(true);
 $('next').onclick=nextQuestion;
+/* ---------- 鍵盤（電腦）：選擇題 ↑↓ 移焦點、Enter 作答；A–D／1–4 直接作答；
+   拼字 Enter 送出；答完後 Enter 下一題。觸控與滑鼠不經過這裡。
+   capture 階段統一處理 Enter：一次按下只算一次（連發、長按一律吞掉，連原生按鈕觸發也擋），
+   避免「作答那一下」的連發接著把下一題也跳掉。 */
+let enterDown=false;                                   // keyup 才解鎖
+document.addEventListener('keyup',e=>{ if(e.key==='Enter') enterDown=false; },true);
+addEventListener('blur',()=>{ enterDown=false; });
 document.addEventListener('keydown',e=>{
-  if(!$('pick').hidden) return;
-  if(e.target.tagName==='INPUT') return;
-  if(e.target.tagName==='BUTTON' && (e.key==='Enter'||e.key===' ')) return;
+  if(e.isComposing||e.keyCode===229) return;           // 輸入法組字中：交給輸入法
+  if(e.ctrlKey||e.metaKey||e.altKey) return;
+  if(e.key==='Enter'){
+    if(e.repeat||enterDown){ e.preventDefault(); e.stopPropagation(); return; }
+    enterDown=true;
+  }
+  // 範圍選單、資料過期提示開著，或還沒有題目：鍵盤照瀏覽器原生行為
+  if(!Q || $('quiz').hidden || !$('pick').hidden || !$('stale').hidden) return;
+  const t=e.target;
+  // 焦點在題目區以外的控制項（範圍、清空、首頁、發音鈕…）：不攔，讓 Enter 觸發它本身
+  // （剛關掉的範圍選單裡的「開始」鈕若還留著焦點，也算題目區）
+  const ours = t===document.body || t===cv || !!t.closest('[hidden]') || ($('quiz').contains(t) && !t.matches('.say'));
+  if(!ours) return;
+  if(answered){
+    if(e.key==='Enter'){ e.preventDefault(); nextQuestion(); }
+    return;
+  }
+  if(Q.type==='spell'){
+    const inp=$('typed');
+    if(e.key==='Enter' && t===inp){ e.preventDefault(); submitSpell(false); }
+    else if(t!==inp && /^[a-z]$/i.test(e.key)) inp.focus({preventScroll:true});   // 焦點跑掉（例如點了土地）：打字導回輸入框
+    return;
+  }
+  const opts=[...document.querySelectorAll('#opts .opt')];
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault();
+    const n=opts.length, cur=opts.indexOf(t), down=e.key==='ArrowDown';
+    opts[cur<0 ? (down?0:n-1) : (cur+(down?1:n-1))%n].focus({preventScroll:true});
+    return;
+  }
+  if(e.key==='Enter'){
+    e.preventDefault();
+    const i=opts.indexOf(t);
+    if(i>=0) answer(i);                                // 沒有選中任何選項時 Enter 不作答
+    return;
+  }
+  if(e.repeat) return;
   const k=e.key.toUpperCase();
   const idx='ABCD'.indexOf(k)>=0?'ABCD'.indexOf(k):'1234'.indexOf(k);
-  if(!answered && Q && Q.type!=='spell' && idx>=0 && k.length===1){answer(idx)}
-  else if(answered && e.key==='Enter'){nextQuestion()}
-});
+  if(idx>=0 && k.length===1) answer(idx);
+},true);
 
 /* ---------- speech ---------- */
 const canSpeak='speechSynthesis' in window && typeof SpeechSynthesisUtterance!=='undefined';
@@ -691,7 +732,7 @@ world.on('saveerror',()=>{ saveFailed=true; showBanners(); });
 world.on('saved',()=>{ if(saveFailed){ saveFailed=false; showBanners(); } });
 function save(){ world.save(); }
 // 版本號（範圍選單底部）：頁面改了就更新 PAGE_VERSION；world 的版本由載入的 world 檔自己報
-const PAGE_VERSION='2026-11-03';
+const PAGE_VERSION='2026-11-03b';
 $('ver').textContent='版本 '+PAGE_VERSION+' · world '+OneDropWorld.VERSION;
 
 /* ================= 讀檔（題庫進度） ================= */
