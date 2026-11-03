@@ -426,9 +426,24 @@ function sayBtn(word){
   return b;
 }
 const KIND={e2c:'看英文選中文',c2e:'看中文選英文',spell:'看中文拼英文'};
+// 拼字題：一段時間沒動靜（沒打字）就自動唸一次單字；每題最多一次，按過喇叭也算聽過了。
+// 打字、答題、換題、開範圍選單、分頁切到背景都會取消。
+const HEAR_IDLE=3000;
+let hearTimer=0, autoHeard=false;
+function disarmHear(){ clearTimeout(hearTimer); hearTimer=0; }
+function armHear(){
+  disarmHear();
+  if(autoHeard||answered||!Q||Q.type!=='spell') return;
+  const id=Q.id;
+  hearTimer=setTimeout(()=>{
+    hearTimer=0;
+    if(autoHeard||answered||!Q||Q.id!==id||Q.type!=='spell'||document.hidden||!$('pick').hidden||$('quiz').hidden) return;
+    autoHeard=true; speak(WORDS[id].word);
+  },HEAR_IDLE);
+}
 function showQuestion(){
   const w=WORDS[Q.id];
-  answered=false;
+  answered=false; autoHeard=false;
   $('kind').textContent=KIND[Q.type];
   $('again').hidden=!again;
   updateScope();
@@ -437,6 +452,12 @@ function showQuestion(){
     const s=document.createElement('span'); s.className='word'; s.textContent=w.word; pr.append(s, sayBtn(w.word));
   }else{
     const s=document.createElement('span'); s.className='mean'; s.textContent=w.meaning; pr.append(s);
+    if(Q.type==='spell'){
+      // 不確定時聽發音：只放喇叭圖示。只唸、不算答題；標籤不能寫出單字（螢幕閱讀器會洩漏答案）
+      const h=sayBtn(w.word); h.id='hear'; h.title='不確定？聽發音'; h.setAttribute('aria-label','不確定？聽發音');
+      h.onclick=()=>{ autoHeard=true; disarmHear(); speak(w.word); $('typed').focus({preventScroll:true}); };
+      pr.append(h);
+    }
   }
   const ul=$('opts'); ul.innerHTML=''; ul.classList.remove('done');
   $('spell').hidden=Q.type!=='spell';
@@ -462,6 +483,7 @@ function showQuestion(){
   }
   $('after').classList.remove('on');
   $('quiz').scrollTop=0;
+  armHear();
 }
 function record(id,ok){
   const s=stats[id]||[0,0,0];
@@ -510,14 +532,15 @@ function submitSpell(giveUp){
   if(answered||Q.type!=='spell') return;
   const w=WORDS[Q.id], t=$('typed'), v=tidy(t.value);
   if(!giveUp && !v){ t.focus(); return; }
-  answered=true;
+  answered=true; disarmHear();
   const ok=!giveUp && v===w.spell;
   t.disabled=true; t.className=ok?'ok':'no';
-  $('check').disabled=true; $('giveup').disabled=true;
+  $('check').disabled=true; $('giveup').disabled=true; $('hear').disabled=true;
   finish(ok, giveUp?'沒關係，記一下拼法。':'正確拼法是 '+w.spell+'。');
 }
 $('spell').onsubmit=e=>{e.preventDefault();submitSpell(false)};
 $('giveup').onclick=()=>submitSpell(true);
+$('typed').addEventListener('input',armHear);        // 打字就重新計時
 $('next').onclick=nextQuestion;
 /* ---------- 鍵盤（電腦）：選擇題 ↑↓ 移焦點、Enter 作答；A–D／1–4 直接作答；
    拼字 Enter 送出；答完後 Enter 下一題。觸控與滑鼠不經過這裡。
@@ -732,7 +755,7 @@ world.on('saveerror',()=>{ saveFailed=true; showBanners(); });
 world.on('saved',()=>{ if(saveFailed){ saveFailed=false; showBanners(); } });
 function save(){ world.save(); }
 // 版本號（範圍選單底部）：頁面改了就更新 PAGE_VERSION；world 的版本由載入的 world 檔自己報
-const PAGE_VERSION='2026-11-03b';
+const PAGE_VERSION='2026-11-03c';
 $('ver').textContent='版本 '+PAGE_VERSION+' · world '+OneDropWorld.VERSION;
 
 /* ================= 讀檔（題庫進度） ================= */
