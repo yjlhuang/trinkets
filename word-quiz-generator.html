@@ -1603,13 +1603,20 @@ document.getElementById("sel-align").addEventListener("change", ()=>{
   document.getElementById("preview-frame").srcdoc = buildFinalHTML();
 });
 
+// 範圍有填就當預設檔名（去掉檔名不能用的字元），沒填用「單字小考」
+// 下載 HTML 的檔名、列印/存 PDF 的預設檔名（取自頁面標題）都用這個
+function quizFileBaseName(){
+  const safe = (quizScopeText || "").replace(/[\\/:*?"<>|\r\n\t]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  return safe || "單字小考";
+}
+
 document.getElementById("btn-download").addEventListener("click", ()=>{
   const html = buildFinalHTML();
   const blob = new Blob([html], {type:"text/html;charset=utf-8"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "單字小考.html";
+  a.download = quizFileBaseName() + ".html";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -1627,7 +1634,7 @@ document.getElementById("btn-print-pdf").addEventListener("click", ()=>{
   printWin.document.open();
   printWin.document.write(html);
   printWin.document.close();
-  printWin.document.title = "單字小考";
+  printWin.document.title = quizFileBaseName();
   const triggerPrint = ()=>{
     printWin.focus();
     printWin.print();
