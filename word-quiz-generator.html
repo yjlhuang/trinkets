@@ -479,7 +479,7 @@ phr. / 引起（某人的）共鳴 / strike a chord (with sb.)"></textarea>
     </div>
   </div>
 
-  <div class="app-footer">v1.0 · by YJLHuang &amp; Claude</div>
+  <div class="app-footer">v1.1 · by YJLHuang &amp; Claude</div>
 
 </div>
 
@@ -1394,14 +1394,21 @@ document.getElementById("btn-to-export").addEventListener("click", ()=>{
    STEP 4: EXPORT — reuse master template logic
    ══════════════════════════════════════════════════════════ */
 function firstLetterHint(en){
-  const main = en.replace(/\s*\(.*?\)\s*/g, " ").trim();
+  // 只移除「含字母」的括號註解；(…)、(...) 這種純符號括號要保留
+  const main = en.replace(/\s*\([^)]*[A-Za-z][^)]*\)\s*/g, " ").trim();
   const tokens = main.split(/\s+/).filter(Boolean);
+  const hintWord = function(seg){
+    const letters = seg.replace(/[^A-Za-z]/g, "");
+    if(letters.length===0) return seg;
+    const first = seg.match(/[A-Za-z]/)[0];
+    if(letters.length===1) return first; // 單字母（如 a）不加底線
+    return first + "_".repeat(letters.length-1);
+  };
   return tokens.map(function(tok){
-    const letters = tok.replace(/[^A-Za-z]/g, "");
-    if(letters.length===0) return tok;
-    const first = tok.match(/[A-Za-z]/)[0];
-    const blankCount = letters.length-1;
-    return first + "_".repeat(Math.max(blankCount,1));
+    // 省略號（… 或 ...）與 ~ - ' ’ / 原樣保留，前後黏著的字各自處理
+    return tok.split(/(…|\.{2,}|[~\-'’\/])/).map(function(seg){
+      return /^(…|\.{2,}|[~\-'’\/])$/.test(seg) ? seg : hintWord(seg);
+    }).join("");
   }).join("  ");
 }
 
