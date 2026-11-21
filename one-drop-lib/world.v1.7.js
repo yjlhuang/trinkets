@@ -8,10 +8,12 @@
    critters、seenKinds、found、newFound（居民與圖鑑）。v1.2 讓居民前面的植物變透明，不新增存檔欄位。
    v1.3 加 4 種居民（嗡嗡、點點、毛毛、小雲）和 4 種植物（三葉草、向日葵、鬱金香、南瓜），圖鑑 12 → 28 格；
    存檔欄位不變（只多了新的 kind/type 字串），讀到不認得的居民會原樣保留、存檔時寫回。
+   v1.7 加十二月限定（呵呵公公、雪橇、聖誕紅、小雪）和大樹上限：公公、禮物、雪橇只在記憶體，不進存檔；
+   聖誕紅是新的 plant type 字串；存檔欄位不變。
    內部資料已經是多地圖的形狀（maps + activeMap），目前只有 home 一張。 */
 (function(){
 'use strict';
-const VERSION='1.5';
+const VERSION='1.7';
 
 function create(cfg){
 const $=id=>document.getElementById(id);
@@ -62,6 +64,7 @@ const TAU=Math.PI*2;
 // v1.3：今天的日期（南瓜只在 10～11 月長）；測試可以用 cfg.today() 注入
 const today=()=>cfg.today?cfg.today():new Date();
 const autumn=()=>{const m=today().getMonth();return m===9||m===10};
+const december=()=>today().getMonth()===11;   // v1.7：十二月限定（公公、雪橇、聖誕紅、小雪）
 // v1.5：南瓜上限 6 顆只算橘的（v1.3 連白的一起算，而且南瓜不會消失，6 顆橘的長滿後白南瓜就永遠出不來）。
 // 橘的還沒滿：照舊，每顆 3% 是白的；橘的滿了：之後的南瓜機會只會長白南瓜（50%），白的最多 2 顆。
 // 回傳要長的顏色，不長就回傳 null。
@@ -70,13 +73,20 @@ function pumpkinColor(){
   if(o<6) return w<2&&chance(.03)?5:Math.floor(Math.random()*5);
   return w<2&&chance(.5)?5:null;
 }
+// v1.7：聖誕紅的顏色，做法同 pumpkinColor()：紅的最多 12 株，白的（color 5）8%、最多 2 株；紅的滿了只長白的。
+function poinColor(){
+  let r=0,w=0; for(const p of plants) if(p.type==='poinsettia') p.color===5?w++:r++;
+  if(r<12) return w<2&&chance(.08)?5:0;
+  return w<2&&chance(.5)?5:null;
+}
 // v1.3：植物分組。outcome() 用它決定「從這株長出什麼」；不在分組裡的會被當成樹（舊程式的 else 分支）
-const GRASSY={grass:1,mushroom:1,clover:1,pumpkin:1}, FLOWERY={flower:1,sunflower:1,tulip:1};
+const GRASSY={grass:1,mushroom:1,clover:1,pumpkin:1}, FLOWERY={flower:1,sunflower:1,tulip:1,poinsettia:1};   // v1.7 聖誕紅算花（不在分組裡會被當成樹）
 // v1.3：新植物的圖鑑格。min＝長到第幾階才登錄；稀有＝color 5（跟紫花同一個機率）
 const PKEY={clover:{type:'clover',rare:false,min:1},cloverR:{type:'clover',rare:true,min:1},
   sunflower:{type:'sunflower',rare:false,min:3},sunflowerR:{type:'sunflower',rare:true,min:3},
   tulip:{type:'tulip',rare:false,min:3},tulipR:{type:'tulip',rare:true,min:3},
-  pumpkin:{type:'pumpkin',rare:false,min:3},pumpkinR:{type:'pumpkin',rare:true,min:3}};
+  pumpkin:{type:'pumpkin',rare:false,min:3},pumpkinR:{type:'pumpkin',rare:true,min:3},
+  poinsettia:{type:'poinsettia',rare:false,min:2},poinsettiaR:{type:'poinsettia',rare:true,min:2}};
 
 function resize(){
   const r=land.getBoundingClientRect();
@@ -127,7 +137,17 @@ function makePond(x,y){
 // v1.5：土地長滿（超過 FULL 株）以後，只有特殊植物還能長：換掉附近一株普通的草或花，總數不變。
 // 普通版在地上已經有 ROOM_CAP 株以上就不換（免得整片草地慢慢變成三葉草），稀有版（color 5）一律可以換。
 // 南瓜的數量由 pumpkinColor() 管。
-const FULL=900, ROOM_CAP={clover:40,sunflower:12,tulip:12,pumpkin:Infinity};
+const FULL=900, ROOM_CAP={clover:40,sunflower:12,tulip:12,pumpkin:Infinity,poinsettia:Infinity};   // 聖誕紅的數量由 poinColor() 管
+// v1.7：大樹上限。中樹（stage 2）的樹冠已經很大，一起算。到了上限：小樹苗不再長大、不再冒新樹苗。
+// 新樹苗只長在「樹區」：後排（y .2～.32，再往上樹冠會超出土地）或左右邊緣。樹區外的大樹畫成半透明（舊存檔的樹不動）。
+const TREE_CAP=5;
+const bigTrees=()=>plants.filter(p=>p.type==='tree'&&p.stage>=2).length;
+const treeZone=(x,y)=>y<=.32||x<=.08||x>=.92;
+function toTreeZone(x,y){
+  const yy=Math.max(.2,y), c=[[x,clamp(y,.2,.32)],[.03+Math.random()*.05,yy],[.92+Math.random()*.05,yy]];
+  let best=c[0],bd=1e9; for(const q of c){const d=Math.hypot((q[0]-x)*W,(q[1]-y)*H);if(d<bd){bd=d;best=q}}
+  return best;
+}
 const plainPlant=q=>(q.type==='grass'||q.type==='flower')&&q.color!==5;
 function dropPlant(q){const i=plants.indexOf(q);if(i>=0)plants.splice(i,1)}
 // 南瓜很矮，擋在它前面（畫在它後面、y 比較大）的普通草花最多換掉 2 株，讓它看得到
@@ -144,6 +164,10 @@ function makeRoom(x,y){
 function addPlant(type,x,y,opts={}){
   const full=plants.length>FULL;
   if(full && !(type in ROOM_CAP)) return null;
+  if(type==='tree'){   // v1.7：大樹滿了就長草；不在樹區就移到最近的樹區
+    if(bigTrees()>=TREE_CAP) type='grass';
+    else if(!treeZone(x,y)) [x,y]=toTreeZone(x,y);
+  }
   x=Math.max(.02,Math.min(.98,x)); y=Math.max(.05,Math.min(.99,y));
   const pd=pondAt(x,y,1.05);
   if(type==='lily'){ if(!pd) return null; }
@@ -163,8 +187,10 @@ function addPlant(type,x,y,opts={}){
   if(type==='flower' && color===5 && opts.color===undefined) emit('discover',{kind:'rare-flower',x,y,map:activeMap,color});
   return p;
 }
-function grow(p){ if(p.stage<3){p.stage++; ring(p);} if(p.type==='lily'&&p.stage>=2) record('lily'); if(p.type==='tree'&&p.stage>=3) record('tree');
-  if(PKEY[p.type]&&PKEY[p.type].min===3&&p.stage>=3) record(p.type+(p.color===5?'R':'')); }
+function grow(p){
+  if(p.type==='tree'&&(p.stage===1?bigTrees()>=TREE_CAP:plants.filter(q=>q.type==='tree'&&q.stage>=3).length>=TREE_CAP)) return;   // v1.7 大樹上限
+  if(p.stage<3){p.stage++; ring(p);} if(p.type==='lily'&&p.stage>=2) record('lily'); if(p.type==='tree'&&p.stage>=3) record('tree');
+  const pk=p.type+(p.color===5?'R':''); if(PKEY[pk]&&p.stage>=PKEY[pk].min) record(pk); }
 function ring(p){ rings.push({x:p.x,y:p.y,t0:now()}) }
 function around(x,y,minR,maxR){
   const a=Math.random()*Math.PI*2,r=(minR+Math.random()*(maxR-minR))*U;
@@ -203,6 +229,7 @@ function outcome(x,y){
   const fresh=()=>{
     // v1.3：秋天（10～11 月）空地偶爾冒出南瓜藤
     if(autumn() && chance(.05)){ const pc=pumpkinColor(); if(pc!==null){ acts.push(()=>addPlant('pumpkin',x,y,{color:pc})); return; } }
+    if(december() && chance(.1)){ const pc=poinColor(); if(pc!==null){ acts.push(()=>addPlant('poinsettia',x,y,{color:pc})); return; } }
     const lush=near.length>=4, t=Math.random();
     if(t<(lush?.62:.72)) acts.push(()=>addPlant('grass',x,y));
     else if(t<(lush?.88:.94)) acts.push(()=>addPlant('flower',x,y));
@@ -229,7 +256,9 @@ function outcome(x,y){
         for(let i=0,k=1+Math.floor(Math.random()*3);i<k;i++){const [a,b]=around(x,y,.02,.07),ty=sprout();acts.push(()=>addPlant(ty,a,b))}
         if(chance(.12)){const [a,b]=around(x,y,.02,.06);acts.push(()=>addPlant('flower',a,b))}
         if(autumn() && chance(.03)){const pc=pumpkinColor();if(pc!==null){const [a,b]=around(x,y,.03,.07);acts.push(()=>addPlant('pumpkin',a,b,{color:pc}))}}
+        if(december() && chance(.08)){const pc=poinColor();if(pc!==null){const [a,b]=around(x,y,.03,.07);acts.push(()=>addPlant('poinsettia',a,b,{color:pc}))}}
       }else if(FLOWERY[src.type]){
+        if(december() && chance(.08)){const pc=poinColor();if(pc!==null){const [a,b]=around(src.x,src.y,.03,.07);acts.push(()=>addPlant('poinsettia',a,b,{color:pc}))}}
         const fc=src.type==='flower'?src.color:src.type==='sunflower'?1:undefined;
         for(let i=0,k=1+(chance(.4)?1:0);i<k;i++){const [a,b]=around(src.x,src.y,.025,.07);acts.push(()=>addPlant('flower',a,b,{color:fc!==undefined&&chance(.8)?fc:undefined}))}
         if(chance(.5)){const [a,b]=around(x,y,.02,.05);acts.push(()=>addPlant('grass',a,b))}
@@ -333,9 +362,12 @@ cv.addEventListener('click',e=>{
    critters 住在 maps[activeMap] 裡（bindMap）；提示文字走 message 事件，由頁面的 toast 顯示。 */
 const sparks=[];
 let seenKinds={};
-const CR={dew:7.4, moss:9.2, cap:7.2, bee:6, ladybug:7, puff:8, cloud:8};
+const CR={dew:7.4, moss:9.2, cap:7.2, bee:6, ladybug:7, puff:8, cloud:8, santa:8.6};
+// v1.7：客人（呵呵公公）：只在十二月、只在記憶體（serialize 會跳過），不佔 15 隻居民的名額，一塊地最多一位
+const GUEST={santa:1};
 const FIRST={dew:'水塘邊住進了一顆小露珠',moss:'草地上滾來一顆愛睡覺的苔球',cap:'蘑菇圈裡，好像有誰在偷看',
-  bee:'花圃裡飛來一隻嗡嗡',ladybug:'花叢裡跑來一隻點點',puff:'草地上飄來一團毛毛',cloud:'答對好多題，飄來一朵小雲'};
+  bee:'花圃裡飛來一隻嗡嗡',ladybug:'花叢裡跑來一隻點點',puff:'草地上飄來一團毛毛',cloud:'答對好多題，飄來一朵小雲',
+  santa:'聖誕公公揹著禮物來了！點點看他'};
 const RARE={dew:'來了一顆會變色的露珠',moss:'這顆苔球別著一朵稀有的花',cap:'冒出一朵沒見過顏色的小蕈寶',
   bee:'這隻嗡嗡是藍色條紋的',ladybug:'來了一隻黃色的點點',puff:'飄來一團粉紅色的毛毛',cloud:'小雲身邊掛著一段彩虹'};
 // v1.3：飛在空中的居民（不會被植物擋、也不會把新植物推開）；alt 是離地高度（S 單位）
@@ -353,7 +385,8 @@ function newCritter(kind,x,y,home,o={}){
     alt:ALT0[kind]||0,talt:ALT0[kind]||0,loop:-1e9,fly:-1e9,amt:1,drops:[],rainUntil:-1e9,heavy:-1e9,nextRain:t+4000+Math.random()*5000};
 }
 function makeCritter(kind,x,y,home,o={}){
-  if(critters.length>=15) return null;
+  if(GUEST[kind]){ if(critters.some(c=>c.kind===kind)) return null; o={...o,v:0}; }   // 公公沒有稀有色（稀有版是雪橇）
+  else if(critters.filter(c=>!GUEST[c.kind]).length>=15) return null;
   const c=newCritter(kind,x,y,home,o);
   critters.push(c);
   if(!o.quiet){ record(kind+(c.v?'R':'')); emit('discover',{kind:kind+(c.v?'R':''),x:c.x,y:c.y,map:activeMap}); }
@@ -390,8 +423,8 @@ function critterTarget(c){
     c.talt=18+Math.random()*10;return around(c.hx,c.hy,0,.06);
   }
   if(c.kind==='cloud'){c.talt=ALT0.cloud;return around(c.hx,c.hy,0,.14)}
-  if(c.kind==='puff'||c.kind==='ladybug'){
-    for(let i=0;i<8;i++){const t=around(c.hx,c.hy,0,c.kind==='puff'?.08:.06);if(!pondAt(t[0],t[1],1.2)) return t}
+  if(c.kind==='puff'||c.kind==='ladybug'||c.kind==='santa'){
+    for(let i=0;i<8;i++){const t=around(c.hx,c.hy,0,c.kind==='santa'?.12:c.kind==='puff'?.08:.06);if(!pondAt(t[0],t[1],1.2)) return t}
     return [c.x,c.y];
   }
   return ringSpot(c);
@@ -443,8 +476,8 @@ function updateCritters(t,dt){
     if(!c.tgt) c.tgt=critterTarget(c);
     const d=dist(c.x,c.y,c.tgt[0],c.tgt[1]);
     if(d<1.5){c.tgt=null;c.t0=t;c.wait=c.kind==='moss'?3000+Math.random()*6000:c.kind==='cap'?1500+Math.random()*2500:1200+Math.random()*3000;continue}
-    if(c.kind==='moss'){
-      const f=Math.min(1,.016*U*dt/d);
+    if(c.kind==='moss'||c.kind==='santa'){
+      const f=Math.min(1,(c.kind==='santa'?.03:.016)*U*dt/d);
       if(Math.abs(c.tgt[0]-c.x)>1e-4) c.face=c.tgt[0]>c.x?1:-1;
       c.x+=(c.tgt[0]-c.x)*f;c.y+=(c.tgt[1]-c.y)*f;c.moving=t;
       continue;
@@ -604,7 +637,144 @@ function drawCritter(c,t){
   else if(c.kind==='ladybug') drawLadybug(c,t,p,g);
   else if(c.kind==='puff') drawPuff(c,t,p,g);
   else if(c.kind==='cloud') drawCloud(c,t,p,g);
+  else if(c.kind==='santa') drawSanta(c,t,p,g);
   else drawCap(c,t,p,g);
+}
+/* ---------- v1.7 呵呵公公、雪橇（照 docs/december-preview.html） ---------- */
+function fluff(x,y,rx,ry,n,col,seed){
+  ctx.fillStyle=col;
+  for(let i=0;i<n;i++){const a=i/n*TAU;ctx.beginPath();ctx.arc(x+Math.cos(a)*rx*.82,y+Math.sin(a)*ry*.82,Math.min(rx,ry)*(.36+hash(seed,i)*.12),0,TAU);ctx.fill()}
+  ctx.beginPath();ctx.ellipse(x,y,rx*.9,ry*.9,0,0,TAU);ctx.fill();
+}
+function drawSanta(c,t,p,g){
+  const r=CR.santa*S*g, X=p.cx, Y=p.cy-p.lift;
+  ctx.fillStyle=PAL.shadow;ctx.beginPath();ctx.ellipse(X,p.cy+S*.4,r*1.15*Math.max(.55,1-p.lift/(30*S)),r*.37,0,0,TAU);ctx.fill();
+  const walking=!reduceMotion&&t-(c.moving||-1e9)<150;
+  const breathe=reduceMotion?0:Math.sin(t*.0024+c.seed*9)*.03;
+  const rot=walking?Math.sin(t*.013+c.seed*5)*.1:0;
+  ctx.save();ctx.translate(X,Y);ctx.rotate(rot);ctx.scale((1-p.sq*.7-breathe*.5)*c.face,1+p.sq+breathe);
+  const rx=r*1.02, ry=r*.98, cy=-ry;
+  ctx.save();ctx.translate(-rx*.82,cy+ry*.05);ctx.rotate(-.25);   // 背後的禮物袋
+  ctx.fillStyle='#a9794d';ctx.beginPath();ctx.ellipse(0,0,r*.62,r*.72,0,0,TAU);ctx.fill();
+  ctx.fillStyle='#8a5e3a';ctx.beginPath();ctx.ellipse(r*.12,-r*.66,r*.26,r*.12,0,0,TAU);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.22)';ctx.beginPath();ctx.ellipse(-r*.22,-r*.2,r*.14,r*.28,-.4,0,TAU);ctx.fill();
+  ctx.restore();
+  ctx.fillStyle='#3b2b25';   // 靴子
+  for(const s of [-1,1]){const k=walking?Math.sin(t*.02+(s>0?Math.PI:0))*r*.06:0;ctx.beginPath();ctx.ellipse(s*r*.42,-r*.06-Math.max(0,k),r*.32,r*.18,0,0,TAU);ctx.fill()}
+  const gr=ctx.createRadialGradient(-rx*.35,cy-ry*.4,r*.1,0,cy,rx*1.1);
+  gr.addColorStop(0,'#f2877a');gr.addColorStop(.55,'#d8473e');gr.addColorStop(1,'#ad2f2f');
+  ctx.fillStyle=gr;ctx.beginPath();ctx.ellipse(0,cy,rx,ry,0,0,TAU);ctx.fill();
+  ctx.save();ctx.beginPath();ctx.ellipse(0,cy,rx*1.01,ry*1.01,0,0,TAU);ctx.clip();
+  ctx.fillStyle='#fbf7f0';for(let i=0;i<9;i++){ctx.beginPath();ctx.arc(-rx+i*rx/4,-r*.02,r*.2,0,TAU);ctx.fill()}   // 下擺白毛邊
+  ctx.fillStyle='#2d2523';ctx.fillRect(-rx*1.1,cy+ry*.3,rx*2.2,ry*.2);   // 腰帶
+  ctx.strokeStyle='#e8bf52';ctx.lineWidth=r*.07;ctx.strokeRect(-r*.17,cy+ry*.3+r*.02,r*.34,ry*.2-r*.04);
+  ctx.restore();
+  ctx.fillStyle='#2f6f4a';   // 手套
+  for(const s of [-1,1]){const wave=s>0&&happy(c,t)&&!reduceMotion?Math.sin(t*.025)*r*.18:0;ctx.beginPath();ctx.arc(s*rx*.98,cy+ry*.18-wave,r*.2,0,TAU);ctx.fill()}
+  ctx.scale(c.face,1);
+  const fy=cy-ry*.28;
+  ctx.fillStyle='#f7d2b8';ctx.beginPath();ctx.ellipse(0,fy,rx*.58,ry*.36,0,0,TAU);ctx.fill();
+  fluff(0,cy+ry*.12,rx*.62,ry*.42,10,'#fbf8f3',c.seed);   // 鬍子
+  ctx.fillStyle='rgba(200,190,180,.18)';ctx.beginPath();ctx.ellipse(r*.12,cy+ry*.34,rx*.35,ry*.12,0,0,TAU);ctx.fill();
+  const ho=t>=(c.hoho||-1e9)&&t-(c.hoho||-1e9)<900;
+  if(ho){ctx.fillStyle='#7a2a2a';ctx.beginPath();ctx.ellipse(0,cy+ry*.12,r*.14,r*.11+Math.abs(Math.sin((t-c.hoho)*.018))*r*.06,0,0,TAU);ctx.fill()}
+  ctx.fillStyle='#ffffff';   // 八字鬍
+  for(const s of [-1,1]){ctx.beginPath();ctx.ellipse(s*r*.2,fy+ry*.24,r*.24,r*.12,s*-.35,0,TAU);ctx.fill()}
+  const lk=lookAt(X,Y,r);
+  eyes(c,t,r*.24,fy-ry*.02,r*.13,lk,true);
+  cheeks(r*.44,fy+ry*.12,r*.12);
+  ctx.fillStyle='#e0605a';ctx.beginPath();ctx.arc(lk*.5,fy+ry*.13,r*.11,0,TAU);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.6)';ctx.beginPath();ctx.arc(lk*.5-r*.03,fy+ry*.1,r*.035,0,TAU);ctx.fill();
+  const hy=fy-ry*.3, sway=reduceMotion?0:Math.sin(t*.003+c.seed*7)*.08+(walking?Math.sin(t*.013)*.08:0);   // 帽子
+  ctx.save();ctx.translate(0,hy);
+  const tipX=r*.95+Math.sin(sway)*r*.3, tipY=-r*.95;
+  const hg=ctx.createLinearGradient(0,-r,0,0);hg.addColorStop(0,'#c83a36');hg.addColorStop(1,'#e2564c');
+  ctx.fillStyle=hg;ctx.beginPath();ctx.moveTo(-rx*.62,0);
+  ctx.quadraticCurveTo(-rx*.45,-r*1.05,r*.2,-r*1.12);ctx.quadraticCurveTo(tipX*.9,-r*1.15,tipX,tipY+r*.25);
+  ctx.quadraticCurveTo(r*.45,-r*.6,rx*.62,0);ctx.closePath();ctx.fill();
+  fluff(tipX,tipY+r*.3,r*.2,r*.2,7,'#fbf8f3',c.seed+3);
+  ctx.fillStyle='#fbf8f3';
+  for(let i=0;i<7;i++){ctx.beginPath();ctx.arc(-rx*.62+i*rx*1.24/6,0,r*.17,0,TAU);ctx.fill()}
+  ctx.fillRect(-rx*.62,-r*.12,rx*1.24,r*.22);
+  ctx.restore();
+  ctx.restore();
+  if(ho&&!reduceMotion){   // 「呵呵」
+    const k=(t-c.hoho)/900, b=ctx.globalAlpha;ctx.globalAlpha=b*Math.sin(Math.PI*k);ctx.fillStyle='#fff';ctx.strokeStyle='rgba(120,40,40,.6)';ctx.lineWidth=S*.8;
+    ctx.font='900 '+Math.round(5.5*S)+'px sans-serif';ctx.textAlign='center';
+    const tx=X+c.face*r*1.6, ty=Y-r*2.6-k*6*S;
+    ctx.strokeText('呵呵',tx,ty);ctx.fillText('呵呵',tx,ty);ctx.globalAlpha=b;ctx.textAlign='start';
+  }
+}
+// 雪橇：X、Y 是畫的位置（像素）
+function drawSleighAt(X,Y,t,seed){
+  const r=6.6*S;
+  ctx.save();ctx.translate(X,Y);
+  const dx=r*3.1;   // 麋鹿
+  ctx.strokeStyle='#6e4a2c';ctx.lineWidth=S*.5;ctx.beginPath();ctx.moveTo(r*1.2,-r*.4);ctx.quadraticCurveTo(r*2,-r*.1,dx-r*.5,-r*.5);ctx.stroke();
+  ctx.save();ctx.translate(dx,-r*.3);
+  ctx.strokeStyle='#7b5233';ctx.lineWidth=r*.18;ctx.lineCap='round';
+  for(const [lx,ph] of [[-.45,0],[-.2,Math.PI],[.3,.5],[.55,Math.PI+.5]]){const a=reduceMotion?0:Math.sin(t*.02+ph)*.5;ctx.beginPath();ctx.moveTo(lx*r,r*.3);ctx.lineTo(lx*r+Math.sin(a)*r*.5,r*.95);ctx.stroke()}
+  ctx.fillStyle='#9a6a42';ctx.beginPath();ctx.ellipse(0,0,r*.85,r*.52,-.08,0,TAU);ctx.fill();
+  ctx.fillStyle='#f4e7d6';ctx.beginPath();ctx.ellipse(-r*.05,r*.18,r*.45,r*.22,0,0,TAU);ctx.fill();
+  ctx.fillStyle='#9a6a42';ctx.beginPath();ctx.arc(r*.85,-r*.55,r*.5,0,TAU);ctx.fill();
+  ctx.strokeStyle='#6b4428';ctx.lineWidth=r*.12;
+  for(const s of [-1,1]){const bx=r*(.75+s*.18);ctx.beginPath();ctx.moveTo(bx,-r*.95);ctx.lineTo(bx+s*r*.15,-r*1.45);ctx.moveTo(bx+s*r*.07,-r*1.2);ctx.lineTo(bx+s*r*.42,-r*1.32);ctx.moveTo(bx+s*r*.12,-r*1.38);ctx.lineTo(bx-s*r*.12,-r*1.62);ctx.stroke()}
+  ctx.fillStyle='#262626';ctx.beginPath();ctx.arc(r*.95,-r*.68,r*.09,0,TAU);ctx.fill();
+  const glow=.55+.45*Math.sin(t*.008), b=ctx.globalAlpha;
+  ctx.globalAlpha=b*.25*glow;ctx.fillStyle='#ff5a50';ctx.beginPath();ctx.arc(r*1.32,-r*.5,r*.42,0,TAU);ctx.fill();ctx.globalAlpha=b;
+  ctx.fillStyle='#ef3d3d';ctx.beginPath();ctx.arc(r*1.32,-r*.5,r*.17,0,TAU);ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle='#e0b545';ctx.lineWidth=r*.14;ctx.lineCap='round';   // 雪橇
+  ctx.beginPath();ctx.moveTo(-r*1.5,r*.6);ctx.lineTo(r*1.1,r*.6);ctx.quadraticCurveTo(r*1.6,r*.6,r*1.5,r*.15);ctx.stroke();
+  for(const sx of [-.8,.5]){ctx.beginPath();ctx.moveTo(sx*r,r*.6);ctx.lineTo(sx*r,r*.25);ctx.stroke()}
+  ctx.fillStyle='#a9794d';ctx.beginPath();ctx.ellipse(-r*1.05,-r*.55,r*.55,r*.6,-.2,0,TAU);ctx.fill();
+  ctx.fillStyle='#d8473e';ctx.beginPath();ctx.ellipse(r*.1,-r*.45,r*.55,r*.5,0,0,TAU);ctx.fill();
+  ctx.fillStyle='#f7d2b8';ctx.beginPath();ctx.arc(r*.15,-r*1.05,r*.36,0,TAU);ctx.fill();
+  fluff(r*.15,-r*.75,r*.34,r*.24,8,'#fbf8f3',seed);
+  ctx.fillStyle='#262626';for(const s of [-1,1]){ctx.beginPath();ctx.arc(r*.15+s*r*.13+r*.06,-r*1.1,r*.06,0,TAU);ctx.fill()}
+  ctx.fillStyle='#e0605a';ctx.beginPath();ctx.arc(r*.24,-r*.98,r*.07,0,TAU);ctx.fill();
+  ctx.fillStyle='#d8473e';ctx.beginPath();ctx.moveTo(-r*.22,-r*1.25);ctx.quadraticCurveTo(r*.1,-r*1.95,r*.55,-r*1.25);ctx.closePath();ctx.fill();
+  ctx.fillStyle='#fbf8f3';ctx.fillRect(-r*.24,-r*1.32,r*.8,r*.14);ctx.beginPath();ctx.arc(r*.12,-r*1.62,r*.13,0,TAU);ctx.fill();
+  const bg=ctx.createLinearGradient(0,-r*.6,0,r*.4);bg.addColorStop(0,'#c8353a');bg.addColorStop(1,'#93222a');
+  ctx.fillStyle=bg;ctx.beginPath();ctx.moveTo(-r*1.6,-r*.5);ctx.quadraticCurveTo(-r*1.75,r*.35,-r*1.1,r*.35);ctx.lineTo(r*.75,r*.35);
+  ctx.quadraticCurveTo(r*1.25,r*.3,r*1.05,-r*.25);ctx.quadraticCurveTo(r*.3,-r*.05,-r*.4,-r*.25);ctx.closePath();ctx.fill();
+  ctx.strokeStyle='#e8bf52';ctx.lineWidth=r*.08;ctx.beginPath();ctx.moveTo(-r*1.45,-r*.1);ctx.quadraticCurveTo(-r*.3,r*.05,r*.85,-r*.02);ctx.stroke();
+  ctx.restore();
+}
+// 土地上的雪橇：從左飛到右，經過 drops 的位置丟禮物
+function drawSleigh(t){
+  const sl=sleigh; if(!sl) return;
+  const k=(t-sl.t0)/sl.d; if(k<0||k>1) return;
+  const r=6.6*S, X=-30*S+k*(W+60*S), Y=sl.y*H+(reduceMotion?0:Math.sin(t*.004)*3*S);
+  const b=ctx.globalAlpha; ctx.globalAlpha=b*.35;ctx.fillStyle=PAL.shadow;ctx.beginPath();ctx.ellipse(X,sl.gy*H,r*2.6,r*.5,0,0,TAU);ctx.fill();ctx.globalAlpha=b;
+  if(!reduceMotion&&Math.random()<.3) sparks.push({x:X-r*2.5,y:Y+r*.3,t0:t,c:'#f3c645'});
+  drawSleighAt(X,Y,t,sl.seed);
+  for(const d of sl.drops) if(!d.done&&k>=d.at){ d.done=1; if(gifts.length<6&&X>0&&X<W) gifts.push({x:clamp((X-r*.8)/W,.03,.97),y:clamp(sl.gy+(Math.random()-.5)*.06,.1,.97),fromY:Y/H,t0:t,col:Math.floor(Math.random()*4)}); }
+}
+/* ---------- v1.7 聖誕紅（drawNewPlant 的格式：g, v=階段, s=S） ---------- */
+function poinBract(g,len,wid,rot,col,s){
+  g.save();g.rotate(rot);g.fillStyle=col;
+  g.beginPath();g.moveTo(0,0);g.bezierCurveTo(wid,-len*.25,wid*.8,-len*.75,0,-len);g.bezierCurveTo(-wid*.8,-len*.75,-wid,-len*.25,0,0);g.fill();
+  g.strokeStyle='rgba(0,0,0,.12)';g.lineWidth=s*.25;g.beginPath();g.moveTo(0,-len*.1);g.lineTo(0,-len*.8);g.stroke();
+  g.restore();
+}
+function drawPoinsettia(g,v,s,t,seed,rare){
+  const sway=reduceMotion?0:Math.sin(t*.0016+seed*9)*.05, k=clamp((v-1)/2,0,1);
+  g.save();g.rotate(sway);
+  const sh=s*(3+3.4*k);
+  g.strokeStyle='#3f7a3a';g.lineWidth=s*.8;g.lineCap='round';g.beginPath();g.moveTo(0,0);g.lineTo(0,-sh);g.stroke();
+  for(const [a,l] of [[-1.2,5.5],[1.25,5.2],[-2.1,4.3],[2.05,4.6]]){g.save();g.translate(0,-sh*.5);g.rotate(a);g.fillStyle=a<0?'#3d7d3e':'#4c8f48';const L=l*s*(.7+.3*k);
+    g.beginPath();g.moveTo(0,0);g.bezierCurveTo(1.6*s,-L*.3,1.4*s,-L*.8,0,-L);g.bezierCurveTo(-1.4*s,-L*.8,-1.6*s,-L*.3,0,0);g.fill();g.restore()}
+  if(v>=1.4){
+    const z=.45+.55*clamp((v-1.4)/1.6,0,1), C=rare?['#d9d2c2','#f2ede2','#fffdf8']:['#a8222c','#d23a3a','#ec5a50'];
+    g.translate(0,-sh-s*.4);
+    for(let i=0;i<6;i++) poinBract(g,5.4*s*z,1.9*s*z,i/6*TAU+seed,C[0],s);
+    for(let i=0;i<6;i++) poinBract(g,4.4*s*z,1.7*s*z,(i+.5)/6*TAU+seed,C[1],s);
+    for(let i=0;i<5;i++) poinBract(g,2.6*s*z,1.1*s*z,i/5*TAU+seed*2,C[2],s);
+    g.fillStyle='#7fae3a';for(let i=0;i<5;i++){const a=i/5*TAU;g.beginPath();g.arc(Math.cos(a)*.6*s*z,Math.sin(a)*.6*s*z,.42*s*z,0,TAU);g.fill()}
+    g.fillStyle='#f2cb45';g.beginPath();g.arc(0,0,.4*s*z,0,TAU);g.fill();
+  }
+  g.restore();
 }
 /* ---------- v1.3 居民的畫法（照 docs/new-guide-candidates.html，降過彩度） ---------- */
 function smile(y,r,big){ctx.strokeStyle='#2a2a2a';ctx.lineWidth=r*.09;ctx.lineCap='round';ctx.beginPath();ctx.arc(0,y,big?r*.16:r*.09,Math.PI*.15,Math.PI*.85);ctx.stroke()}
@@ -748,6 +918,8 @@ function poke(c){
   else if(c.kind==='ladybug'){c.fly=t;c.hop=null}
   else if(c.kind==='puff') puffBurst(c,t);
   else if(c.kind==='cloud'){c.rainUntil=t+2200;c.heavy=t+2200}
+  else if(c.kind==='santa'){c.hoho=t;if(!c.hop&&!reduceMotion){startHop(c,c.x,c.y,t,380,8);c.t0=t;c.wait=1100}
+    if(gifts.length<6) gifts.push({x:clamp(c.x+c.face*r*1.9/W,.03,.97),y:c.y+1.5*S/H,t0:t+250,col:Math.floor(Math.random()*4)})}
   else if(!c.hop&&!reduceMotion){startHop(c,c.x,c.y,t,440,15);c.t0=t;c.wait=1100}
   sparks.push({x:p.cx,y:AIR[c.kind]?p.cy-p.lift-r*1.6:p.cy-r*2.6,t0:t,c:'#f08aa2'});
 }
@@ -760,7 +932,8 @@ function critterCheer(){
     if(c.kind==='ladybug'){c.fly=t;c.hop=null;return}
     if(c.kind==='cloud'){c.rainUntil=Math.max(c.rainUntil,t+1200);return}
     if(c.kind==='puff') return;
-    if(!c.hop&&!reduceMotion){startHop(c,c.x,c.y,t,360,c.kind==='moss'?6:10);c.t0=t;c.wait=Math.max(c.wait,700)}
+    if(c.kind==='santa') c.hoho=t;
+    if(!c.hop&&!reduceMotion){startHop(c,c.x,c.y,t,360,c.kind==='moss'||c.kind==='santa'?6:10);c.t0=t;c.wait=Math.max(c.wait,700)}
   },i*90+Math.random()*60));
 }
 function critterNotice(x,y){ // a drop lands nearby: dew and moss come to look
@@ -792,6 +965,55 @@ function residents(x,y,acts,nG,bigTrees){
   if(cols>=3&&dry&&nK('bee')<3&&!near('bee',.15)&&chance(.15)) acts.push(()=>{if(!near('bee',.15))makeCritter('bee',x,y,[x,y])});
   if(fl.length>=4&&dry&&nK('ladybug')<3&&!near('ladybug',.15)&&chance(.15)) acts.push(()=>{if(!near('ladybug',.15))makeCritter('ladybug',x,y,[x,y])});
   if(nG>=10&&dry&&nK('puff')<3&&!near('puff',.15)&&chance(.1)) acts.push(()=>{if(!near('puff',.15))makeCritter('puff',x,y,[x,y])});
+  // v1.7：十二月，公公會揹著禮物走進來（只在記憶體，每次打開頁面要再來一次）；偶爾有雪橇從天上飛過（稀有）
+  if(december()){
+    if(dry&&!nK('santa')&&chance(.12)) acts.push(()=>{const c=makeCritter('santa',x,y,[x,y]);if(c&&!reduceMotion){c.hoho=now()+700}});
+    if(!sleigh&&!document.hidden&&Date.now()-lastSleigh>90000&&chance(.03)) acts.push(startSleigh);
+  }
+}
+/* ---------- v1.7 十二月：禮物、雪橇、小雪（都只在記憶體） ---------- */
+const gifts=[], flakes=[]; let sleigh=null, lastSleigh=0;
+function startSleigh(){
+  if(sleigh) return;
+  lastSleigh=Date.now();
+  sleigh={t0:now(),d:reduceMotion?3500:6000,y:.1+Math.random()*.08,gy:.3+Math.random()*.15,seed:Math.random(),drops:[{at:.35},{at:.65}]};
+  emit('message','天上飛過一台雪橇！');
+  record('santaR'); emit('discover',{kind:'santaR',x:.5,y:sleigh.y,map:activeMap});
+}
+function snowTick(t,dt){
+  if(!december()||reduceMotion){flakes.length=0;return}
+  if(flakes.length<Math.min(60,W*H/5000)&&Math.random()<dt*5) flakes.push({x:Math.random(),y:-.02,r:(.6+Math.random()*.8)*S,v:.03+Math.random()*.04,ph:Math.random()*9,end:.55+Math.random()*.45});
+  for(let i=flakes.length-1;i>=0;i--){const f=flakes[i];f.y+=f.v*dt;f.x+=Math.sin(t*.001+f.ph)*.0004;if(f.y>f.end)flakes.splice(i,1)}
+}
+function drawSnow(){
+  if(!flakes.length) return;
+  ctx.fillStyle='rgba(255,255,255,.85)';
+  for(const f of flakes){const k=f.y>f.end-.05?(f.end-f.y)/.05:1;ctx.globalAlpha=Math.max(0,k);ctx.beginPath();ctx.arc(f.x*W,f.y*H,f.r,0,TAU);ctx.fill()}
+  ctx.globalAlpha=1;
+}
+const GIFT=[['#e45c55','#f6d36b'],['#4f9a6a','#f4efe4'],['#5b84c9','#f6d36b'],['#f0c24a','#d8473e']], GIFT_MS=6000;
+function drawGift(gf,t){
+  const age=t-gf.t0; if(age<0) return;
+  const b=2.6*S, X=gf.x*W, gy=gf.y*H; let Y=gy, sc=1, a=1;
+  if(gf.fromY!==undefined){const k=Math.min(1,age/700);Y=gf.fromY*H+(gy-gf.fromY*H)*k*k}
+  else if(!reduceMotion) sc=easeBack(age/450);
+  if(age>GIFT_MS-500) a=Math.max(0,(GIFT_MS-age)/500);
+  if(age>GIFT_MS-500&&!gf.poof){gf.poof=1;sparks.push({x:X,y:Y-b*2,t0:t,c:'#f3c645'})}
+  const base=ctx.globalAlpha; ctx.save();ctx.globalAlpha=base*a;
+  ctx.fillStyle=PAL.shadow;ctx.beginPath();ctx.ellipse(X,gy,b*1.1,b*.35,0,0,TAU);ctx.fill();
+  ctx.translate(X,Y);ctx.scale(sc,sc);
+  const [c0,c1]=GIFT[gf.col];
+  ctx.fillStyle=c0;ctx.fillRect(-b,-b*2,b*2,b*2);
+  ctx.fillStyle='rgba(0,0,0,.12)';ctx.fillRect(b*.35,-b*2,b*.65,b*2);
+  ctx.fillStyle=c0;ctx.fillRect(-b*1.12,-b*2.35,b*2.24,b*.5);
+  ctx.fillStyle=c1;ctx.fillRect(-b*.2,-b*2.35,b*.4,b*2.35);ctx.fillRect(-b*1.12,-b*2.15,b*2.24,b*.22);
+  for(const s of [-1,1]){ctx.beginPath();ctx.ellipse(s*b*.4,-b*2.55,b*.38,b*.22,s*.5,0,TAU);ctx.fill()}
+  ctx.restore();
+}
+function tickDecember(t,dt){
+  snowTick(t,dt);
+  for(let i=gifts.length-1;i>=0;i--) if(t-gifts[i].t0>GIFT_MS) gifts.splice(i,1);
+  if(sleigh&&t-sleigh.t0>sleigh.d) sleigh=null;
 }
 function streakTick(){   // v1.3：5 分鐘內答對 10 次（算 addWater 的次數，不算水滴數）→ 來一朵小雲
   const t=Date.now(); streak.push(t);
@@ -939,6 +1161,12 @@ const GUIDE=[
   {k:'cloudR', name:'彩虹小雲', art:'critter',kind:'cloud',v:1,rare:true,
    desc:'身邊掛著一段彩虹的小雲。',
    hint:'小雲偶爾會帶著彩虹'},
+  {k:'santa', name:'呵呵公公', art:'critter',kind:'santa',v:0,
+   desc:'只在十二月來玩的聖誕公公。點他一下，他會「呵呵」笑，從袋子裡拿禮物給你。',
+   hint:'十二月的時候，多澆幾次水看看'},
+  {k:'santaR', name:'雪橇', art:'sleigh',rare:true,
+   desc:'十二月偶爾從天上飛過的雪橇，麋鹿的鼻子會發紅光，沿路丟下禮物。',
+   hint:'十二月的時候，抬頭看看天上'},
   {sec:'花草',note:'在對的地方澆水，會長出不一樣的植物'},
   {k:'clover', name:'三葉草', art:'plant',type:'clover',color:0,ps:.05,
    desc:'一叢一叢的三葉草，長大會開白色的小絨球花。會自己慢慢蔓延。',
@@ -964,6 +1192,12 @@ const GUIDE=[
   {k:'pumpkinR', name:'白南瓜', art:'plant',type:'pumpkin',color:5,ps:.032,rare:true,
    desc:'白色的南瓜，很少見。',
    hint:'南瓜也有不是橘色的'},
+  {k:'poinsettia', name:'聖誕紅', art:'plant',type:'poinsettia',color:0,ps:.024,
+   desc:'只在十二月長。紅紅的不是花瓣，是葉子變的；中間黃綠色的小點點才是花。',
+   hint:'十二月的時候，在花草旁邊澆水'},
+  {k:'poinsettiaR', name:'白聖誕紅', art:'plant',type:'poinsettia',color:5,ps:.024,rare:true,
+   desc:'白色的聖誕紅，很少見。',
+   hint:'聖誕紅也有不是紅色的'},
   {sec:'土地的秘密',note:'照顧土地時會慢慢發生的事'},
   {k:'pond', name:'水塘', art:'pond',
    desc:'同一塊地澆了太多水，就積成一個小水塘。',
@@ -1014,13 +1248,15 @@ function onLand(key){
     case 'ring': return plants.filter(p=>p.type==='tree'&&p.stage>=3&&plants.some(q=>q.type==='mushroom'&&dist(q.x,q.y,p.x,p.y)<.1*U)).length;
     case 'fly': return flies.length;
     case 'violet': return plants.filter(p=>p.type==='flower'&&p.color===5).length;
+    case 'santaR': return sleigh?1:0;
     default:
       if(PKEY[key]){const d=PKEY[key];return plants.filter(p=>p.type===d.type&&(p.color===5)===d.rare&&p.stage>=d.min).length}
       return critters.filter(c=>c.kind+(c.v?'R':'')===key).length;
   }
 }
 const UNIT_WORD={pond:'個',lily:'朵',tree:'棵',ring:'個',fly:'隻',violet:'朵',cloud:'朵',cloudR:'朵',puff:'團',puffR:'團',
-  clover:'叢',cloverR:'叢',sunflower:'朵',sunflowerR:'朵',tulip:'朵',tulipR:'朵',pumpkin:'顆',pumpkinR:'顆'};
+  clover:'叢',cloverR:'叢',sunflower:'朵',sunflowerR:'朵',tulip:'朵',tulipR:'朵',pumpkin:'顆',pumpkinR:'顆',
+  santa:'位',santaR:'台',poinsettia:'株',poinsettiaR:'株'};
 function updateGuideBtn(){
   const n=G_ITEMS.filter(e=>found[e.k]).length;
   G.gcount.textContent=n+'/'+G_ITEMS.length;
@@ -1074,7 +1310,7 @@ function drawPortrait(pt,t){
         tickPortraitCritter(st.c,t);
         if(e.kind==='moss') st.c.face=1;
         if(e.kind==='bee'){S=P*.016;drawFlower({seed:.3,color:e.v?5:2},.5*W,.94*H,2,1,t)}
-        S=P*({dew:.027,bee:.03,ladybug:.028,puff:.026,cloud:.024}[e.kind]||.024);
+        S=P*({dew:.027,bee:.03,ladybug:.028,puff:.026,cloud:.024,santa:.025}[e.kind]||.024);
         drawCritter(st.c,t);break;
       }
       case 'pond':{
@@ -1108,6 +1344,11 @@ function drawPortrait(pt,t){
         // drawFly 會把蝴蝶畫在 y 往上 18*S 的地方（土地上是飛在花叢上方）；畫像的 S 很大，
         // 參考檔直接給 y=.52 會整隻畫到卡片外。這裡把那段位移加回來，讓蝴蝶停在花的上方（約 .22 高）。
         S=P*.04; drawFly({x:.5,y:.22+18*S/H,seed:.3,c:0,born:-1e9},t);
+        break;
+      }
+      case 'sleigh':{
+        S=P*.013; drawGrass({seed:.7},.16*W,.92*H,1.5,1,t);drawGrass({seed:.9},.85*W,.9*H,1.5,1,t);
+        S=P*.024; drawSleighAt(.32*W,.56*H+(reduceMotion?0:Math.sin(t*.004)*P*.02),t,.4);
         break;
       }
       case 'violet':{
@@ -1499,7 +1740,7 @@ function critterViews(t){
   }
   return out;
 }
-const PLANT_BOX={grass:[7,24],flower:[8,34],tree:[29,95],mushroom:[4,8],clover:[9,17],sunflower:[10,42],tulip:[9,33],pumpkin:[12,15]};   // [half width, height] in S units
+const PLANT_BOX={grass:[7,24],flower:[8,34],tree:[29,95],mushroom:[4,8],clover:[9,17],sunflower:[10,42],tulip:[9,33],pumpkin:[12,15],poinsettia:[11,26]};   // [half width, height] in S units
 function foliageAlpha(p,X,Y,views){
   const box=PLANT_BOX[p.type]; if(!box) return 1;
   const hw=box[0]*S, h=box[1]*S*(p.type==='tree'?Math.max(.4,p.v/3):1);
@@ -1539,8 +1780,20 @@ const SPECIES={
   sunflower:{draw:(p,X,Y,a,t)=>drawNewPlant(drawSunflower,p,X,Y,a,t,1)},
   tulip:    {draw:(p,X,Y,a,t)=>drawNewPlant(drawTulip,p,X,Y,a,t,1.3)},
   pumpkin:  {draw:(p,X,Y,a,t)=>drawNewPlant(drawPumpkin,p,X,Y,a,t,1.1)},
+  poinsettia:{draw:(p,X,Y,a,t)=>drawNewPlant(drawPoinsettia,p,X,Y,a,t,1.9)},
 };
 
+let layer=null, lctx=null;
+function drawLayered(fn,X,Y,alpha){
+  const hw=Math.ceil(42*S), up=Math.ceil(112*S), down=Math.ceil(14*S), pw=Math.ceil(hw*2*DPR), ph=Math.ceil((up+down)*DPR);
+  if(!layer){layer=document.createElement('canvas');lctx=layer.getContext('2d')}
+  if(layer.width<pw||layer.height<ph){layer.width=Math.max(layer.width,pw);layer.height=Math.max(layer.height,ph)}
+  lctx.setTransform(1,0,0,1,0,0);lctx.clearRect(0,0,pw,ph);
+  lctx.setTransform(DPR,0,0,DPR,(hw-X)*DPR,(up-Y)*DPR);lctx.globalAlpha=1;
+  const sv=ctx; ctx=lctx; try{fn()}finally{ctx=sv}
+  ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.globalAlpha=alpha;
+  ctx.drawImage(layer,0,0,pw,ph,Math.round((X-hw)*DPR),Math.round((Y-up)*DPR),pw,ph);ctx.restore();
+}
 let last=now(), wetColor='';
 function paint(t,withHover){
   ctx.setTransform(DPR,0,0,DPR,0,0);
@@ -1567,15 +1820,18 @@ function paint(t,withHover){
     if(p.kind){ drawCritter(p,t); continue; }
     const a=reduceMotion?1:Math.max(.001,easeBack((t-p.born)/700));
     const X=p.x*W,Y=p.y*H;
-    const fade=views.length&&p.type!=='lily'?foliageAlpha(p,X,Y,views):1;
-    ctx.globalAlpha=fade;
+    let fade=views.length&&p.type!=='lily'?foliageAlpha(p,X,Y,views):1;
+    if(p.type==='tree'&&!treeZone(p.x,p.y)) fade=Math.min(fade,1-.55*clamp((p.v-1.2)/1.6,0,1));   // v1.7：樹區外的大樹半透明，後面的花草看得到
     const sp=SPECIES[p.type];
-    if(sp) sp.draw(p,X,Y,a,t);
-    ctx.globalAlpha=1;
+    if(sp&&p.type==='tree'&&fade<.999) drawLayered(()=>sp.draw(p,X,Y,a,t),X,Y,fade);   // v1.7：整棵樹先畫好再一起變淡（樹冠一團一團疊著，直接設透明度會疊回不透明）
+    else{ ctx.globalAlpha=fade; if(sp) sp.draw(p,X,Y,a,t); ctx.globalAlpha=1; }
   }
+  for(const gf of gifts) drawGift(gf,t);
   for(const f of flies) drawFly(f,t);
+  drawSleigh(t);
   drawSparks(t);
   if(!withHover) return;
+  drawSnow();
   for(let i=falls.length-1;i>=0;i--){
     const f=falls[i],k=reduceMotion?1:(t-f.t0)/420;
     if(k>=1){falls.splice(i,1);rings.push({x:f.x,y:f.y,t0:t,type:'splash'});continue}
@@ -1591,6 +1847,7 @@ function frame(t){
   const dt=Math.min(.05,(t-last)/1000);last=t;
   for(const p of plants) p.v+=(p.stage-p.v)*Math.min(1,dt*(reduceMotion?60:2.6));
   updateCritters(t,dt);
+  tickDecember(now(),dt);
   paint(t,true);
   renderPortraits(t);
   requestAnimationFrame(frame);
@@ -1610,7 +1867,7 @@ function serialize(){
     wets:wets.slice(-400).map(w=>[+w.x.toFixed(4),+w.y.toFixed(4),+w.r.toFixed(1)]),
     ponds:ponds.map(p=>[+p.x.toFixed(4),+p.y.toFixed(4),+p.r.toFixed(4)]),
     flies:flies.map(f=>[+f.x.toFixed(4),+f.y.toFixed(4),+f.seed.toFixed(6),f.c]),
-    critters:critters.map(c=>[c.kind,+c.x.toFixed(4),+c.y.toFixed(4),+c.seed.toFixed(6),c.v,+c.hx.toFixed(4),+c.hy.toFixed(4)]).concat(keepCritters), seenKinds, found, newFound
+    critters:critters.filter(c=>!GUEST[c.kind]).map(c=>[c.kind,+c.x.toFixed(4),+c.y.toFixed(4),+c.seed.toFixed(6),c.v,+c.hx.toFixed(4),+c.hy.toFixed(4)]).concat(keepCritters), seenKinds, found, newFound
   });
 }
 function writeNow(){
@@ -1635,7 +1892,7 @@ function load(){
     (d.wets||[]).forEach(a=>wets.push({x:a[0],y:a[1],r:a[2],t0:-1e9}));
     (d.ponds||[]).forEach(a=>ponds.push({x:a[0],y:a[1],r:a[2],born:-1e9}));
     (d.flies||[]).forEach(a=>flies.push({x:a[0],y:a[1],seed:a[2],c:a[3],born:-1e9}));
-    (d.critters||[]).forEach(a=>{if(!Array.isArray(a)) return; if(CR[a[0]]) makeCritter(a[0],a[1],a[2],[a[5],a[6]],{seed:a[3],v:a[4],born:-1e9,quiet:true}); else keepCritters.push(a)});
+    (d.critters||[]).forEach(a=>{if(!Array.isArray(a)) return; if(GUEST[a[0]]) return; if(CR[a[0]]) makeCritter(a[0],a[1],a[2],[a[5],a[6]],{seed:a[3],v:a[4],born:-1e9,quiet:true}); else keepCritters.push(a)});
     if(d.seenKinds&&typeof d.seenKinds==='object') seenKinds=d.seenKinds;
     if(d.found&&typeof d.found==='object') found=d.found;
     if(d.newFound&&typeof d.newFound==='object') newFound=d.newFound;
@@ -1649,7 +1906,8 @@ function load(){
 /* ================= 清空土地 ================= */
 function reset(){
   gen++;
-  for(const a of [plants,wets,ponds,flies,falls,rings,critters,sparks,keepCritters,puffSeeds]) a.length=0;
+  for(const a of [plants,wets,ponds,flies,falls,rings,critters,sparks,keepCritters,puffSeeds,gifts,flakes]) a.length=0;
+  sleigh=null;
   seenKinds={};         // 圖鑑紀錄 found 不清
   water=0;
   syncWater(false); save();
@@ -1718,6 +1976,13 @@ function downloadBackup(){
 function restoreBackup(text){
   let b=null, d=null;
   try{ b=JSON.parse(text) }catch(e){}
+  // v1.6：Painless 首頁「匯出進度」的完整備份（schema_version＋progress）放錯入口時，說清楚要去哪裡匯入
+  if(b&&typeof b==='object'&&b.schema_version&&b.progress&&typeof b.progress==='object'){
+    alert(KEY==='pg.drop.v1'
+      ?'這是 Painless 的完整備份（單字進度＋一滴水花園），要從 Painless 首頁的「匯出／匯入」→「匯入」放回去，單字進度和花園會一起回來。'
+      :'這是 Painless GRE 的備份，不能還原到這一頁。');
+    return false;
+  }
   if(!b||b.app!==BK_APP||typeof b.data!=='string'){ alert('這不是一滴水的備份檔。'); return false; }
   if(b.key!==KEY){ alert('這是「'+bkName(b.key)+'」那一頁的備份，不能還原到「'+bkName(KEY)+'」這一頁。'); return false; }
   try{ d=JSON.parse(b.data) }catch(e){}
