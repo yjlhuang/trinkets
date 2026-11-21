@@ -10,15 +10,18 @@
    存檔欄位不變（只多了新的 kind/type 字串），讀到不認得的居民會原樣保留、存檔時寫回。
    v1.7 加十二月限定（呵呵公公、雪橇、聖誕紅、小雪）和大樹上限：公公、禮物、雪橇只在記憶體，不進存檔；
    聖誕紅是新的 plant type 字串；存檔欄位不變。
-   內部資料已經是多地圖的形狀（maps + activeMap），目前只有 home 一張。 */
+   v2.0 第二塊地「水邊樹林」：存在新的 key（KEY+'.forest'），第一塊地的 key 一個欄位都不加。
+   森林 key 存在＝已經開門（第一塊地長到 300 株時建立）；「目前在哪塊地」也記在森林 key 裡。
+   水、圖鑑（found/seenKinds）、頁面的答題進度仍然只寫在第一塊地的 key。 */
 (function(){
 'use strict';
-const VERSION='1.7';
+const VERSION='2.0';
 
 function create(cfg){
 const $=id=>document.getElementById(id);
 const land=cfg.root;
 const KEY=cfg.key;
+const FKEY=KEY+'.forest';   // v2.0 水邊樹林的存檔（Painless backup.js 的 KEYS.dropForest 要跟它一字不差）
 
 /* ---------- 事件：on(type, fn)；discover 的 kind 是穩定字串 id，之後加新種類不用改頁面 ---------- */
 const handlers={};
@@ -26,9 +29,33 @@ function on(type,fn){ (handlers[type]=handlers[type]||[]).push(fn); return api; 
 function emit(type,ev){ (handlers[type]||[]).forEach(fn=>{ try{ fn(ev); }catch(e){ console.error(e); } }); }
 
 /* ---------- 手上的水與地圖 ---------- */
-let water=0, activeMap='home';
-const maps={ home:{plants:[],wets:[],ponds:[],flies:[],critters:[]} };
-function bindMap(){ const m=maps[activeMap]; plants=m.plants; wets=m.wets; ponds=m.ponds; flies=m.flies; critters=m.critters; }
+let water=0, activeMap='home', forestOpen=false;
+// keep：讀到不認得的居民（之後版本才有的），原樣保留、存檔時寫回（每塊地各一份）；n：這塊地滴過幾滴（森林的輪替用）
+const newMapData=()=>({plants:[],wets:[],ponds:[],flies:[],critters:[],keep:[],n:0});
+const maps={ home:newMapData() };
+const inForest=()=>activeMap==='forest';
+function bindMap(){ const m=maps[activeMap]; plants=m.plants; wets=m.wets; ponds=m.ponds; flies=m.flies; critters=m.critters; keepCritters=m.keep; stream=LAYOUT[activeMap].stream; }
+/* v2.0 兩塊地的版面。水邊樹林照 docs/forest-map-preview.html 的 A「小溪穿林」：一條小溪從上面流下來，中間一個小水潭，
+   開局就有三棵橡樹、一棵溪邊的小垂柳（中樹，要自己澆大）、香蒲、蕨、鈴蘭。溪和小水潭每次從這裡重建，不存檔。
+   小垂柳一開始就是中樹：大樹上限 5 棵連中樹一起算，先佔一個名額，才不會被別的樹苗搶光、永遠長不大。
+   座標 0～1；溪寬 w 是 U 的比例。植物的 seed 用 hash 算（不用 Math.random，第一塊地的亂數順序不受影響）。 */
+const OPEN_AT=300;   // 第一塊地長到幾株開第二塊地（2026-11-21 主人定：300 株；普通格那一條拿掉）
+const LAYOUT={
+  home:{name:'第一塊地',stream:null},
+  forest:{name:'水邊樹林',
+    stream:{w:.03,pts:[[.72,-.03],[.67,.14],[.57,.3],[.56,.44],[.62,.58],[.53,.76],[.41,.9],[.37,1.03]]},
+    pond:{x:.6,y:.55,r:.065},
+    start:[['tree',.2,.3,3],['tree',.37,.2,3],['tree',.94,.46,3],['tree',.69,.24,2],
+      ['cattail',.67,.63,3],['cattail',.52,.5,3],['cattail',.42,.8,3],['cattail',.64,.29,3],
+      ['fern',.13,.42,3],['fern',.28,.37,2],['fern',.88,.56,3],['lilyvalley',.4,.31,3],
+      ['lily',.58,.54,2],['lily',.62,.565,1],['lily',.605,.525,1],
+      ['grass',.1,.7,2],['grass',.3,.65,2],['grass',.78,.75,2],['grass',.84,.2,2],['grass',.36,.58,2],['grass',.7,.9,2]]}
+};
+function fixedPond(m){ const p=LAYOUT.forest.pond; m.ponds.unshift({x:p.x,y:p.y,r:p.r,born:-1e9,fixed:true}); }
+function seedForest(m){
+  fixedPond(m);
+  LAYOUT.forest.start.forEach(([type,x,y,stage],i)=>m.plants.push({type,x,y,stage,v:stage,color:0,seed:+hash(i+1,101).toFixed(6),born:-1e9,nb:-Math.floor(hash(i+1,102)*300)}));
+}
 // 水量變了：土地游標、提示字、頁面的水滴列（頁面訂閱 water 事件）
 function syncWater(gained){
   land.classList.toggle('has-water',water>0);
@@ -40,7 +67,7 @@ function syncWater(gained){
 const cv=$('cv'); let ctx=cv.getContext('2d');   // 圖鑑畫像會用 withCanvas() 暫時換掉 ctx
 let W=0,H=0,DPR=1,U=1,S=1, ground=null, hover=null, gen=0;
 const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)').matches;
-let plants, wets, ponds, flies, critters;   // 指向 maps[activeMap] 裡的陣列（bindMap），程式只原地修改、不重新指定
+let plants, wets, ponds, flies, critters, keepCritters, stream;   // 指向 maps[activeMap] 裡的陣列（bindMap），程式只原地修改、不重新指定
 const falls=[], rings=[];
 
 const PAL={
@@ -73,20 +100,31 @@ function pumpkinColor(){
   if(o<6) return w<2&&chance(.03)?5:Math.floor(Math.random()*5);
   return w<2&&chance(.5)?5:null;
 }
-// v1.7：聖誕紅的顏色，做法同 pumpkinColor()：紅的最多 12 株，白的（color 5）8%、最多 2 株；紅的滿了只長白的。
+// v1.7：聖誕紅的顏色，做法同 pumpkinColor()：紅的最多 12 株；紅的滿了只長白的。
+// v1.8（主人：期間限定要讓學生考試前也收得到）：白的（color 5）8% → 20%、最多 2 → 3 株。
 function poinColor(){
   let r=0,w=0; for(const p of plants) if(p.type==='poinsettia') p.color===5?w++:r++;
-  if(r<12) return w<2&&chance(.08)?5:0;
-  return w<2&&chance(.5)?5:null;
+  if(r<12) return w<3&&chance(.2)?5:0;
+  return w<3&&chance(.5)?5:null;
 }
+// v1.8：顏色在真的長出來那一刻才決定（滴水到長出來隔了幾百毫秒，點很快時先決定顏色會超過上限）
+function addPoin(x,y){ const pc=poinColor(); return pc===null?null:addPlant('poinsettia',x,y,{color:pc}); }
+// v2.0：南瓜也一樣（待辦：v1.3 起顏色在滴下去時就決定，連點很快時白南瓜會超過 2 顆）。滴下去時照舊決定「要不要長南瓜」，長出來那一刻再決定顏色
+function addPumpkin(x,y){ const pc=pumpkinColor(); return pc===null?null:addPlant('pumpkin',x,y,{color:pc}); }
 // v1.3：植物分組。outcome() 用它決定「從這株長出什麼」；不在分組裡的會被當成樹（舊程式的 else 分支）
-const GRASSY={grass:1,mushroom:1,clover:1,pumpkin:1}, FLOWERY={flower:1,sunflower:1,tulip:1,poinsettia:1};   // v1.7 聖誕紅算花（不在分組裡會被當成樹）
+// v2.0 香蒲、蕨、鈴蘭算草（水邊樹林才長）
+const GRASSY={grass:1,mushroom:1,clover:1,pumpkin:1,cattail:1,fern:1,lilyvalley:1}, FLOWERY={flower:1,sunflower:1,tulip:1,poinsettia:1};   // v1.7 聖誕紅算花（不在分組裡會被當成樹）
+const treeKey=p=>inForest()?(isWillow(p)?'willow':'oak'):'tree';   // v2.0 大樹的圖鑑格：第一塊地是「大樹」，水邊樹林分橡樹、垂柳
 // v1.3：新植物的圖鑑格。min＝長到第幾階才登錄；稀有＝color 5（跟紫花同一個機率）
 const PKEY={clover:{type:'clover',rare:false,min:1},cloverR:{type:'clover',rare:true,min:1},
   sunflower:{type:'sunflower',rare:false,min:3},sunflowerR:{type:'sunflower',rare:true,min:3},
   tulip:{type:'tulip',rare:false,min:3},tulipR:{type:'tulip',rare:true,min:3},
   pumpkin:{type:'pumpkin',rare:false,min:3},pumpkinR:{type:'pumpkin',rare:true,min:3},
-  poinsettia:{type:'poinsettia',rare:false,min:2},poinsettiaR:{type:'poinsettia',rare:true,min:2}};
+  poinsettia:{type:'poinsettia',rare:false,min:2},poinsettiaR:{type:'poinsettia',rare:true,min:2},
+  // v2.0 水邊樹林
+  cattail:{type:'cattail',rare:false,min:3},cattailR:{type:'cattail',rare:true,min:3},
+  fern:{type:'fern',rare:false,min:2},fernR:{type:'fern',rare:true,min:2},
+  lilyvalley:{type:'lilyvalley',rare:false,min:3},lilyvalleyR:{type:'lilyvalley',rare:true,min:3}};
 
 function resize(){
   const r=land.getBoundingClientRect();
@@ -114,6 +152,7 @@ function buildGround(){
     g.beginPath();g.ellipse(x,y,r*1.6,r*.8,0,0,Math.PI*2);g.fill();
   }
   g.globalAlpha=1;
+  if(stream) drawStream(g);   // v2.0 水邊樹林的小溪畫在底圖上（只畫一次，換地圖或改大小時重畫）
 }
 
 /* ---------- ponds ---------- */
@@ -123,6 +162,44 @@ function inPond(p,x,y,pad=1){const dx=(x-p.x)*W/(pondRx(p)*pad),dy=(y-p.y)*H/(po
 function pondAt(x,y,pad=1){return ponds.find(p=>inPond(p,x,y,pad))}
 function pondEdge(p){const a=Math.random()*Math.PI*2,k=1.05+Math.random()*.25;return [p.x+Math.cos(a)*pondRx(p)*k/W,p.y+Math.sin(a)*pondRy(p)*k/H]}
 function pondInside(p){const a=Math.random()*Math.PI*2,k=Math.random()*.6;return [p.x+Math.cos(a)*pondRx(p)*k/W,p.y+Math.sin(a)*pondRy(p)*k/H]}
+/* ---------- v2.0 小溪（只有水邊樹林有；第一塊地 stream 是 null，下面這些都直接回傳「不在溪邊」） ---------- */
+// 離溪最近的點：d＝距離（px），q＝溪中心線上的點，n＝法線
+function streamNear(x,y){
+  const P=[x*W,y*H]; let best=null;
+  for(let i=0;i<stream.pts.length-1;i++){
+    const A=[stream.pts[i][0]*W,stream.pts[i][1]*H], B=[stream.pts[i+1][0]*W,stream.pts[i+1][1]*H];
+    const dx=B[0]-A[0],dy=B[1]-A[1],L=dx*dx+dy*dy||1;
+    const k=clamp(((P[0]-A[0])*dx+(P[1]-A[1])*dy)/L,0,1), qx=A[0]+dx*k, qy=A[1]+dy*k;
+    const d=Math.hypot(P[0]-qx,P[1]-qy);
+    if(!best||d<best.d) best={d,qx,qy,nx:-dy/Math.sqrt(L),ny:dx/Math.sqrt(L)};
+  }
+  return best;
+}
+const inStream=(x,y,pad=1)=>!!stream&&streamNear(x,y).d<stream.w*U*pad;
+const wetAt=(x,y,pad=1.2)=>!!pondAt(x,y,pad)||inStream(x,y,pad);
+// 長在溪裡的推到岸上
+function streamBank(x,y){
+  const s=streamNear(x,y); let dx=x*W-s.qx, dy=y*H-s.qy, l=Math.hypot(dx,dy);
+  if(l<.5){const sg=Math.random()<.5?-1:1;dx=s.nx*sg;dy=s.ny*sg;l=1}
+  const k=stream.w*U*(1.15+Math.random()*.6);
+  return [(s.qx+dx/l*k)/W,(s.qy+dy/l*k)/H];
+}
+const nearWater=(x,y)=>ponds.some(p=>inPond(p,x,y,1.9))||(!!stream&&streamNear(x,y).d<(stream.w+.045)*U);
+const shady=(x,y)=>plants.some(p=>p.type==='tree'&&p.stage===3&&dist(p.x,p.y,x,y)<.085*U);
+// 水邊樹林的樹：靠溪的長成垂柳，其他是橡樹（看位置決定，溪不會動，所以每次算出來都一樣；記在記憶體裡不進存檔）
+// 用固定的 780×610 虛擬土地量距離（跟螢幕大小無關，同一棵樹在手機和電腦上都是同一種）
+function isWillow(p){
+  if(p.wl===undefined){
+    const st=LAYOUT.forest.stream, VW=780, VH=610; let d=1e9;
+    for(let i=0;i<st.pts.length-1;i++){
+      const [ax,ay]=st.pts[i],[bx,by]=st.pts[i+1], dx=(bx-ax)*VW, dy=(by-ay)*VH, L=dx*dx+dy*dy||1;
+      const k=clamp(((p.x-ax)*VW*dx+(p.y-ay)*VH*dy)/L,0,1);
+      d=Math.min(d,Math.hypot((p.x-ax)*VW-dx*k,(p.y-ay)*VH-dy*k));
+    }
+    p.wl=d<(st.w+.08)*VH;
+  }
+  return p.wl;
+}
 function makePond(x,y){
   record('pond');
   const p={x,y,r:.04+Math.random()*.02,born:now()};
@@ -172,6 +249,10 @@ function addPlant(type,x,y,opts={}){
   const pd=pondAt(x,y,1.05);
   if(type==='lily'){ if(!pd) return null; }
   else if(pd){ [x,y]=pondEdge(pd); }
+  if(inForest()){   // v2.0 水邊樹林：長在溪裡的推到岸上；草長在水邊常是香蒲，長在大樹下常是蕨或鈴蘭
+    if(type!=='lily'&&inStream(x,y,1.1)) [x,y]=streamBank(x,y);
+    if(type==='grass'){ const r=Math.random(); if(nearWater(x,y)){ if(r<.35) type='cattail'; } else if(shady(x,y)){ if(r<.3) type='fern'; else if(r<.48) type='lilyvalley'; } }
+  }
   [x,y]=clearOfCritters(type,x,y);
   let color=opts.color;
   if(color===undefined) color = chance(.03) ? 5 : Math.floor(Math.random()*5);
@@ -179,17 +260,21 @@ function addPlant(type,x,y,opts={}){
     if(color!==5 && plants.filter(q=>q.type===type&&q.color!==5).length>=ROOM_CAP[type]) return null;
     if(!(type==='pumpkin'&&clearFront(x,y)) && !makeRoom(x,y)) return null;
   }else if(type==='pumpkin') clearFront(x,y);
-  const p={type,x,y,stage:opts.stage||1,v:0,born:now(),seed:Math.random(),color};
+  // v1.8：聖誕紅一長出來就是第 2 階（開紅花、登錄圖鑑）；第 1 階只有綠葉，學生認不出來，長滿的地也很難剛好滴到旁邊讓它長大
+  const p={type,x,y,stage:opts.stage||(type==='poinsettia'?2:1),v:0,born:now(),seed:Math.random(),color};
+  if(inForest()) p.nb=maps.forest.n;   // v2.0 輪替：第幾滴長出來的（存檔第 7 欄）
   plants.push(p);
+  if(activeMap==='home'&&!forestOpen&&plants.length>=OPEN_AT) setTimeout(()=>openForest(false),1200);   // v2.0 第一塊地長到 300 株就開第二塊地
   if(type==='flower'&&color===5) record('violet');
   if(type==='mushroom') record('ring');
   if(type==='clover') record(color===5?'cloverR':'clover');
+  if(type==='poinsettia') record(color===5?'poinsettiaR':'poinsettia');
   if(type==='flower' && color===5 && opts.color===undefined) emit('discover',{kind:'rare-flower',x,y,map:activeMap,color});
   return p;
 }
 function grow(p){
   if(p.type==='tree'&&(p.stage===1?bigTrees()>=TREE_CAP:plants.filter(q=>q.type==='tree'&&q.stage>=3).length>=TREE_CAP)) return;   // v1.7 大樹上限
-  if(p.stage<3){p.stage++; ring(p);} if(p.type==='lily'&&p.stage>=2) record('lily'); if(p.type==='tree'&&p.stage>=3) record('tree');
+  if(p.stage<3){p.stage++; ring(p);} if(p.type==='lily'&&p.stage>=2) record('lily'); if(p.type==='tree'&&p.stage>=3) record(treeKey(p));
   const pk=p.type+(p.color===5?'R':''); if(PKEY[pk]&&p.stage>=PKEY[pk].min) record(pk); }
 function ring(p){ rings.push({x:p.x,y:p.y,t0:now()}) }
 function around(x,y,minR,maxR){
@@ -206,6 +291,7 @@ function outcome(x,y){
   const count=t=>near.filter(p=>p.type===t).length;
   const nG=count('grass')+count('clover'), nF=count('flower');   // v1.3：三葉草也算草，苔球、毛毛不會因此變少
   const bigTrees=near.filter(p=>p.type==='tree'&&p.stage===3);
+  const crowded=inForest()&&near.length>=14;   // v2.0 水邊樹林：太擠的地方只長大、不再冒新的（第一塊地永遠是 false，亂數順序不變）
 
   // 1. dropped into a pond: lily pads, or the bank gets greener
   const pd=pondAt(x,y);
@@ -213,8 +299,15 @@ function outcome(x,y){
     const lilies=plants.filter(p=>p.type==='lily'&&inPond(pd,p.x,p.y));
     const small=lilies.find(p=>p.stage<2);
     if(small && chance(.5)) acts.push(()=>grow(small));
-    else if(lilies.length<4 && chance(.6)) acts.push(()=>{const [a,b]=pondInside(pd);addPlant('lily',a,b)});
+    else if(lilies.length<(pd.fixed?6:4) && chance(.6)) acts.push(()=>{const [a,b]=pondInside(pd);addPlant('lily',a,b)});
     else for(let i=0;i<2;i++) acts.push(()=>{const [a,b]=pondEdge(pd);addPlant(chance(.6)?'grass':'flower',a,b)});
+    residents(x,y,acts,nG,bigTrees);
+    return acts;
+  }
+
+  // v2.0 滴在小溪裡：兩岸長得更茂密（只有水邊樹林有溪）
+  if(stream && inStream(x,y)){
+    for(let i=0;i<2;i++){const [a,b]=around(x,y,.03,.07);acts.push(()=>addPlant(chance(.7)?'grass':'flower',a,b))}
     residents(x,y,acts,nG,bigTrees);
     return acts;
   }
@@ -222,14 +315,14 @@ function outcome(x,y){
   // 2. watering the same bare patch again and again pools into a pond
   const soaked=wets.filter(w=>dist(w.x,w.y,x,y)<.022*U).length;   // includes this drop
   const treeClose=plants.some(p=>p.type==="tree"&&p.stage===3&&dist(p.x,p.y,x,y)<.04*U);
-  if(soaked>=6 && ponds.length<4 && !treeClose && !ponds.some(p=>dist(p.x,p.y,x,y)<.16*U) && chance(.35)){
+  if(soaked>=6 && ponds.filter(p=>!p.fixed).length<4 && !treeClose && !inStream(x,y,2.2) && !ponds.some(p=>dist(p.x,p.y,x,y)<.16*U) && chance(.35)){
     acts.push(()=>makePond(x,y)); return acts;
   }
 
   const fresh=()=>{
     // v1.3：秋天（10～11 月）空地偶爾冒出南瓜藤
-    if(autumn() && chance(.05)){ const pc=pumpkinColor(); if(pc!==null){ acts.push(()=>addPlant('pumpkin',x,y,{color:pc})); return; } }
-    if(december() && chance(.1)){ const pc=poinColor(); if(pc!==null){ acts.push(()=>addPlant('poinsettia',x,y,{color:pc})); return; } }
+    if(autumn() && chance(.05)){ const pc=pumpkinColor(); if(pc!==null){ acts.push(()=>addPumpkin(x,y)); return; } }
+    if(december() && chance(.1) && poinColor()!==null){ acts.push(()=>addPoin(x,y)); return; }
     const lush=near.length>=4, t=Math.random();
     if(t<(lush?.62:.72)) acts.push(()=>addPlant('grass',x,y));
     else if(t<(lush?.88:.94)) acts.push(()=>addPlant('flower',x,y));
@@ -243,11 +336,11 @@ function outcome(x,y){
   else{
     const r=Math.random();
     const growable=near.filter(p=>p.stage<3);
-    if(r<.45 && growable.length){
+    if((r<.45||crowded) && growable.length){
       // a crowded spot lets more than one plant grow at once
       const k=1+(near.length>=6?1:0)+(near.length>=10&&chance(.5)?1:0);
       growable.slice(0,k).forEach(p=>acts.push(()=>grow(p)));
-    }else if(r<.85){
+    }else if(r<.85&&!crowded){
       const src=near[Math.floor(Math.pow(Math.random(),2)*near.length)];
       ring(src);
       if(GRASSY[src.type]){
@@ -255,10 +348,10 @@ function outcome(x,y){
         const sprout=()=>(src.type==='clover'&&chance(.45))||(nG>=5&&chance(.12))?'clover':'grass';
         for(let i=0,k=1+Math.floor(Math.random()*3);i<k;i++){const [a,b]=around(x,y,.02,.07),ty=sprout();acts.push(()=>addPlant(ty,a,b))}
         if(chance(.12)){const [a,b]=around(x,y,.02,.06);acts.push(()=>addPlant('flower',a,b))}
-        if(autumn() && chance(.03)){const pc=pumpkinColor();if(pc!==null){const [a,b]=around(x,y,.03,.07);acts.push(()=>addPlant('pumpkin',a,b,{color:pc}))}}
-        if(december() && chance(.08)){const pc=poinColor();if(pc!==null){const [a,b]=around(x,y,.03,.07);acts.push(()=>addPlant('poinsettia',a,b,{color:pc}))}}
+        if(autumn() && chance(.03)){const pc=pumpkinColor();if(pc!==null){const [a,b]=around(x,y,.03,.07);acts.push(()=>addPumpkin(a,b))}}
+        if(december() && chance(.08)){const [a,b]=around(x,y,.03,.07);acts.push(()=>addPoin(a,b))}
       }else if(FLOWERY[src.type]){
-        if(december() && chance(.08)){const pc=poinColor();if(pc!==null){const [a,b]=around(src.x,src.y,.03,.07);acts.push(()=>addPlant('poinsettia',a,b,{color:pc}))}}
+        if(december() && chance(.08)){const [a,b]=around(src.x,src.y,.03,.07);acts.push(()=>addPoin(a,b))}
         const fc=src.type==='flower'?src.color:src.type==='sunflower'?1:undefined;
         for(let i=0,k=1+(chance(.4)?1:0);i<k;i++){const [a,b]=around(src.x,src.y,.025,.07);acts.push(()=>addPlant('flower',a,b,{color:fc!==undefined&&chance(.8)?fc:undefined}))}
         if(chance(.5)){const [a,b]=around(x,y,.02,.05);acts.push(()=>addPlant('grass',a,b))}
@@ -281,10 +374,10 @@ function outcome(x,y){
         const col=near.find(p=>p.type==='flower').color;
         acts.push(()=>{const i=plants.indexOf(g);if(i>=0){plants.splice(i,1);addPlant('flower',g.x,g.y,{color:col})}});
       }
-    }else fresh();
+    }else if(!crowded) fresh();
 
     // clusters are rewarded: a meadow blooms, a flower bed thickens
-    if(nG>=5 && chance(.25)){const [a,b]=around(x,y,.01,.05);acts.push(()=>addPlant('flower',a,b))}
+    if(!crowded && nG>=5 && chance(.25)){const [a,b]=around(x,y,.01,.05);acts.push(()=>addPlant('flower',a,b))}
     if(nF>=4 && chance(.4)){const f=near.find(p=>p.type==='flower'&&p.stage<3);if(f)acts.push(()=>grow(f))}
   }
 
@@ -313,20 +406,52 @@ function outcome(x,y){
   if(bank && chance(.4)) acts.push(()=>{const [a,b]=pondEdge(bank);addPlant(chance(.7)?'grass':'flower',a,b)});
   residents(x,y,acts,nG,bigTrees);
 
-  if(!acts.length) fresh();
+  if(!acts.length&&!crowded) fresh();
   return acts;
 }
 
+/* ---------- v2.0 輪替（只有水邊樹林）：每株活幾滴由 seed 算出來；只有滴水時才會變老，放著不玩不會自己變空 ----------
+   大樹、蘑菇、睡蓮、南瓜等特殊植物，和稀有色（color 5）不會走——紫花例外：紫花旁邊再開的花常常也是紫的，
+   不會謝的話其他顏色謝了又長、紫花只增不減，越積越多（2026-11-21 主人試玩快轉時發現紫花比例很高）。 */
+const LIFE={grass:[700,1200],flower:[450,800],cattail:[220,380],fern:[1200,2000],lilyvalley:[900,1500],clover:[900,1500]};   // 三葉草會自己蔓延，不會走的話會慢慢鋪滿（四葉草是 color 5，不會走）
+const petals=[];   // 謝掉的花留下的花瓣（只在記憶體）：搬搬隊會扛回窩裡
+function lifeOf(p){ const L=LIFE[p.type]; return L&&(p.color!==5||p.type==='flower') ? L[0]+hash(p.seed,77)*(L[1]-L[0]) : 0; }
+function fluffBurst(p){   // 香蒲的穗爆開，絨毛飄走
+  if(reduceMotion) return; const t=now();
+  for(let i=0;i<7;i++) puffSeeds.push({x:p.x*W+(Math.random()-.5)*4*S,y:p.y*H-24*S,vx:(Math.random()*16+4)*S,vy:(Math.random()*-8-3)*S,t0:t,rot:Math.random()*TAU,life:1800+Math.random()*1000});
+}
+function turnover(){
+  const m=maps.forest; m.n++;
+  for(let i=plants.length-1;i>=0;i--){
+    const p=plants[i], life=lifeOf(p);
+    if(!life||m.n-(p.nb|0)<=life) continue;
+    plants.splice(i,1); ring(p);
+    if(p.type==='cattail'){ fluffBurst(p); if(chance(.4)){const [a,b]=around(p.x,p.y,.08,.22);addPlant('grass',a,b)} }
+    else if(p.type==='flower'&&petals.length<6) petals.push({x:p.x,y:p.y,col:p.color,t0:now()});
+  }
+  // 花開著的時候偶爾也會掉一片花瓣，搬搬隊比較常有事做
+  if(petals.length<3&&critters.some(c=>c.kind==='beans')&&chance(.2)){
+    const fl=plants.filter(p=>p.type==='flower'&&p.stage>=2&&critters.some(c=>c.kind==='beans'&&dist(c.hx,c.hy,p.x,p.y)<.25*U));
+    if(fl.length){const f=pick(fl),[a,b]=around(f.x,f.y,.01,.025);petals.push({x:a,y:b,col:f.color,t0:now()})}
+  }
+}
+
+// v2.0 切換地圖時，還在半空中的水滴和還沒長完的植物要先跑完（不然會長到另一塊地）：busyUntil 之前不切換、也不接新的水滴
+let busyUntil=0, switching=false;
 function dropAt(x,y){
+  if(switching) return;
   if(water<=0){ emit('nowater'); return; }
   water--; syncWater(false); save();
   const g=gen;
   falls.push({x,y,t0:now()});
   critterNotice(x,y);
+  busyUntil=Math.max(busyUntil,now()+(reduceMotion?0:420)+80);
   setTimeout(()=>{
     if(g!==gen) return;
     wets.push({x,y,t0:now(),r:14+Math.random()*8});
+    if(inForest()) turnover();
     const acts=outcome(x,y);
+    busyUntil=Math.max(busyUntil,now()+120+acts.length*(reduceMotion?0:180)+80);
     acts.forEach((f,i)=>setTimeout(()=>{if(g===gen){f();save()}},120+i*(reduceMotion?0:180)));
     save();
     setTimeout(updateHint,200);
@@ -362,31 +487,42 @@ cv.addEventListener('click',e=>{
    critters 住在 maps[activeMap] 裡（bindMap）；提示文字走 message 事件，由頁面的 toast 顯示。 */
 const sparks=[];
 let seenKinds={};
-const CR={dew:7.4, moss:9.2, cap:7.2, bee:6, ladybug:7, puff:8, cloud:8, santa:8.6};
+const CR={dew:7.4, moss:9.2, cap:7.2, bee:6, ladybug:7, puff:8, cloud:8, santa:8.6, frog:8, pebble:8, acorn:7, leaf:7, beans:6.2};
 // v1.7：客人（呵呵公公）：只在十二月、只在記憶體（serialize 會跳過），不佔 15 隻居民的名額，一塊地最多一位
 const GUEST={santa:1};
 const FIRST={dew:'水塘邊住進了一顆小露珠',moss:'草地上滾來一顆愛睡覺的苔球',cap:'蘑菇圈裡，好像有誰在偷看',
   bee:'花圃裡飛來一隻嗡嗡',ladybug:'花叢裡跑來一隻點點',puff:'草地上飄來一團毛毛',cloud:'答對好多題，飄來一朵小雲',
-  santa:'聖誕公公揹著禮物來了！點點看他'};
+  santa:'聖誕公公揹著禮物來了！點點看他',
+  frog:'睡蓮葉上跳來一隻呱呱',pebble:'水塘邊有一顆石頭在打呼',acorn:'大樹下滾來一顆橡橡',leaf:'有一片葉子醒過來了',beans:'花叢旁邊搬來了搬搬隊'};
 const RARE={dew:'來了一顆會變色的露珠',moss:'這顆苔球別著一朵稀有的花',cap:'冒出一朵沒見過顏色的小蕈寶',
-  bee:'這隻嗡嗡是藍色條紋的',ladybug:'來了一隻黃色的點點',puff:'飄來一團粉紅色的毛毛',cloud:'小雲身邊掛著一段彩虹'};
+  bee:'這隻嗡嗡是藍色條紋的',ladybug:'來了一隻黃色的點點',puff:'飄來一團粉紅色的毛毛',cloud:'小雲身邊掛著一段彩虹',
+  frog:'來了一隻粉紅色的呱呱',pebble:'這顆石石身上有花紋',acorn:'金色的橡橡！',leaf:'一片楓紅的葉葉'};
+const NORARE={santa:1,beans:1};   // 沒有稀有版（公公的稀有版是雪橇；搬搬隊三色一組就是特色）
+// v2.0 水邊樹林自己的居民。森林裡第一塊地那幾種（露露、小雲…）最多 6 隻，名額留給這些（不然 15 隻很快被露露、小雲佔滿，搬搬隊來不了）
+const NATIVE={frog:1,pebble:1,acorn:1,leaf:1,beans:1}, VISITOR_CAP=6;
 // v1.3：飛在空中的居民（不會被植物擋、也不會把新植物推開）；alt 是離地高度（S 單位）
 const AIR={bee:1,puff:1,cloud:1}, ALT0={bee:22,puff:12,cloud:70};
-const keepCritters=[];   // v1.3：讀到不認得的居民（例如之後版本才有的），原樣保留、存檔時寫回
 const puffSeeds=[];      // 毛毛噴出來的種子（只在記憶體）
 let streak=[];           // 最近幾次答對的時間（addWater），湊滿就來一朵小雲
 const STREAK_N=10, STREAK_MS=5*60*1000;
 function newCritter(kind,x,y,home,o={}){
   const t=now();
-  return {kind,x,y,hx:home[0],hy:home[1],seed:o.seed??Math.random(),v:o.v??(Math.random()<.05?1:0),
+  const c={kind,x,y,hx:home[0],hy:home[1],seed:o.seed??Math.random(),v:o.v??(Math.random()<.05?1:0),
     born:o.born??t,t0:t,wait:600+Math.random()*1500,hop:null,tgt:null,land:-1e9,
     blinkAt:t+800+Math.random()*3000,blinkT:-1e9,face:Math.random()<.5?-1:1,poke:-1e9,cheer:-1e9,
     e:kind==='cap'?0:1,state:kind==='cap'?'hidden':'idle',st0:t,sdur:400+Math.random()*1500,wakeAt:t+6000+Math.random()*9000,wakeT:-1e9,
     alt:ALT0[kind]||0,talt:ALT0[kind]||0,loop:-1e9,fly:-1e9,amt:1,drops:[],rainUntil:-1e9,heavy:-1e9,nextRain:t+4000+Math.random()*5000};
+  // v2.0 水邊樹林居民的狀態：計時起點用 seed 算（不呼叫 Math.random，第一塊地的亂數順序不變）。
+  // 每個欄位都要有初值：石石的 rolled 沒給的時候，位置會算成 NaN、存檔變 null
+  Object.assign(c,{croak:-1e9,nextCroak:t+2500+hash(c.seed,41)*2500,roll:-1e9,rolled:true,awake:-1e9,wob:-1e9,nextWob:t+4000+hash(c.seed,42)*3000,
+    lst:'sit',lt0:t,ldur:2500+hash(c.seed,43)*2000,rot:0,spin:-1e9,carry:false,petal:null});
+  return c;
 }
 function makeCritter(kind,x,y,home,o={}){
-  if(GUEST[kind]){ if(critters.some(c=>c.kind===kind)) return null; o={...o,v:0}; }   // 公公沒有稀有色（稀有版是雪橇）
+  if(NORARE[kind]) o={...o,v:0};
+  if(GUEST[kind]){ if(critters.some(c=>c.kind===kind)) return null; }
   else if(critters.filter(c=>!GUEST[c.kind]).length>=15) return null;
+  else if(inForest()&&!o.quiet&&!NATIVE[kind]&&critters.filter(c=>!GUEST[c.kind]&&!NATIVE[c.kind]).length>=VISITOR_CAP) return null;   // 讀檔（quiet）不擋，免得丟掉存檔裡的居民
   const c=newCritter(kind,x,y,home,o);
   critters.push(c);
   if(!o.quiet){ record(kind+(c.v?'R':'')); emit('discover',{kind:kind+(c.v?'R':''),x:c.x,y:c.y,map:activeMap}); }
@@ -410,10 +546,30 @@ function critterTarget(c){
     c.hx=p.x;c.hy=p.y;
     const lil=plants.filter(q=>q.type==='lily'&&inPond(p,q.x,q.y)&&!critters.some(o=>o!==c&&dist(o.x,o.y,q.x,q.y)<3));
     if(lil.length&&chance(.3)){const l=pick(lil);return [l.x,l.y]}
-    return pondEdge(p);
+    for(let i=0;i<5;i++){const e=pondEdge(p);if(!inStream(e[0],e[1],1.1)) return e}   // v2.0 水邊樹林的小水潭在溪上，岸邊不要選到溪裡
+    return [c.x,c.y];
   }
   if(c.kind==='moss'){
-    for(let i=0;i<8;i++){const t=around(c.hx,c.hy,0,.07);if(!pondAt(t[0],t[1],1.2)) return t}
+    for(let i=0;i<8;i++){const t=around(c.hx,c.hy,0,.07);if(!wetAt(t[0],t[1])) return t}
+    return [c.x,c.y];
+  }
+  if(c.kind==='frog'){   // v2.0 呱呱：在自己水塘的睡蓮葉之間跳，偶爾跳到岸邊
+    const p=nearestPond(c.hx,c.hy);
+    if(!p) return [c.x,c.y];
+    const lil=plants.filter(q=>q.type==='lily'&&inPond(p,q.x,q.y)&&dist(q.x,q.y,c.x,c.y)>3&&!critters.some(o=>o!==c&&dist(o.x,o.y,q.x,q.y)<3));
+    if(lil.length&&chance(.75)){const l=pick(lil);return [l.x,l.y]}
+    for(let i=0;i<5;i++){const e=pondEdge(p);if(!inStream(e[0],e[1],1.1)) return e}
+    return [c.x,c.y];
+  }
+  if(c.kind==='beans'){   // v2.0 搬搬隊：附近有花瓣就去扛，扛到了就搬回窩
+    if(c.carry) return [c.hx,c.hy];
+    const pt=petals.find(q=>!q.taken&&dist(q.x,q.y,c.hx,c.hy)<.3*U);
+    if(pt){pt.taken=1;c.petal=pt;return [pt.x,pt.y]}
+    for(let i=0;i<8;i++){const t=around(c.hx,c.hy,0,.04);if(!wetAt(t[0],t[1])) return t}
+    return [c.hx,c.hy];
+  }
+  if(c.kind==='acorn'||c.kind==='leaf'){   // v2.0 橡橡在大樹附近走；葉葉飄到大樹附近
+    for(let i=0;i<8;i++){const t=around(c.hx,c.hy,.01,c.kind==='leaf'?.07:.06);if(!wetAt(t[0],t[1])) return t}
     return [c.x,c.y];
   }
   if(c.kind==='bee'){   // 飛到附近開著的花上面；藍紋嗡嗡偏愛紫花
@@ -424,7 +580,7 @@ function critterTarget(c){
   }
   if(c.kind==='cloud'){c.talt=ALT0.cloud;return around(c.hx,c.hy,0,.14)}
   if(c.kind==='puff'||c.kind==='ladybug'||c.kind==='santa'){
-    for(let i=0;i<8;i++){const t=around(c.hx,c.hy,0,c.kind==='santa'?.12:c.kind==='puff'?.08:.06);if(!pondAt(t[0],t[1],1.2)) return t}
+    for(let i=0;i<8;i++){const t=around(c.hx,c.hy,0,c.kind==='santa'?.12:c.kind==='puff'?.08:.06);if(!wetAt(t[0],t[1])) return t}
     return [c.x,c.y];
   }
   return ringSpot(c);
@@ -459,6 +615,9 @@ function updateCritters(t,dt){
     if(c.kind==='puff') c.amt=Math.min(1,c.amt+dt/9);
     if(c.kind==='cloud') rainTick(c,t,dt);
     if(AIR[c.kind]){ airMove(c,t,dt); continue; }
+    if(c.kind==='pebble'){ pebbleTick(c,t); continue; }   // v2.0 石石幾乎都在睡，只有被點才翻滾
+    if(c.kind==='leaf'){ leafTick(c,t); continue; }       // v2.0 葉葉：坐著 → 被風吹起來 → 晃下來
+    if(c.kind==='frog'&&!reduceMotion&&!c.hop&&t>c.nextCroak){ croak(c,t); c.nextCroak=t+6000+Math.random()*4000; }
     if(c.kind==='ladybug'&&t-c.fly<1000) continue;
     if(c.kind==='cap'){
       const k=t-c.st0;
@@ -475,23 +634,65 @@ function updateCritters(t,dt){
     if(t-c.t0<c.wait) continue;
     if(!c.tgt) c.tgt=critterTarget(c);
     const d=dist(c.x,c.y,c.tgt[0],c.tgt[1]);
-    if(d<1.5){c.tgt=null;c.t0=t;c.wait=c.kind==='moss'?3000+Math.random()*6000:c.kind==='cap'?1500+Math.random()*2500:1200+Math.random()*3000;continue}
-    if(c.kind==='moss'||c.kind==='santa'){
-      const f=Math.min(1,(c.kind==='santa'?.03:.016)*U*dt/d);
+    if(d<1.5){
+      if(c.kind==='beans'){ beansArrive(c,t); continue; }
+      c.tgt=null;c.t0=t;c.wait=c.kind==='moss'?3000+Math.random()*6000:c.kind==='cap'?1500+Math.random()*2500:c.kind==='frog'?2000+Math.random()*2500:1200+Math.random()*3000;continue}
+    if(c.kind==='moss'||c.kind==='santa'||c.kind==='beans'){
+      const f=Math.min(1,(c.kind==='santa'?.03:c.kind==='beans'?(c.carry?.024:.032):.016)*U*dt/d);
       if(Math.abs(c.tgt[0]-c.x)>1e-4) c.face=c.tgt[0]>c.x?1:-1;
       c.x+=(c.tgt[0]-c.x)*f;c.y+=(c.tgt[1]-c.y)*f;c.moving=t;
       continue;
     }
     const bug=c.kind==='ladybug';   // 點點：一小步一小步地蹦（橫著滑會像蜘蛛）
-    const step=(c.kind==='dew'?.032:bug?.02:.014)*U, f=Math.min(1,step/d);
-    const dur=c.kind==='dew'?380:bug?200:240;
+    const frog=c.kind==='frog', acorn=c.kind==='acorn';   // v2.0 呱呱一跳就到下一片葉子；橡橡搖搖擺擺地小步走
+    const step=(c.kind==='dew'?.032:bug?.02:frog?.08:acorn?.012:.014)*U, f=Math.min(1,step/d);
+    const dur=c.kind==='dew'?380:bug?200:frog?540:acorn?280:240;
     if(reduceMotion){c.x+=(c.tgt[0]-c.x)*f;c.y+=(c.tgt[1]-c.y)*f;c.t0=t;c.wait=400;continue}
-    startHop(c,c.x+(c.tgt[0]-c.x)*f,c.y+(c.tgt[1]-c.y)*f,t,dur,c.kind==='dew'?9:bug?2.6:4);
-    c.t0=t;c.wait=dur+(c.kind==='dew'?120+Math.random()*260:bug?40+Math.random()*90:200+Math.random()*350);
+    startHop(c,c.x+(c.tgt[0]-c.x)*f,c.y+(c.tgt[1]-c.y)*f,t,dur,c.kind==='dew'?9:bug?2.6:frog?15:acorn?3.5:4);
+    c.t0=t;c.wait=dur+(c.kind==='dew'?120+Math.random()*260:bug?40+Math.random()*90:frog?200+Math.random()*200:acorn?60+Math.random()*120:200+Math.random()*350);
   }
   for(let i=sparks.length-1;i>=0;i--) if(t-sparks[i].t0>1100) sparks.splice(i,1);
+  for(let i=petals.length-1;i>=0;i--) if(!petals[i].taken&&t-petals[i].t0>45000) petals.splice(i,1);   // v2.0 沒人扛的花瓣 45 秒後被風吹走
   for(let i=puffSeeds.length-1;i>=0;i--){const s=puffSeeds[i];if(t-s.t0>s.life){puffSeeds.splice(i,1);continue}
     s.x+=s.vx*dt+Math.sin(t*.003+i)*.15*S;s.y+=s.vy*dt;s.vy*=.992;s.vx*=.995;s.rot+=dt*2}
+}
+/* ---------- v2.0 水邊樹林的居民：動作 ---------- */
+const easeIO=k=>{k=clamp(k,0,1);return k<.5?2*k*k:1-Math.pow(-2*k+2,2)/2};
+function croak(c,t){ c.croak=t; sparks.push({x:c.x*W+9*S*c.face,y:c.y*H-17*S,t0:t,c:c.v?'#c2577a':'#4d7a2c',text:'呱'}); }
+function pebbleTick(c,t){
+  if(!c.rolled){   // 被點了才會滾（rolled 一開始就是 true；沒被點過不去算位置，不然起點是空的、位置會壞掉）
+    const k=(t-c.roll)/1100;
+    if(k>=0&&k<1) c.x=c.rx0+c.dir*easeIO(k)*c.rd;
+    else if(k>=1){ c.rolled=true; c.x=c.rx0+c.dir*c.rd; sparks.push({x:c.x*W,y:c.y*H-CR.pebble*S*1.8,t0:t,c:'#f08aa2'}); }
+  }
+  if(!reduceMotion&&t>c.nextWob){c.wob=t;c.nextWob=t+5000+Math.random()*4000}
+}
+function pebbleRoll(c,t){
+  if(t>c.roll&&t-c.roll<1100) return;
+  c.awake=t; c.rx0=c.x; c.rolled=false; c.rd=18*S/W;
+  // 左右輪流滾（不會越滾越遠）；滾過去是水就換邊，兩邊都是水就原地翻一圈
+  let dir=-(c.dir||1); if(wetAt(c.x+dir*c.rd,c.y,1.1)) dir=-dir; if(wetAt(c.x+dir*c.rd,c.y,1.1)) c.rd=0;
+  c.dir=dir; c.roll=reduceMotion?-1e9:t+380;
+}
+function leafRise(c,t){ c.lst='rise';c.lt0=t;c.x0=c.x;c.y0=c.y;const tg=critterTarget(c);c.x1=clamp(tg[0],.03,.97);c.y1=clamp(tg[1],.08,.98); }
+function leafTick(c,t){
+  if(reduceMotion) return;
+  if(c.lst==='sit'){ if(t-c.lt0>c.ldur) leafRise(c,t); return; }
+  if(c.lst==='rise'){
+    const k=Math.min(1,(t-c.lt0)/900); c.alt=(1-Math.pow(1-k,2))*22;
+    c.x=c.x0+(c.x1-c.x0)*k*.4; c.y=c.y0+(c.y1-c.y0)*k*.4; c.moving=t;
+    if(k>=1){c.lst='fall';c.lt0=t;c.fx0=c.x;c.fy0=c.y}
+    return;
+  }
+  const k=Math.min(1,(t-c.lt0)/3400), sw=Math.sin(k*Math.PI*3);
+  c.alt=22*(1-k); c.x=c.fx0+(c.x1-c.fx0)*k+sw*.012; c.y=c.fy0+(c.y1-c.fy0)*k; c.rot=sw*.5; c.moving=t;
+  if(k>=1){c.lst='sit';c.lt0=t;c.alt=0;c.rot=0;c.land=t;c.ldur=3500+Math.random()*3000}
+}
+function beansArrive(c,t){
+  c.tgt=null; c.t0=t;
+  if(c.petal&&!c.carry&&petals.includes(c.petal)){ petals.splice(petals.indexOf(c.petal),1); c.petal=null; c.carry=true; c.grab=t; c.wait=650; return; }
+  if(c.carry&&dist(c.x,c.y,c.hx,c.hy)<3){ c.carry=false; c.wait=900; sparks.push({x:c.x*W,y:c.y*H-14*S,t0:t,c:'#e3a1b0'}); if(!reduceMotion) startHop(c,c.x,c.y,t,380,9); return; }
+  c.petal=null; c.wait=600+Math.random()*1800;
 }
 function critterPos(c,t){
   let x=c.x,y=c.y,lift=0,sq=0;
@@ -508,6 +709,7 @@ function critterPos(c,t){
     if(c.kind==='puff'&&t-c.cheer<900) lift+=Math.sin(Math.PI*(t-c.cheer)/900)*5*S;
     lift=Math.min(lift,Math.max(0,y*H-CR[c.kind]*S*2.2));   // 不要飛出土地上緣
   }else if(c.kind==='ladybug'){const k=(t-c.fly)/1000;if(k>=0&&k<1) lift+=Math.sin(Math.PI*k)*5*S}
+  else if(c.kind==='leaf') lift+=c.alt*S;
   return {cx,cy:y*H,lift,sq};
 }
 const happy=(c,t)=>t-c.poke<1400||t-c.cheer<1100;
@@ -638,6 +840,11 @@ function drawCritter(c,t){
   else if(c.kind==='puff') drawPuff(c,t,p,g);
   else if(c.kind==='cloud') drawCloud(c,t,p,g);
   else if(c.kind==='santa') drawSanta(c,t,p,g);
+  else if(c.kind==='frog') drawFrog(c,t,p,g);
+  else if(c.kind==='pebble') drawPebble(c,t,p,g);
+  else if(c.kind==='acorn') drawAcorn(c,t,p,g);
+  else if(c.kind==='leaf') drawLeaf(c,t,p,g);
+  else if(c.kind==='beans') drawBeans(c,t,p,g);
   else drawCap(c,t,p,g);
 }
 /* ---------- v1.7 呵呵公公、雪橇（照 docs/december-preview.html） ---------- */
@@ -881,6 +1088,130 @@ function drawCloud(c,t,p,g){   // 小雲
   ctx.restore();
 }
 
+/* ---------- v2.0 水邊樹林的居民：畫法（照 docs/new-guide-candidates.html、forest-map-preview.html） ---------- */
+function groundShadow(p,r,k){ctx.fillStyle=PAL.shadow;ctx.beginPath();ctx.ellipse(p.cx,p.cy,r*k*Math.max(.5,1-p.lift/(30*S)),r*.3,0,0,TAU);ctx.fill()}
+function drawFrog(c,t,p,g){   // 呱呱：青蛙
+  const r=CR.frog*S*g, X=p.cx, Y=p.cy-p.lift;
+  const col=c.v?['#ffd9e4','#f3a3bd','#d67596','#fff3f7']:['#cbe996','#8fc65c','#5d9a3a','#eef5cf'];
+  groundShadow(p,r,1.1);
+  ctx.save();ctx.translate(X,Y);ctx.scale(1-p.sq*.7,1+p.sq);
+  ctx.fillStyle=col[2];for(const s of [-1,1]){ctx.beginPath();ctx.ellipse(s*r*.95,-r*.32,r*.44,r*.3,s*.3,0,TAU);ctx.fill()}
+  const gr=ctx.createRadialGradient(-r*.3,-r*1.15,r*.1,0,-r*.7,r*1.35);gr.addColorStop(0,col[0]);gr.addColorStop(.6,col[1]);gr.addColorStop(1,col[2]);
+  ctx.fillStyle=gr;for(const s of [-1,1]){ctx.beginPath();ctx.arc(s*r*.5,-r*1.3,r*.37,0,TAU);ctx.fill()}
+  ctx.beginPath();ctx.ellipse(0,-r*.72,r*1.1,r*.74,0,0,TAU);ctx.fill();
+  ctx.fillStyle=col[3];ctx.beginPath();ctx.ellipse(0,-r*.4,r*.62,r*.34,0,0,TAU);ctx.fill();
+  const ck=(t-c.croak)/800;
+  if(ck>=0&&ck<1){const pf=Math.abs(Math.sin(ck*Math.PI*2));   // 鼓起喉嚨
+    ctx.fillStyle=col[3];ctx.strokeStyle='rgba(214,117,150,.35)';ctx.lineWidth=S*.5;
+    ctx.beginPath();ctx.ellipse(0,-r*.55,r*.12+r*.34*pf,r*.1+r*.26*pf,0,0,TAU);ctx.fill();ctx.stroke()}
+  ctx.fillStyle=col[2];for(const s of [-1,1]){ctx.beginPath();ctx.ellipse(s*r*.42,-r*.04,r*.22,r*.12,0,0,TAU);ctx.fill()}
+  eyes(c,t,r*.5,-r*1.3,r*.17,lookAt(X,Y,r),true);
+  cheeks(r*.74,-r*.86,r*.15);
+  ctx.strokeStyle='#2a2a2a';ctx.lineWidth=r*.08;ctx.lineCap='round';
+  ctx.beginPath();ctx.arc(0,-r*1.12,happy(c,t)?r*.48:r*.36,Math.PI*.25,Math.PI*.75);ctx.stroke();
+  ctx.restore();
+}
+function drawPebble(c,t,p,g){   // 石石：水塘邊的小石頭
+  const r=CR.pebble*S*g, X=p.cx, Y=p.cy;
+  const k=(t-c.roll)/1100, rolling=k>=0&&k<1, wk=(t-c.wob)/700;
+  const rot=rolling?c.dir*easeIO(k)*TAU:(wk>=0&&wk<1?Math.sin(wk*Math.PI*3)*.1*(1-wk):0);
+  const lift=Math.abs(Math.sin(rot))*r*.5;
+  ctx.fillStyle=PAL.shadow;ctx.beginPath();ctx.ellipse(X,Y,r*1.15,r*.3,0,0,TAU);ctx.fill();
+  ctx.save();ctx.translate(X,Y-r*.62-lift);ctx.rotate(rot);
+  const gr=ctx.createRadialGradient(-r*.4,-r*.45,r*.1,0,0,r*1.3);
+  gr.addColorStop(0,c.v?'#f6ece0':'#cfcac1');gr.addColorStop(1,c.v?'#d8c5ad':'#8d877d');
+  ctx.fillStyle=gr;ctx.beginPath();ctx.ellipse(0,0,r*1.12,r*.62,0,0,TAU);ctx.fill();
+  if(c.v){const b=ctx.globalAlpha;ctx.save();ctx.beginPath();ctx.ellipse(0,0,r*1.12,r*.62,0,0,TAU);ctx.clip();
+    ['#d9a98a','#b89ad0','#9cc3d6','#e8c9a8','#c79ad6'].forEach((cc,i)=>{ctx.strokeStyle=cc;ctx.globalAlpha=b*.65;ctx.lineWidth=r*.09;ctx.beginPath();ctx.ellipse(r*.35,-r*.25,r*(.25+i*.22),r*(.14+i*.13),.3,0,TAU);ctx.stroke()});
+    ctx.restore();ctx.globalAlpha=b}
+  for(const [x,y,s,cc] of [[-.25,-.5,.2,'#6b9a3c'],[.05,-.56,.24,'#7fa548'],[.35,-.48,.18,'#6b9a3c'],[.18,-.6,.13,'#9cc266']]){ctx.fillStyle=cc;ctx.beginPath();ctx.arc(x*r,y*r,s*r,0,TAU);ctx.fill()}
+  ctx.fillStyle='rgba(255,255,255,.28)';ctx.beginPath();ctx.ellipse(-r*.55,-r*.2,r*.22,r*.1,-.3,0,TAU);ctx.fill();
+  const awake=t-c.awake<2800||t-c.cheer<1100||t-c.poke<2800;
+  eyes(c,t,r*.34,r*.04,r*.13,0,awake);
+  cheeks(r*.62,r*.17,r*.13);
+  if(awake) smile(r*.2,r,happy(c,t));
+  ctx.restore();
+  if(!awake&&!reduceMotion){
+    const zk=(t*.00035+c.seed)%1, b=ctx.globalAlpha;ctx.globalAlpha=b*Math.sin(Math.PI*zk)*.7;ctx.fillStyle='#fff';
+    ctx.font='700 '+Math.round(5*S+zk*3*S)+'px sans-serif';ctx.fillText('z',X+r*.9+zk*6*S,Y-r*1.4-zk*14*S);ctx.globalAlpha=b;
+  }
+}
+function drawAcorn(c,t,p,g){   // 橡橡：橡實，被點會掀帽子
+  const r=CR.acorn*S*g, X=p.cx, Y=p.cy-p.lift;
+  const col=c.v?['#fff0b8','#f2c24e','#c9932a']:['#ecc189','#c98b4b','#9a6332'], cap=c.v?'#b5862a':'#7a5a36';
+  groundShadow(p,r,.95);
+  ctx.save();ctx.translate(X,Y);
+  const rot=c.hop?Math.sin((t-c.hop.t0)/c.hop.d*Math.PI)*.18*c.face:(reduceMotion?0:Math.sin(t*.002+c.seed*7)*.03);
+  ctx.rotate(rot);ctx.scale(1-p.sq*.6,1+p.sq);
+  ctx.fillStyle='#6b4a2b';for(const s of [-1,1]){ctx.beginPath();ctx.ellipse(s*r*.35,-r*.05,r*.22,r*.13,0,0,TAU);ctx.fill()}
+  const gr=ctx.createRadialGradient(-r*.3,-r*1.3,r*.1,0,-r*.9,r*1.2);gr.addColorStop(0,col[0]);gr.addColorStop(.55,col[1]);gr.addColorStop(1,col[2]);
+  ctx.fillStyle=gr;ctx.beginPath();ctx.ellipse(0,-r*.95,r*.82,r*.95,0,0,TAU);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.3)';ctx.beginPath();ctx.ellipse(-r*.38,-r*1.05,r*.12,r*.3,-.2,0,TAU);ctx.fill();
+  eyes(c,t,r*.3,-r*.86,r*.14,lookAt(X,Y,r),true);
+  cheeks(r*.52,-r*.62,r*.13);
+  smile(-r*.68,r,happy(c,t));
+  const k=(t-c.poke)/800, up=k>=0&&k<1?Math.sin(k*Math.PI):0;
+  ctx.save();ctx.translate(0,-r*1.55-up*r*1.1);ctx.rotate(-up*.45*c.face);
+  ctx.fillStyle=cap;ctx.beginPath();ctx.moveTo(-r*1.02,0);ctx.bezierCurveTo(-r*1.02,-r*.95,r*1.02,-r*.95,r*1.02,0);ctx.quadraticCurveTo(0,r*.34,-r*1.02,0);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.17)';
+  for(let i=0;i<9;i++){const a=Math.PI*(1.1+i*.1);ctx.beginPath();ctx.arc(Math.cos(a)*r*.62,-r*.12+Math.sin(a)*r*.45,r*.09,0,TAU);ctx.fill()}
+  ctx.strokeStyle=cap;ctx.lineWidth=r*.18;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,-r*.66);ctx.quadraticCurveTo(r*.02,-r*.95,r*.25,-r*1.05);ctx.stroke();
+  ctx.restore();ctx.restore();
+  if(c.v&&!reduceMotion){const tw=(t*.0007+c.seed)%1;pStar(ctx,X+r*.9,Y-r*2.1,r*.32*Math.sin(Math.PI*tw),Math.sin(Math.PI*tw))}
+}
+function drawLeaf(c,t,p,g){   // 葉葉：會飄的葉子
+  const r=CR.leaf*S*g, X=p.cx, Y=p.cy-p.lift;
+  ctx.fillStyle=PAL.shadow;ctx.beginPath();ctx.ellipse(p.cx,p.cy,r*.75*Math.max(.4,1-c.alt/30),r*.24,0,0,TAU);ctx.fill();
+  const col=c.v?['#ffc27a','#e8603c','#b8322a','#ffd98a']:['#bfe08a','#8fbf55','#5f8a3a','#d9efb0'];
+  ctx.save();ctx.translate(X,Y-r*1.35);
+  const sk=(t-c.spin)/700;
+  let rot=c.rot+(sk>=0&&sk<1?easeIO(sk)*TAU:0);
+  if(c.lst==='sit'&&!reduceMotion) rot+=Math.sin(t*.002+c.seed*5)*.06;
+  ctx.rotate(rot);ctx.translate(0,r*1.35);
+  if(c.lst==='sit'&&t-c.land<240) ctx.scale(1+.15*(1-(t-c.land)/240),1-.2*(1-(t-c.land)/240));
+  ctx.strokeStyle=col[2];ctx.lineWidth=r*.12;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(0,-r*.4);ctx.quadraticCurveTo(0,-r*.05,r*.2,0);ctx.stroke();
+  const gr=ctx.createLinearGradient(-r,-r*2.4,r,-r*.4);gr.addColorStop(0,col[0]);gr.addColorStop(.5,col[1]);gr.addColorStop(1,col[2]);
+  ctx.fillStyle=gr;ctx.beginPath();ctx.moveTo(0,-r*.35);
+  ctx.bezierCurveTo(r*1.1,-r*.6,r*.98,-r*1.95,0,-r*2.5);ctx.bezierCurveTo(-r*.98,-r*1.95,-r*1.1,-r*.6,0,-r*.35);ctx.fill();
+  const b=ctx.globalAlpha;ctx.strokeStyle=col[3];ctx.globalAlpha=b*.7;ctx.lineWidth=r*.07;
+  ctx.beginPath();ctx.moveTo(0,-r*.45);ctx.lineTo(0,-r*.95);ctx.moveTo(0,-r*1.6);ctx.lineTo(0,-r*2.3);
+  for(const [y,s] of [[-1.85,1],[-2.05,-1],[-.75,1],[-.6,-1]]){ctx.moveTo(0,y*r);ctx.lineTo(s*r*.5,(y-.25)*r)}
+  ctx.stroke();ctx.globalAlpha=b;
+  eyes(c,t,r*.3,-r*1.32,r*.14,lookAt(X,Y,r),true);
+  cheeks(r*.55,-r*1.05,r*.13);
+  smile(-r*1.12,r,happy(c,t)||c.alt>1);
+  ctx.restore();
+}
+const BEANS=[['#f2dcc6','#dcb08c','#bd8a64'],['#d8e7d6','#a0c4a3','#76a07c'],['#e1dcee','#b3a8d0','#8e83b2']];   // 搬搬隊：杏、薄荷、薰衣草
+function drawPetalAt(X,Y,w,h,rot,col){ctx.save();ctx.translate(X,Y);ctx.rotate(rot);ctx.fillStyle=col;ctx.beginPath();ctx.moveTo(0,0);
+  ctx.bezierCurveTo(-w,-h*.3,-w*.8,-h,0,-h);ctx.bezierCurveTo(w*.8,-h,w,-h*.3,0,0);ctx.fill();ctx.restore()}
+function drawBeans(c,t,p,g){   // 搬搬隊：三隻小豆豆，扛著花瓣回窩
+  const r=CR.beans*S*g;
+  if(!c.bs) c.bs=[0,1,2].map(()=>({blinkT:-1e9,blinkAt:t+800+Math.random()*3000,poke:-1e9,cheer:-1e9}));
+  const walking=!reduceMotion&&t-(c.moving||-1e9)<140, gk=(t-(c.grab||-1e9))/600, crouch=gk>=0&&gk<1?Math.sin(gk*Math.PI)*.2:0;
+  for(let i=0;i<3;i++){
+    const b=c.bs[i]; if(t>b.blinkAt){b.blinkT=t;b.blinkAt=t+1800+Math.random()*3800} b.poke=c.poke;b.cheer=c.cheer;
+    const ph=Math.sin(t*.016+i*2.1+c.seed*6), bob=walking?Math.abs(ph)*r*.22:0;
+    const X=p.cx+(i-1)*r*2.3*c.face, gy=p.cy+(i-1)*S*1.6, Y=gy-p.lift-bob, cs=BEANS[i];
+    ctx.fillStyle=PAL.shadow;ctx.beginPath();ctx.ellipse(X,gy,r,r*.3,0,0,TAU);ctx.fill();
+    ctx.save();ctx.translate(X,Y);ctx.scale(c.face*(1-(p.sq+crouch)*.6),1+p.sq+crouch);
+    ctx.fillStyle=cs[2];for(const s of [-1,1]){const lf=walking?Math.max(0,ph*s)*r*.35:0;ctx.beginPath();ctx.ellipse(s*r*.4,-r*.08-lf+bob,r*.3,r*.17,0,0,TAU);ctx.fill()}
+    const gr=ctx.createRadialGradient(-r*.35,-r*1.6,r*.1,0,-r*1.0,r*1.4);gr.addColorStop(0,'rgba(255,255,255,.8)');gr.addColorStop(.25,cs[0]);gr.addColorStop(.75,cs[1]);gr.addColorStop(1,cs[2]);
+    ctx.fillStyle=gr;ctx.beginPath();ctx.ellipse(0,-r*1.0,r*.98,r*1.1,0,0,TAU);ctx.fill();
+    ctx.scale(c.face,1);
+    eyes(b,t,r*.36,-r*1.2,r*.16,i===1?lookAt(X,Y,r):0,true);cheeks(r*.62,-r*.85,r*.15);smile(-r*.88,r,happy(b,t)||c.carry);
+    ctx.restore();
+    if(i===1&&c.carry) drawPetalAt(X-r*.55*c.face,Y-r*2.3,r*.42,r*1.1,Math.PI/2+(reduceMotion?0:Math.sin(t*.004+c.seed)*.2),'#e3a1b0');
+  }
+}
+function drawPetals(){   // 地上的花瓣（搬搬隊會來扛；白花的花瓣畫淡紫一點，不然在土上看不到；快被吹走時慢慢變淡）
+  const t=now();
+  for(const q of petals){ const col=PAL.flower[q.col]||'#e3a1b0';
+    ctx.globalAlpha=q.taken?1:clamp((45000-(t-q.t0))/3000,0,1);
+    drawPetalAt(q.x*W,q.y*H,1.8*S,3.6*S,1.2+hash(q.x,3),col==='#f2f0f7'?'#ece6f3':col); }
+  ctx.globalAlpha=1;
+}
+
 function drawSparks(t){
   for(const s of puffSeeds){
     const k=(t-s.t0)/s.life;ctx.save();ctx.translate(s.x,s.y);ctx.rotate(s.rot);ctx.globalAlpha=clamp((1-k)*1.8,0,1);
@@ -894,6 +1225,10 @@ function drawSparks(t){
     const X=s.x+Math.sin(k*6+s.x)*3*S, Y=s.y-k*22*S, r=3.2*S*(1-k*.3);
     ctx.globalAlpha=Math.min(1,(1-k)*1.6);
     ctx.fillStyle=s.c;
+    if(s.text){   // v2.0 呱呱的「呱」
+      ctx.font='700 '+Math.round(6*S)+'px sans-serif';ctx.textAlign='center';
+      ctx.fillText(s.text,s.x+Math.sin(k*5)*2*S,s.y-k*16*S);ctx.textAlign='start';continue;
+    }
     ctx.beginPath();ctx.moveTo(X,Y+r*.9);
     ctx.bezierCurveTo(X-r*1.3,Y-r*.1,X-r*.6,Y-r*1.2,X,Y-r*.45);
     ctx.bezierCurveTo(X+r*.6,Y-r*1.2,X+r*1.3,Y-r*.1,X,Y+r*.9);ctx.fill();
@@ -905,7 +1240,7 @@ function critterHit(x,y){
   for(const c of critters){
     if(c.kind==='cap'&&c.e<.35) continue;
     const p=critterPos(c,t), r=CR[c.kind]*S;
-    const d=Math.hypot(x*W-p.cx,y*H-(p.cy-p.lift-r*1.1));
+    const d=Math.hypot(x*W-p.cx,y*H-(p.cy-p.lift-r*1.1))-(c.kind==='beans'?r*2:0);   // 搬搬隊是三隻排成一排，點到哪一隻都算
     if(d<bd){bd=d;best=c}
   }
   return best&&bd<Math.max(16*S,CR[best.kind]*S*1.8)?best:null;
@@ -918,6 +1253,10 @@ function poke(c){
   else if(c.kind==='ladybug'){c.fly=t;c.hop=null}
   else if(c.kind==='puff') puffBurst(c,t);
   else if(c.kind==='cloud'){c.rainUntil=t+2200;c.heavy=t+2200}
+  else if(c.kind==='frog'){croak(c,t);if(!c.hop&&!reduceMotion){startHop(c,c.x,c.y,t,440,12);c.t0=t;c.wait=1100}}   // v2.0
+  else if(c.kind==='pebble') pebbleRoll(c,t);
+  else if(c.kind==='acorn'){c.t0=t;c.wait=Math.max(c.wait,900)}   // 掀帽子（畫的時候看 c.poke）
+  else if(c.kind==='leaf'){c.spin=t;if(c.lst==='sit'&&!reduceMotion)leafRise(c,t)}
   else if(c.kind==='santa'){c.hoho=t;if(!c.hop&&!reduceMotion){startHop(c,c.x,c.y,t,380,8);c.t0=t;c.wait=1100}
     if(gifts.length<6) gifts.push({x:clamp(c.x+c.face*r*1.9/W,.03,.97),y:c.y+1.5*S/H,t0:t+250,col:Math.floor(Math.random()*4)})}
   else if(!c.hop&&!reduceMotion){startHop(c,c.x,c.y,t,440,15);c.t0=t;c.wait=1100}
@@ -932,13 +1271,16 @@ function critterCheer(){
     if(c.kind==='ladybug'){c.fly=t;c.hop=null;return}
     if(c.kind==='cloud'){c.rainUntil=Math.max(c.rainUntil,t+1200);return}
     if(c.kind==='puff') return;
+    if(c.kind==='pebble'){c.awake=t;c.wob=t;return}   // v2.0 石石醒來晃一下就好
+    if(c.kind==='leaf'){c.spin=t;return}
     if(c.kind==='santa') c.hoho=t;
     if(!c.hop&&!reduceMotion){startHop(c,c.x,c.y,t,360,c.kind==='moss'||c.kind==='santa'?6:10);c.t0=t;c.wait=Math.max(c.wait,700)}
   },i*90+Math.random()*60));
 }
+const STAY={frog:1,pebble:1,leaf:1,beans:1};   // v2.0 這幾隻不會跑過來看水滴（呱呱離不開水塘、石石在睡、葉葉用飄的、搬搬隊在忙）
 function critterNotice(x,y){ // a drop lands nearby: dew and moss come to look
   for(const c of critters){
-    if(c.kind==='cap'||AIR[c.kind]||dist(c.x,c.y,x,y)>.16*U) continue;
+    if(c.kind==='cap'||AIR[c.kind]||STAY[c.kind]||dist(c.x,c.y,x,y)>.16*U) continue;
     const tg=around(x,y,.02,.035);
     if(c.kind==='dew'){ if(pondAt(tg[0],tg[1],1.05)) continue; const p=nearestPond(c.hx,c.hy); if(!p||!inPond(p,tg[0],tg[1],2.4)) continue; }
     else if(pondAt(tg[0],tg[1],1.15)) continue;
@@ -967,9 +1309,34 @@ function residents(x,y,acts,nG,bigTrees){
   if(nG>=10&&dry&&nK('puff')<3&&!near('puff',.15)&&chance(.1)) acts.push(()=>{if(!near('puff',.15))makeCritter('puff',x,y,[x,y])});
   // v1.7：十二月，公公會揹著禮物走進來（只在記憶體，每次打開頁面要再來一次）；偶爾有雪橇從天上飛過（稀有）
   if(december()){
-    if(dry&&!nK('santa')&&chance(.12)) acts.push(()=>{const c=makeCritter('santa',x,y,[x,y]);if(c&&!reduceMotion){c.hoho=now()+700}});
-    if(!sleigh&&!document.hidden&&Date.now()-lastSleigh>90000&&chance(.03)) acts.push(startSleigh);
+    // v1.8 機率調高：公公 12% → 30%；雪橇 3% → 8%（還沒看過雪橇 16%），90 → 60 秒最多一次；地上還沒有聖誕紅時每滴 25% 長第一株
+    if(dry&&!nK('santa')&&chance(.3)) acts.push(()=>{const c=makeCritter('santa',x,y,[x,y]);if(c&&!reduceMotion){c.hoho=now()+700}});
+    if(!sleigh&&!document.hidden&&Date.now()-lastSleigh>60000&&chance(found.santaR?.08:.16)) acts.push(startSleigh);
+    if(dry&&!plants.some(p=>p.type==='poinsettia')&&chance(.25)) acts.push(()=>{if(!plants.some(p=>p.type==='poinsettia')){const [a,b]=around(x,y,.02,.05);addPoin(a,b)}});
   }
+  if(inForest()) forestResidents(x,y,acts,bigTrees,fl,nK,near);
+}
+// v2.0 水邊樹林的居民（只在森林跑，第一塊地的亂數順序不變）
+function forestResidents(x,y,acts,bigTrees,fl,nK,near){
+  // 呱呱：睡蓮開了花的水塘（一個水塘最多 2 隻，整塊地最多 2 隻）；石石：水塘邊（一個水塘最多一顆，整塊地最多 2 顆）
+  const fp=pondAt(x,y,2.4);
+  if(fp){
+    const pads=()=>plants.filter(p=>p.type==='lily'&&p.stage>=2&&inPond(fp,p.x,p.y));
+    const frogs=()=>critters.filter(c=>c.kind==='frog'&&dist(c.hx,c.hy,fp.x,fp.y)<6).length;
+    if(pads().length&&frogs()<2&&nK('frog')<2&&chance(.25)) acts.push(()=>{const l=pads();if(!l.length||frogs()>=2||nK('frog')>=2)return;const q=pick(l);makeCritter('frog',q.x,q.y,[fp.x,fp.y])});
+    const rock=()=>critters.some(c=>c.kind==='pebble'&&dist(c.hx,c.hy,fp.x,fp.y)<6)||nK('pebble')>=2;
+    if(!rock()&&chance(.18)) acts.push(()=>{if(rock())return;for(let i=0;i<6;i++){const [a,b]=pondEdge(fp);if(!inStream(a,b,1.3)){makeCritter('pebble',a,b,[fp.x,fp.y]);return}}});
+  }
+  if(bigTrees.length){
+    const tr=bigTrees[0], grove=plants.filter(p=>p.type==='tree'&&p.stage===3&&dist(p.x,p.y,tr.x,tr.y)<.25*U).length;
+    const spot=()=>{for(let i=0;i<6;i++){const q=around(tr.x,tr.y+.015*U/H,.02,.06);if(!wetAt(q[0],q[1]))return q}return null};
+    // 橡橡：兩棵以上大樹長在一起（小樹林）
+    if(grove>=2&&nK('acorn')<2&&!near('acorn',.12)&&chance(.15)) acts.push(()=>{if(near('acorn',.12))return;const q=spot();if(q)makeCritter('acorn',q[0],q[1],[tr.x,tr.y+.015*U/H])});
+    // 葉葉：大樹下，偶爾有一片葉子醒過來（秋天比較常是楓紅的）
+    if(nK('leaf')<2&&!near('leaf',.12)&&chance(.12)) acts.push(()=>{if(near('leaf',.12))return;const q=spot();if(q)makeCritter('leaf',q[0],q[1],[tr.x,tr.y+.015*U/H],{v:Math.random()<(autumn()?.2:.05)?1:0})});
+  }
+  // 搬搬隊：花開得多的地方，搬來一個小窩
+  if(fl.length>=4&&!wetAt(x,y)&&!nK('beans')&&chance(.12)) acts.push(()=>{if(!nK('beans'))makeCritter('beans',x,y,[x,y])});
 }
 /* ---------- v1.7 十二月：禮物、雪橇、小雪（都只在記憶體） ---------- */
 const gifts=[], flakes=[]; let sleigh=null, lastSleigh=0;
@@ -1041,6 +1408,12 @@ const GUIDE_CSS=`
 .guide-btn .dot{width:8px;height:8px;border-radius:50%;background:var(--wrong)}
 .guide-btn .dot[hidden]{display:none}
 .stale:not([hidden]) ~ .guide-btn{display:none}
+.map-btn{position:absolute;left:.75rem;top:3.2rem;display:flex;align-items:center;gap:.45rem;font-size:.9rem;color:var(--ink);background:var(--panel);border:0;border-radius:999px;padding:.35rem .9rem;cursor:pointer;opacity:.9}
+.map-btn:hover{opacity:1}
+.map-btn[hidden]{display:none}
+.map-btn .dot{width:8px;height:8px;border-radius:50%;background:var(--wrong)}
+.map-btn .dot[hidden]{display:none}
+.stale:not([hidden]) ~ .map-btn{display:none}
 .guide{position:fixed;inset:0;z-index:20;background:rgba(18,22,14,.5);display:grid;place-items:center;padding:1.25rem;animation:gfade .2s ease-out}
 .guide[hidden]{display:none}
 @keyframes gfade{from{opacity:0}to{opacity:1}}
@@ -1100,6 +1473,11 @@ const G={};   // 圖鑑的 DOM（元素參考，不靠 getElementById）
   btn.className='guide-btn'; btn.id='guideBtn'; btn.type='button';
   btn.innerHTML='圖鑑 <span class="gc" id="gcount">0/12</span><i class="dot" id="gdot" hidden></i>';
   land.appendChild(btn);
+  // v2.0 換地圖的按鈕（水邊樹林開了才出現），放在圖鑑按鈕下面
+  const mb=document.createElement('button');
+  mb.className='map-btn'; mb.id='mapBtn'; mb.type='button'; mb.hidden=true;
+  mb.innerHTML='<span class="ml"></span><i class="dot" hidden></i>';
+  land.appendChild(mb);
   const dlg=document.createElement('div');
   dlg.className='guide'; dlg.id='guide'; dlg.hidden=true;
   dlg.setAttribute('role','dialog'); dlg.setAttribute('aria-modal','true'); dlg.setAttribute('aria-labelledby','gTitle');
@@ -1111,7 +1489,7 @@ const G={};   // 圖鑑的 DOM（元素參考，不靠 getElementById）
     '<div class="g-bkbtns"><button type="button" id="gBkSave">下載備份</button><button type="button" id="gBkLoad">從備份還原</button>'+
     '<input type="file" id="gBkFile" accept=".json,application/json" hidden></div><p class="g-bknote" id="gBkNote"></p></footer></div>';
   document.body.appendChild(dlg);
-  Object.assign(G,{guideBtn:btn, gcount:btn.querySelector('.gc'), gdot:btn.querySelector('.dot'), guide:dlg,
+  Object.assign(G,{guideBtn:btn, mapBtn:mb, gcount:btn.querySelector('.gc'), gdot:btn.querySelector('.dot'), guide:dlg,
     gBar:dlg.querySelector('#gBar'), gSub:dlg.querySelector('#gSub'), gLand:dlg.querySelector('#gLand'), gClose:dlg.querySelector('.g-close'), gBody:dlg.querySelector('.g-body'),
     gBkInfo:dlg.querySelector('#gBkInfo'), gBkSave:dlg.querySelector('#gBkSave'), gBkLoad:dlg.querySelector('#gBkLoad'),
     gBkFile:dlg.querySelector('#gBkFile'), gBkNote:dlg.querySelector('#gBkNote')});
@@ -1217,8 +1595,62 @@ const GUIDE=[
   {k:'violet', name:'紫花', art:'violet',rare:true,
    desc:'很少見的花。它旁邊再開的花，常常也是紫色的。',
    hint:'運氣很好的時候才會開'},
+  // v2.0 第二塊地「水邊樹林」（開了才顯示；map:'forest'）
+  {sec:'水邊樹林',note:'第二塊地才有的居民和植物',map:'forest'},
+  {k:'frog', name:'呱呱', art:'critter',kind:'frog',v:0,map:'forest',
+   desc:'住在睡蓮葉上的小青蛙，最喜歡從一片葉子跳到另一片。點牠會鼓起喉嚨「呱」一聲。',
+   hint:'睡蓮開花了，好像有誰想搬進來'},
+  {k:'frogR', name:'粉紅呱呱', art:'critter',kind:'frog',v:1,rare:true,map:'forest',
+   desc:'粉紅色的呱呱，叫聲比較細。',
+   hint:'呱呱裡面，有一隻顏色不一樣'},
+  {k:'pebble', name:'石石', art:'critter',kind:'pebble',v:0,map:'forest',
+   desc:'水塘邊的小石頭，背上長了一點苔，幾乎都在睡覺。點它會醒來翻個滾。',
+   hint:'水塘邊有一顆石頭，好像在打呼'},
+  {k:'pebbleR', name:'花紋石石', art:'critter',kind:'pebble',v:1,rare:true,map:'forest',
+   desc:'身上一圈一圈的花紋，像瑪瑙。',
+   hint:'石石也有長得特別漂亮的'},
+  {k:'acorn', name:'橡橡', art:'critter',kind:'acorn',v:0,map:'forest',
+   desc:'從橡樹上掉下來的橡實，戴著一頂小帽子，搖搖擺擺地走。點它會掀帽子打招呼。',
+   hint:'好幾棵大樹長在一起的地方'},
+  {k:'acornR', name:'金橡橡', art:'critter',kind:'acorn',v:1,rare:true,map:'forest',
+   desc:'金色的橡實，偶爾閃一下光。',
+   hint:'橡橡裡面，有一顆會發光'},
+  {k:'leaf', name:'葉葉', art:'critter',kind:'leaf',v:0,map:'forest',
+   desc:'一片醒過來的葉子。風一吹就飛起來，再慢慢晃下來。',
+   hint:'大樹底下的落葉，好像在動'},
+  {k:'leafR', name:'楓紅葉葉', art:'critter',kind:'leaf',v:1,rare:true,map:'forest',
+   desc:'轉紅的葉葉。秋天（10～11 月）比較常見。',
+   hint:'秋天的時候，葉葉的顏色會變'},
+  {k:'beans', name:'搬搬隊', art:'critter',kind:'beans',v:0,map:'forest',
+   desc:'杏、薄荷、薰衣草三隻小豆豆。看到掉下來的花瓣，就一起扛回窩裡。',
+   hint:'花開得很多的地方，好像有誰在搬東西'},
+  {k:'cattail', name:'香蒲', art:'plant',type:'cattail',color:0,ps:.024,map:'forest',
+   desc:'長在水邊的高草，頂端像一根咖啡色的小熱狗。熟了以後穗會爆開飛走。',
+   hint:'在小溪或水塘邊澆水'},
+  {k:'cattailR', name:'絨毛香蒲', art:'plant',type:'cattail',color:5,ps:.024,rare:true,map:'forest',
+   desc:'小熱狗爆開成白絨毛，隨風一點一點飄走。',
+   hint:'香蒲裡，有一叢毛茸茸的'},
+  {k:'fern', name:'蕨', art:'plant',type:'fern',color:0,ps:.022,map:'forest',
+   desc:'從一個小捲捲，慢慢打開成一大叢葉子。',
+   hint:'大樹的樹蔭下'},
+  {k:'fernR', name:'銀蕨', art:'plant',type:'fern',color:5,ps:.022,rare:true,map:'forest',
+   desc:'葉子是銀藍色的蕨。',
+   hint:'蕨也有不是綠色的'},
+  {k:'lilyvalley', name:'鈴蘭', art:'plant',type:'lilyvalley',color:0,ps:.019,map:'forest',
+   desc:'彎彎的花莖上掛著一串小白鈴，風吹會輕輕搖。',
+   hint:'大樹的樹蔭下，仔細看看'},
+  {k:'lilyvalleyR', name:'粉鈴蘭', art:'plant',type:'lilyvalley',color:5,ps:.019,rare:true,map:'forest',
+   desc:'粉紅色的小鈴鐺。',
+   hint:'鈴蘭也有不是白色的'},
+  {k:'oak', name:'橡樹', art:'tree',tree:'oak',map:'forest',
+   desc:'矮矮寬寬的大樹，樹幹粗粗的，長大後樹下會掉幾顆橡實。',
+   hint:'水邊樹林的樹苗，一直照顧它'},
+  {k:'willow', name:'垂柳', art:'tree',tree:'willow',map:'forest',
+   desc:'長在小溪邊的樹，細細的枝條垂下來，風一吹整片晃。',
+   hint:'小溪旁邊的樹苗，長大會不一樣'},
 ];
 const G_ITEMS=GUIDE.filter(e=>e.k);
+const shownItems=()=>G_ITEMS.filter(e=>!e.map||forestOpen);   // v2.0 水邊樹林的格子開了才算
 // 參考檔的 discover(key)；改名是為了不和 discover 事件（每次發生都發、給頁面 toast）混淆。
 // 這裡只在圖鑑第一次登錄時做事，並發 found 事件。
 function record(key){
@@ -1229,12 +1661,12 @@ function record(key){
   emit('found',{key,name:e?e.name:key});
   if(e) setTimeout(()=>emit('message','圖鑑新增：'+e.name),2400);   // after the land's own message
 }
-function scanFound(){ // fill in anything already on the land (older saves)
-  const t=Date.now(), mark=k=>{if(!found[k]) found[k]=t};
+function scanFound(fresh){ // fill in anything already on the land (older saves)；v2.0 fresh＝第一次開水邊樹林，標成「新發現」
+  const t=Date.now(), mark=k=>{if(!found[k]){ found[k]=t; if(fresh) newFound[k]=1; }};
   critters.forEach(c=>mark(c.kind+(c.v?'R':'')));
-  if(ponds.length) mark('pond');
+  if(ponds.some(p=>!p.fixed)) mark('pond');
   if(plants.some(p=>p.type==='lily'&&p.stage>=2)) mark('lily');
-  if(plants.some(p=>p.type==='tree'&&p.stage>=3)) mark('tree');
+  plants.filter(p=>p.type==='tree'&&p.stage>=3).forEach(p=>mark(treeKey(p)));
   if(plants.some(p=>p.type==='mushroom')) mark('ring');
   if(plants.some(p=>p.type==='flower'&&p.color===5)) mark('violet');
   if(flies.length) mark('fly');
@@ -1244,7 +1676,8 @@ function onLand(key){
   switch(key){
     case 'pond': return ponds.length;
     case 'lily': return plants.filter(p=>p.type==='lily'&&p.stage>=2).length;
-    case 'tree': return plants.filter(p=>p.type==='tree'&&p.stage>=3).length;
+    case 'tree': return inForest()?0:plants.filter(p=>p.type==='tree'&&p.stage>=3).length;
+    case 'oak': case 'willow': return inForest()?plants.filter(p=>p.type==='tree'&&p.stage>=3&&treeKey(p)===key).length:0;
     case 'ring': return plants.filter(p=>p.type==='tree'&&p.stage>=3&&plants.some(q=>q.type==='mushroom'&&dist(q.x,q.y,p.x,p.y)<.1*U)).length;
     case 'fly': return flies.length;
     case 'violet': return plants.filter(p=>p.type==='flower'&&p.color===5).length;
@@ -1256,10 +1689,12 @@ function onLand(key){
 }
 const UNIT_WORD={pond:'個',lily:'朵',tree:'棵',ring:'個',fly:'隻',violet:'朵',cloud:'朵',cloudR:'朵',puff:'團',puffR:'團',
   clover:'叢',cloverR:'叢',sunflower:'朵',sunflowerR:'朵',tulip:'朵',tulipR:'朵',pumpkin:'顆',pumpkinR:'顆',
-  santa:'位',santaR:'台',poinsettia:'株',poinsettiaR:'株'};
+  santa:'位',santaR:'台',poinsettia:'株',poinsettiaR:'株',
+  frog:'隻',frogR:'隻',pebble:'顆',pebbleR:'顆',acorn:'顆',acornR:'顆',leaf:'片',leafR:'片',beans:'隊',
+  cattail:'叢',cattailR:'叢',fern:'叢',fernR:'叢',lilyvalley:'株',lilyvalleyR:'株',oak:'棵',willow:'棵'};
 function updateGuideBtn(){
-  const n=G_ITEMS.filter(e=>found[e.k]).length;
-  G.gcount.textContent=n+'/'+G_ITEMS.length;
+  const items=shownItems(), n=items.filter(e=>found[e.k]).length;
+  G.gcount.textContent=n+'/'+items.length;
   G.gdot.hidden=!Object.keys(newFound).length;
 }
 
@@ -1278,7 +1713,10 @@ function pokePortrait(pt,t){
   else if(c.kind==='ladybug') c.fly=t;
   else if(c.kind==='puff') c.amt=.28;
   else if(c.kind==='cloud'){c.rainUntil=t+2200;c.heavy=t+2200}
-  else if(!c.hop&&!reduceMotion){startHop(c,c.x,c.y,t,440,15)}
+  else if(c.kind==='pebble'){c.awake=t;c.dir=1;c.rd=0;c.roll=reduceMotion?-1e9:t}   // v2.0 圖鑑裡原地翻一圈
+  else if(c.kind==='leaf') c.spin=t;
+  else if(c.kind==='acorn'){}   // 掀帽子（畫的時候看 c.poke）
+  else{ if(c.kind==='frog') c.croak=t; if(!c.hop&&!reduceMotion) startHop(c,c.x,c.y,t,440,15); }
 }
 function tickPortraitCritter(c,t){
   if(t>c.blinkAt){c.blinkT=t;c.blinkAt=t+1800+Math.random()*3800}
@@ -1286,6 +1724,7 @@ function tickPortraitCritter(c,t){
   if(c.hop&&t-c.hop.t0>=c.hop.d){c.hop=null;c.land=t}
   if(c.kind==='dew'&&!c.hop&&!reduceMotion&&t>c.nextHop){startHop(c,c.x,c.y,t,380,8);c.nextHop=t+2500+Math.random()*4000}
   if(c.kind==='bee'&&!reduceMotion&&t>c.nextHop){c.loop=t;c.nextHop=t+3500+Math.random()*3000}
+  if(c.kind==='frog'&&!reduceMotion&&t>c.nextHop){c.croak=t;c.nextHop=t+4000+Math.random()*3000}   // v2.0
   if(c.kind==='puff') c.amt=Math.min(1,c.amt+1/540);
   if(c.kind==='cloud') rainTick(c,t,1/60);
   if(c.kind==='cap'){
@@ -1310,7 +1749,7 @@ function drawPortrait(pt,t){
         tickPortraitCritter(st.c,t);
         if(e.kind==='moss') st.c.face=1;
         if(e.kind==='bee'){S=P*.016;drawFlower({seed:.3,color:e.v?5:2},.5*W,.94*H,2,1,t)}
-        S=P*({dew:.027,bee:.03,ladybug:.028,puff:.026,cloud:.024,santa:.025}[e.kind]||.024);
+        S=P*({dew:.027,bee:.03,ladybug:.028,puff:.026,cloud:.024,santa:.025,frog:.026,pebble:.026,acorn:.03,leaf:.028,beans:.019}[e.kind]||.024);
         drawCritter(st.c,t);break;
       }
       case 'pond':{
@@ -1328,7 +1767,7 @@ function drawPortrait(pt,t){
       }
       case 'tree':{
         S=P*.012; drawGrass({seed:.7},.16*W,.9*H,1.5,1,t);drawGrass({seed:.9},.85*W,.88*H,1.5,1,t);
-        S=P*.0105; drawTree({seed:.42},.5*W,.9*H,3,1,t);
+        S=P*.0105; (e.tree==='oak'?drawOak:e.tree==='willow'?drawWillow:drawTree)({seed:.42},.5*W,.9*H,3,1,t);
         break;
       }
       case 'ring':{
@@ -1373,14 +1812,17 @@ function drawPortrait(pt,t){
 function fmtDate(ms){const d=new Date(ms);return (d.getMonth()+1)+'/'+d.getDate()}
 function openGuide(){
   const body=G.gBody; body.innerHTML=''; portraits.length=0;
-  const n=G_ITEMS.filter(e=>found[e.k]).length;
-  G.gSub.textContent='已發現 '+n+' / '+G_ITEMS.length;
-  G.gBar.style.width=(n/G_ITEMS.length*100)+'%';
+  const items=shownItems(), n=items.filter(e=>found[e.k]).length;
+  G.gSub.textContent='已發現 '+n+' / '+items.length;
+  G.gBar.style.width=(n/items.length*100)+'%';
   // v1.5：這塊地有幾株植物（上限 FULL）；長滿了就說明特殊植物會換掉普通草花
   showBackupInfo();
-  G.gLand.textContent=plants.length>FULL?'這塊地長滿了（'+plants.length+' 株）・新的特殊植物會取代普通花草':'這塊地 '+plants.length+'／'+FULL+' 株';
+  if(inForest()) G.gLand.textContent='水邊樹林 '+plants.length+' 株・花草會慢慢換新，地不會塞滿';   // v2.0
+  else G.gLand.textContent=(plants.length>FULL?'這塊地長滿了（'+plants.length+' 株）・新的特殊植物會取代普通花草':'這塊地 '+plants.length+'／'+FULL+' 株')+
+    (forestOpen?'':'・長到 '+OPEN_AT+' 株會開一塊新的地');
   let grid=null;
   for(const e of GUIDE){
+    if(e.map&&!forestOpen) continue;   // v2.0 水邊樹林還沒開：那一區先不顯示
     if(e.sec){
       const h=document.createElement('div');h.className='g-sec';
       h.innerHTML='<h3></h3><p></p>';h.firstChild.textContent=e.sec;h.lastChild.textContent=e.note;
@@ -1685,6 +2127,172 @@ function drawPumpkin(g,v,s,t,seed,rare){
     g.strokeStyle=rare?'#7f8a5a':'#5d6b2f';g.lineWidth=s*1.1;g.beginPath();g.moveTo(px,-P2*1.45);g.quadraticCurveTo(px+s*.3,-P2*1.45-s*1.6,px+s*1.4,-P2*1.45-s*1.8);g.stroke();
   }
 }
+/* ---------- v2.0 水邊樹林的植物：香蒲、蕨、鈴蘭（照 docs/new-guide-candidates.html；畫在原點、腳在 (0,0)） ---------- */
+const qp=(a,c,b,k)=>[(1-k)*(1-k)*a[0]+2*(1-k)*k*c[0]+k*k*b[0],(1-k)*(1-k)*a[1]+2*(1-k)*k*c[1]+k*k*b[1]];
+const qt=(a,c,b,k)=>{const x=2*(1-k)*(c[0]-a[0])+2*k*(b[0]-c[0]),y=2*(1-k)*(c[1]-a[1])+2*k*(b[1]-c[1]),l=Math.hypot(x,y)||1;return [x/l,y/l]};
+function drawLilyvalley(g,v,s,t,seed,rare){
+  const X=0,Y=0,Lh=s*(6+v*3.4);
+  for(const [d,c] of [[-1,'#5f8a3a'],[1,'#6f9a45']]){
+    g.save();g.translate(X+d*s*.8,Y);g.rotate(d*.18);
+    g.fillStyle=c;g.beginPath();g.moveTo(0,0);g.bezierCurveTo(d*s*3.6,-Lh*.3,d*s*3,-Lh*.85,d*s*.6,-Lh);g.bezierCurveTo(-d*s*1.4,-Lh*.6,-d*s*1.2,-Lh*.25,0,0);g.fill();
+    g.strokeStyle='rgba(255,255,255,.25)';g.lineWidth=s*.35;g.beginPath();g.moveTo(0,0);g.quadraticCurveTo(d*s*1.2,-Lh*.5,d*s*.6,-Lh*.95);g.stroke();
+    g.restore();
+  }
+  if(v<1.4) return;
+  const gk=clamp((v-1.4)/.8,0,1), a=[X+s*.5,Y], c=[X+s*1.8,Y-Lh*1.45], b=[X+s*9.5,Y-Lh*.78];
+  g.strokeStyle='#6b9a3c';g.lineWidth=s*.7;g.lineCap='round';g.beginPath();g.moveTo(a[0],a[1]);
+  for(let i=1;i<=16;i++){const p=qp(a,c,b,i/16*(.5+.5*gk));g.lineTo(p[0],p[1])}g.stroke();
+  const open=clamp((v-2.3)/.7,0,1);
+  for(let i=0;i<5;i++){
+    const k=.5+i*.11; if(k>.5+.5*gk) continue;
+    const p=qp(a,c,b,k), sz=s*(2.1-i*.25), sw=reduceMotion?0:Math.sin(t*.0022+seed*4+i*.8)*.18;
+    g.save();g.translate(p[0],p[1]);g.rotate(sw);
+    g.strokeStyle='#6b9a3c';g.lineWidth=s*.35;g.beginPath();g.moveTo(0,0);g.quadraticCurveTo(s*.4,s*.5,0,s*1.1);g.stroke();
+    g.translate(0,s*1.1+sz*.75);
+    if(open<=0){g.fillStyle='#9cc266';g.beginPath();g.arc(0,0,sz*.45,0,TAU);g.fill()}
+    else{const b2=sz*(.55+.45*open);
+      g.fillStyle=rare?'#f6bfd0':'#fbf8ef';g.strokeStyle='rgba(60,70,40,.18)';g.lineWidth=s*.3;
+      g.beginPath();g.moveTo(-b2*.7,b2*.55);g.quadraticCurveTo(-b2*.85,-b2*.75,0,-b2*.75);g.quadraticCurveTo(b2*.85,-b2*.75,b2*.7,b2*.55);
+      g.quadraticCurveTo(b2*.48,b2*.95,b2*.23,b2*.6);g.quadraticCurveTo(0,b2*.95,-b2*.23,b2*.6);g.quadraticCurveTo(-b2*.48,b2*.95,-b2*.7,b2*.55);
+      g.fill();g.stroke();}
+    g.restore();
+  }
+}
+function drawCattail(g,v,s,t,seed,rare){
+  const X=0,Y=0,base=g.globalAlpha;
+  g.lineCap='round';
+  for(let i=0;i<5;i++){
+    const h=s*(8+v*5)*(.75+hash(seed,i)*.4), off=(i-2)*s*1.3, lean=(hash(seed,i+7)-.5)*s*7+off*.8;
+    const sw=reduceMotion?0:Math.sin(t*.0012+seed*9+i*.6)*s*1.2;
+    g.strokeStyle=['#6b8a3c','#7f9c47','#5f7f36'][i%3];g.lineWidth=s*1.3;
+    g.beginPath();g.moveTo(X+off,Y);g.quadraticCurveTo(X+off+lean*.2,Y-h*.6,X+off+lean+sw,Y-h);g.stroke();
+  }
+  if(v<1.5) return;
+  const open=clamp((v-2.3)/.7,0,1);
+  for(const [dx,f] of [[-1.2,1],[2.2,.86]]){
+    const Hs=s*(9+(v-1.5)*13)*f, sw=reduceMotion?0:Math.sin(t*.001+seed*5+dx)*s*.9, tx=X+dx*s+sw, ty=Y-Hs;
+    g.strokeStyle='#6b8a3c';g.lineWidth=s*.8;g.beginPath();g.moveTo(X+dx*s,Y);g.lineTo(tx,ty);g.stroke();
+    if(open<=0){g.strokeStyle='#8fae52';g.lineWidth=s*1.3;g.beginPath();g.moveTo(tx,ty+s*5);g.lineTo(tx,ty+s*1.2);g.stroke();continue}
+    const hl=s*(3.5+3.5*open), hw=s*(1.3+1.1*open), hy=ty+s*1.6;
+    g.lineWidth=s*.4;g.beginPath();g.moveTo(tx,hy);g.lineTo(tx,ty-s*1.5);g.stroke();
+    if(rare&&open>.6){   // 絨毛香蒲：穗爆開成白絨毛，一點一點飄走
+      for(let i=0;i<14;i++){const a=hash(seed,i+30)*TAU,rr=hw*(.8+hash(seed,i+40)*.6);g.fillStyle=i%2?'#f6f1e6':'#e9e1d0';g.beginPath();g.arc(tx+Math.cos(a)*rr*.7,hy+hl/2+Math.sin(a)*hl*.55,hw*.55,0,TAU);g.fill()}
+      if(!reduceMotion) for(let i=0;i<5;i++){const k=((t*.00018)+i/5+dx)%1, fx=tx+k*s*22+Math.sin(k*9+i)*s*2, fy=hy+hl*.3-k*s*16;
+        g.globalAlpha=base*Math.sin(Math.PI*k)*.9;g.fillStyle='#fff';g.beginPath();g.arc(fx,fy,s*.45,0,TAU);g.fill();
+        g.strokeStyle='#fff';g.lineWidth=s*.2;g.beginPath();for(let j=0;j<4;j++){const a=-Math.PI/2+(j-1.5)*.45;g.moveTo(fx,fy);g.lineTo(fx+Math.cos(a)*s*1.4,fy+Math.sin(a)*s*1.4)}g.stroke();g.globalAlpha=base}
+    }else{
+      g.fillStyle='#7a4e2c';g.beginPath();g.ellipse(tx,hy+hl/2,hw/2,hl/2,0,0,TAU);g.fill();
+      g.fillStyle='rgba(255,255,255,.2)';g.beginPath();g.ellipse(tx-hw*.18,hy+hl*.4,hw*.12,hl*.3,0,0,TAU);g.fill();
+    }
+  }
+}
+function drawFern(g,v,s,t,seed,rare){
+  const X=0,Y=0,col=rare?'#93b2c2':'#6f9e45', col2=rare?'#c4dae4':'#8fbe5c';
+  const curl=(x,y,R,dir)=>{g.beginPath();for(let a=0;a<TAU*1.5;a+=.18){const rr=R*(1-a/(TAU*1.7));g.lineTo(x+dir*Math.cos(a+Math.PI)*rr,y+Math.sin(a+Math.PI)*rr)}g.stroke()};
+  g.lineCap='round';
+  if(v<1.6){
+    const h=s*(4+v*3),sw=reduceMotion?0:Math.sin(t*.0015+seed*7)*s*.4;
+    g.strokeStyle=col;g.lineWidth=s*1.1;g.beginPath();g.moveTo(X,Y);g.quadraticCurveTo(X-s,Y-h*.6,X+sw,Y-h);g.stroke();
+    g.lineWidth=s*1.2;curl(X+sw+s*1.2,Y-h-s*.2,s*1.8,1);
+    g.fillStyle=col2;for(let i=0;i<5;i++){g.beginPath();g.arc(X+sw+s*1.2+(hash(seed,i)-.5)*s*2,Y-h+(hash(seed,i+5)-.5)*s*2,s*.25,0,TAU);g.fill()}
+    return;
+  }
+  const n=v<2.5?3:5, u=clamp((v-1.6)/1.2,0,1);
+  for(let i=0;i<n;i++){
+    const off=i-(n-1)/2, ang=-Math.PI/2+off*.5, Lf=s*(9+9*u)*(1-.1*Math.abs(off));
+    const sw=reduceMotion?0:Math.sin(t*.0011+seed*9+i)*s*.8;
+    const a=[X,Y], c=[X+Math.cos(ang)*Lf*.5,Y+Math.sin(ang)*Lf*.85], b=[X+Math.cos(ang)*Lf*1.15+sw,Y+Math.sin(ang)*Lf*.55+Lf*.1*Math.abs(Math.cos(ang))];
+    const reach=.55+.45*u, m=11;
+    g.strokeStyle=col;g.lineWidth=s*.7;g.beginPath();g.moveTo(X,Y);
+    for(let j=1;j<=20;j++){const p=qp(a,c,b,j/20*reach);g.lineTo(p[0],p[1])}g.stroke();
+    for(let j=2;j<m;j++){
+      const k=j/m*reach, p=qp(a,c,b,k), d=qt(a,c,b,k), size=s*(1.9*(1-j/m)+.5);
+      for(const sd of [-1,1]){g.fillStyle=sd>0?col:col2;g.save();g.translate(p[0],p[1]);g.rotate(Math.atan2(d[1],d[0])+sd*1.1);
+        g.beginPath();g.ellipse(size*.55,0,size*.6,size*.24,0,0,TAU);g.fill();g.restore()}
+    }
+    if(u<1){const p=qp(a,c,b,reach);g.lineWidth=s*.8;curl(p[0],p[1],s*1.4*(1-u)+s*.3,Math.cos(ang)>=0?1:-1)}
+  }
+}
+/* ---------- v2.0 水邊樹林的樹：橡樹、垂柳（照 docs/tree-candidates.html）。存檔裡一樣是 type 'tree'，看位置決定畫哪一種 ---------- */
+function treeTrunk(X,Y,th,tw,c,dark,lean){
+  const base=ctx.globalAlpha;
+  const path=()=>{ctx.beginPath();ctx.moveTo(X-tw*1.45,Y);ctx.quadraticCurveTo(X-tw*.75,Y-th*.08,X-tw*.62,Y-th*.3);
+    ctx.lineTo(X-tw*.45+lean,Y-th);ctx.lineTo(X+tw*.45+lean,Y-th);ctx.lineTo(X+tw*.62,Y-th*.3);ctx.quadraticCurveTo(X+tw*.75,Y-th*.08,X+tw*1.45,Y);ctx.closePath()};
+  ctx.fillStyle=c;path();ctx.fill();
+  ctx.save();path();ctx.clip();ctx.fillStyle=dark;ctx.globalAlpha=base*.55;ctx.fillRect(X+tw*.1+lean*.5,Y-th-1,tw*2,th+2);ctx.restore();
+}
+function sproutLeaves(X,Y,s,col,col2,k,swv){   // 小樹苗頂端的三片葉子（有葉脈）
+  const base=ctx.globalAlpha; ctx.globalAlpha=base*k;
+  for(const [dx,dy,rot,c] of [[-3,-.6,.55,col],[3,-1.6,-.55,col2],[0,-3.2,0,col]]){
+    ctx.save();ctx.translate(X+dx*s+swv,Y+dy*s);ctx.rotate(rot);
+    ctx.fillStyle=c;ctx.beginPath();ctx.ellipse(0,0,s*1.6,s*3.2,0,0,TAU);ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.35)';ctx.lineWidth=s*.35;ctx.beginPath();ctx.moveTo(0,s*2.6);ctx.lineTo(0,-s*2.4);ctx.stroke();
+    ctx.restore();
+  }
+  ctx.globalAlpha=base;
+}
+const tblob=(x,y,r,c)=>{ctx.fillStyle=c;ctx.beginPath();ctx.arc(x,y,Math.max(.01,r),0,TAU);ctx.fill()};
+const OAK_CL=[[-1,.15,.42],[-.55,-.2,.5],[0,-.32,.55],[.55,-.18,.5],[1,.15,.42],[-.45,.2,.45],[.45,.22,.45],[0,.12,.5]];
+function drawOak(p,X,Y,v,a,time){
+  const base=ctx.globalAlpha, s=S*a, seed=p.seed;
+  const cr=Math.max(0,v-.9)*s*11, th=s*(6+v*8), tw=s*(1.5+v*1.55), w=reduceMotion?0:Math.sin(time*.0008+seed*12)*s*.7;
+  ctx.fillStyle=PAL.shadow;ctx.beginPath();ctx.ellipse(X,Y+s*.8,s*3+cr*1.35,s*1.2+cr*.36,0,0,TAU);ctx.fill();
+  treeTrunk(X,Y,th,tw,'#6b4f35','#45311f',0);
+  if(v>1.7){ctx.strokeStyle='#6b4f35';ctx.lineCap='round';
+    for(const [d,h,lw] of [[-1,.75,.55],[1,.7,.5],[0,1,.45]]){ctx.lineWidth=tw*lw;ctx.beginPath();ctx.moveTo(X,Y-th*.9);
+      ctx.quadraticCurveTo(X+d*cr*.3,Y-th-cr*.1,X+d*cr*.75*h+w*.5,Y-th-cr*(d?.25:.55));ctx.stroke()}}
+  if(v<1.8) sproutLeaves(X,Y-th,s,'#6d8c44','#5b7a3a',Math.min(1,(1.8-v)*1.3),w);
+  if(cr<=0) return;
+  const cy=Y-th-cr*.55;
+  for(const [x,y,r] of OAK_CL) tblob(X+x*cr*.8+w,cy+y*cr+cr*.08,r*cr*1.05,'#3f5428');
+  for(const [x,y,r] of OAK_CL) tblob(X+x*cr*.8+w,cy+y*cr,r*cr,'#56703a');
+  for(const [x,y,r] of OAK_CL) if(y<0) tblob(X+(x*.8-.06)*cr+w,cy+(y-.1)*cr,r*cr*.62,'#6d8a47');
+  tblob(X-cr*.35+w,cy-cr*.45,cr*.24,'#8aa45c');tblob(X+cr*.2+w,cy-cr*.52,cr*.16,'#8aa45c');
+  ctx.globalAlpha=base*.22;ctx.fillStyle='#2a3a1c';ctx.beginPath();ctx.ellipse(X+w*.5,cy+cr*.55,cr*.85,cr*.13,0,0,TAU);ctx.fill();ctx.globalAlpha=base;
+  if(v>2.6){const k=clamp((v-2.6)/.4,0,1);   // 樹下的橡實
+    for(const [dx,dy] of [[-.7,.1],[.55,.25],[.85,-.05]]){const ax=X+dx*cr,ay=Y+dy*s*3,r=s*1.7*k;
+      ctx.fillStyle='#c98b4b';ctx.beginPath();ctx.ellipse(ax,ay-r,r*.8,r,0,0,TAU);ctx.fill();
+      ctx.fillStyle='#7a5a36';ctx.beginPath();ctx.ellipse(ax,ay-r*1.7,r*.95,r*.5,0,Math.PI,0);ctx.fill()}}
+}
+function drawWillow(p,X,Y,v,a,time){
+  const base=ctx.globalAlpha, s=S*a, seed=p.seed;
+  const cr=Math.max(0,v-.9)*s*9.5, th=s*(8+v*10), tw=s*(1+v*1.1), lean=(hash(seed,1)-.5)*s*6;
+  ctx.fillStyle=PAL.shadow;ctx.beginPath();ctx.ellipse(X+lean*.5,Y+s*.8,s*3+cr*1.15,s*1.2+cr*.35,0,0,TAU);ctx.fill();
+  treeTrunk(X,Y,th,tw,'#6e5438','#48351f',lean);
+  const tx=X+lean, ty=Y-th, w=reduceMotion?0:Math.sin(time*.0008+seed*12);
+  const strand=(x0,y0,len,bow,c,lw)=>{   // 一條垂下來的細枝，上面一片一片的小葉子
+    const ex=x0+bow*s*2+w*s*2.2*(len/(s*30)), ey=y0+len;
+    ctx.strokeStyle=c;ctx.lineWidth=lw;ctx.beginPath();ctx.moveTo(x0,y0);ctx.quadraticCurveTo(x0+bow*s*5,y0+len*.35,ex,ey);ctx.stroke();
+    ctx.fillStyle=c;for(let k=.25;k<1;k+=.14){const px=(1-k)*(1-k)*x0+2*(1-k)*k*(x0+bow*s*5)+k*k*ex,py=(1-k)*(1-k)*y0+2*(1-k)*k*(y0+len*.35)+k*k*ey;
+      ctx.beginPath();ctx.ellipse(px+(k*7%2?s*.7:-s*.7),py,s*.55,s*1.3,(k*7%2?-.5:.5),0,TAU);ctx.fill()}
+  };
+  ctx.lineCap='round';
+  if(v<1.8){ctx.globalAlpha=base*Math.min(1,(1.8-v)*1.3);
+    for(const d of [-1,0,1]) strand(tx+d*s*1.5,ty,s*(6+v*2),d,'#8fae52',s*.6);ctx.globalAlpha=base}
+  if(cr<=0) return;
+  const cy=ty-cr*.2, rx=cr*.95, ry=cr*.5, n=16;
+  for(let i=0;i<n;i++){const f=i/(n-1)*2-1;   // 後排（深）
+    strand(tx+f*rx*.85,cy+ry*.3*(1-f*f),cr*(1.3+hash(seed,i)*.5)*(1-.25*Math.abs(f)),f*1.2,'#6f8f3e',s*.7)}
+  ctx.fillStyle='#6f8f3e';ctx.beginPath();ctx.ellipse(tx,cy,rx*.9,ry,0,0,TAU);ctx.fill();
+  for(const [x,y,r] of [[-.45,-.1,.42],[.4,-.05,.4],[0,-.45,.45],[-.15,.1,.4],[.2,.12,.38]]) tblob(tx+x*rx,cy+y*ry,r*rx,'#7f9f48');
+  for(let i=0;i<n;i++){const f=(i+.5)/n*2-1, top=cy-ry*.75*Math.sqrt(1-f*f*.8);   // 前排（亮），從樹冠上半部垂下
+    strand(tx+f*rx*.82,top,cr*(.85+hash(seed,i+20)*1.0)*(1-.25*Math.abs(f)),f*.9,['#8fae52','#97b456','#aac868'][i%3],s*.75)}
+  ctx.globalAlpha=base*.6;tblob(tx-rx*.3,cy-ry*.6,rx*.18,'#bcd47e');ctx.globalAlpha=base;
+}
+// 小溪（畫進土地的底圖 ground，只畫一次）
+function drawStream(g){
+  const st=stream, w=st.w*U, p=st.pts.map(([x,y])=>[x*W,y*H]);
+  const path=()=>{g.beginPath();g.moveTo(p[0][0],p[0][1]);
+    for(let i=1;i<p.length-1;i++){const mx=(p[i][0]+p[i+1][0])/2,my=(p[i][1]+p[i+1][1])/2;g.quadraticCurveTo(p[i][0],p[i][1],mx,my)}
+    g.lineTo(p[p.length-1][0],p[p.length-1][1])};
+  g.lineCap='round';g.lineJoin='round';g.globalAlpha=1;
+  path();g.strokeStyle=PAL.pondRim;g.lineWidth=w*2.3;g.stroke();
+  path();g.strokeStyle=PAL.pond;g.lineWidth=w*2;g.stroke();
+  g.globalAlpha=.45;path();g.strokeStyle=PAL.pondDeep;g.lineWidth=w*.8;g.stroke();
+  g.globalAlpha=.35;g.strokeStyle='#fff';g.lineWidth=1.2*S;
+  for(let i=1;i<st.pts.length-1;i++){const [x,y]=st.pts[i];g.beginPath();g.moveTo(x*W-w*.6,y*H-w*.2);g.quadraticCurveTo(x*W-w*.2,y*H-w*.45,x*W+w*.2,y*H-w*.25);g.stroke()}
+  g.globalAlpha=1;
+}
 function drawPond(p,t){
   const a=reduceMotion?1:Math.max(.001,Math.min(1,(t-p.born)/1200));
   const X=p.x*W,Y=p.y*H,rx=pondRx(p)*a,ry=pondRy(p)*a;
@@ -1734,13 +2342,14 @@ function critterViews(t){
   for(const c of critters){
     if(c.kind==='cap'&&c.e<=0) continue;
     if(c.kind==='bee'||c.kind==='cloud') continue;   // 飛得比植物高，不用讓前面的植物變透明
-    const p=critterPos(c,t), r=CR[c.kind]*S;
+    const p=critterPos(c,t), r=CR[c.kind]*S*(c.kind==='beans'?2.2:1);   // 搬搬隊三隻排開，透明的範圍寬一點
     const k=t-(c.reveal||-1e9);
     out.push({cx:p.cx, cy:p.cy, top:p.cy-p.lift-r*2.5, r, fresh:k<REVEAL_MS?1-k/REVEAL_MS:0});
   }
   return out;
 }
-const PLANT_BOX={grass:[7,24],flower:[8,34],tree:[29,95],mushroom:[4,8],clover:[9,17],sunflower:[10,42],tulip:[9,33],pumpkin:[12,15],poinsettia:[11,26]};   // [half width, height] in S units
+const PLANT_BOX={grass:[7,24],flower:[8,34],tree:[29,95],mushroom:[4,8],clover:[9,17],sunflower:[10,42],tulip:[9,33],pumpkin:[12,15],poinsettia:[11,26],
+  cattail:[8,34],fern:[22,22],lilyvalley:[14,26]};   // [half width, height] in S units（v2.0 香蒲、蕨、鈴蘭）
 function foliageAlpha(p,X,Y,views){
   const box=PLANT_BOX[p.type]; if(!box) return 1;
   const hw=box[0]*S, h=box[1]*S*(p.type==='tree'?Math.max(.4,p.v/3):1);
@@ -1773,7 +2382,7 @@ function clearOfCritters(type,x,y){
 const SPECIES={
   grass:   {draw:(p,X,Y,a,t)=>drawGrass(p,X,Y,p.v,a,t)},
   flower:  {draw:(p,X,Y,a,t)=>drawFlower(p,X,Y,p.v,a,t)},
-  tree:    {draw:(p,X,Y,a,t)=>drawTree(p,X,Y,p.v,a,t)},
+  tree:    {draw:(p,X,Y,a,t)=>(inForest()?(isWillow(p)?drawWillow:drawOak):drawTree)(p,X,Y,p.v,a,t)},   // v2.0 水邊樹林：靠溪的是垂柳，其他是橡樹
   mushroom:{draw:(p,X,Y,a)=>drawMushroom(p,X,Y,a)},
   lily:    {draw:(p,X,Y,a)=>drawLily(p,X,Y,p.v,a)},
   clover:   {draw:(p,X,Y,a,t)=>drawNewPlant(drawClover,p,X,Y,a,t,1.5)},
@@ -1781,6 +2390,9 @@ const SPECIES={
   tulip:    {draw:(p,X,Y,a,t)=>drawNewPlant(drawTulip,p,X,Y,a,t,1.3)},
   pumpkin:  {draw:(p,X,Y,a,t)=>drawNewPlant(drawPumpkin,p,X,Y,a,t,1.1)},
   poinsettia:{draw:(p,X,Y,a,t)=>drawNewPlant(drawPoinsettia,p,X,Y,a,t,1.9)},
+  cattail:  {draw:(p,X,Y,a,t)=>drawNewPlant(drawCattail,p,X,Y,a,t,1.05)},
+  fern:     {draw:(p,X,Y,a,t)=>drawNewPlant(drawFern,p,X,Y,a,t,1.3)},
+  lilyvalley:{draw:(p,X,Y,a,t)=>drawNewPlant(drawLilyvalley,p,X,Y,a,t,1.5)},
 };
 
 let layer=null, lctx=null;
@@ -1813,6 +2425,7 @@ function paint(t,withHover){
     ctx.beginPath();ctx.ellipse(r.x*W,r.y*H,(6+k*26)*S,(3+k*12)*S,0,0,Math.PI*2);ctx.stroke();
   }
   ctx.globalAlpha=1;
+  if(petals.length) drawPetals();
   // lily pads lie flat on the water, so they go under everything standing
   const flat=plants.filter(p=>p.type==='lily'), up=plants.filter(p=>p.type!=='lily').concat(critters).sort((a,b)=>a.y-b.y);
   const views=critterViews(t);
@@ -1856,58 +2469,128 @@ function frame(t){
 
 bindMap();
 
-/* ================= 存檔（寫回頁面原本的 key；v1 格式不變） ================= */
-// 這個 key 只有 world 會寫（單一寫入者）。題庫進度欄位由頁面的 getProgress() 提供，依原本順序排在 water 後面。
+/* ================= v2.0 兩塊地：開門、切換 ================= */
+let forestSeen=false;   // 去過水邊樹林沒（還沒去過，切換鈕上有小紅點）
+function withMap(name,fn){ const sv=activeMap; activeMap=name; bindMap(); try{ return fn(); }finally{ activeMap=sv; bindMap(); } }
+// 開門提示要短：頁面的 toast 不換行，手機 390 寬要放得下
+function openForest(quiet){
+  if(forestOpen) return;
+  forestOpen=true;
+  if(!maps.forest){ maps.forest=newMapData(); seedForest(maps.forest); }
+  withMap('forest',()=>scanFound(!quiet));   // 開局就有的橡樹、香蒲、蕨…登錄圖鑑（標成新發現）
+  updateMapBtn(); updateGuideBtn();
+  writeNow();   // 立刻寫（不用 save() 的 250ms 延遲）：別的分頁才會馬上看到森林 key，也不會把剛答完那題的存檔再往後延
+  if(!quiet){ emit('message','開了一塊新的地：水邊樹林！'); emit('mapopen',{map:'forest'}); }
+}
+// 換地圖：還有水滴在半空中、或還沒長完時，等它長完再換（這段時間不接新的水滴）
+function switchMap(name){
+  if(name===activeMap||!maps[name]||(name==='forest'&&!forestOpen)) return false;
+  const wait=busyUntil-now();
+  if(wait>0){ if(!switching){ switching=true; setTimeout(()=>{ switching=false; switchMap(name); },wait+30); } return true; }
+  gen++;
+  for(const a of [falls,rings,sparks,puffSeeds,gifts,petals]) a.length=0;
+  sleigh=null; hover=null;
+  activeMap=name; bindMap(); buildGround();
+  if(name==='forest') forestSeen=true;
+  updateMapBtn(); updateHint(); save();
+  emit('map',{map:name});
+  return true;
+}
+function updateMapBtn(){
+  const b=G.mapBtn; b.hidden=!forestOpen;
+  b.querySelector('.ml').textContent=inForest()?'← 回第一塊地':'去水邊樹林 →';
+  b.querySelector('.dot').hidden=forestSeen||inForest();
+}
+G.mapBtn.onclick=()=>switchMap(inForest()?'home':'forest');
+
+/* ================= 存檔 =================
+   第一塊地：寫回頁面原本的 key，v1 格式不變（一律從 maps.home 寫，不管現在在哪塊地）。
+   這個 key 只有 world 會寫（單一寫入者）。題庫進度欄位由頁面的 getProgress() 提供，依原本順序排在 water 後面。
+   v2.0 水邊樹林：寫在 FKEY（KEY+'.forest'），開門以後每次一起寫。 */
 let saveT=null, ready=false, frozen=false;   // ready：load() 之後才准寫；frozen：頁面判定別的分頁改過存檔
+const critterRow=c=>[c.kind,+c.x.toFixed(4),+c.y.toFixed(4),+c.seed.toFixed(6),c.v,+c.hx.toFixed(4),+c.hy.toFixed(4)];
+const wetRows=m=>m.wets.slice(-400).map(w=>[+w.x.toFixed(4),+w.y.toFixed(4),+w.r.toFixed(1)]);
+const flyRows=m=>m.flies.map(f=>[+f.x.toFixed(4),+f.y.toFixed(4),+f.seed.toFixed(6),f.c]);
 function serialize(){
-  const p=cfg.getProgress ? cfg.getProgress() : {};
+  const p=cfg.getProgress ? cfg.getProgress() : {}, m=maps.home;
   return JSON.stringify({
     v:1, water, ...p,
-    plants:plants.map(p=>[p.type,+p.x.toFixed(4),+p.y.toFixed(4),p.stage,p.color,+p.seed.toFixed(6)]),
-    wets:wets.slice(-400).map(w=>[+w.x.toFixed(4),+w.y.toFixed(4),+w.r.toFixed(1)]),
-    ponds:ponds.map(p=>[+p.x.toFixed(4),+p.y.toFixed(4),+p.r.toFixed(4)]),
-    flies:flies.map(f=>[+f.x.toFixed(4),+f.y.toFixed(4),+f.seed.toFixed(6),f.c]),
-    critters:critters.filter(c=>!GUEST[c.kind]).map(c=>[c.kind,+c.x.toFixed(4),+c.y.toFixed(4),+c.seed.toFixed(6),c.v,+c.hx.toFixed(4),+c.hy.toFixed(4)]).concat(keepCritters), seenKinds, found, newFound
+    plants:m.plants.map(p=>[p.type,+p.x.toFixed(4),+p.y.toFixed(4),p.stage,p.color,+p.seed.toFixed(6)]),
+    wets:wetRows(m),
+    ponds:m.ponds.map(p=>[+p.x.toFixed(4),+p.y.toFixed(4),+p.r.toFixed(4)]),
+    flies:flyRows(m),
+    critters:m.critters.filter(c=>!GUEST[c.kind]).map(critterRow).concat(m.keep), seenKinds, found, newFound
+  });
+}
+// 水邊樹林的存檔：植物多一欄「第幾滴長出來的」（輪替用）；小溪和開局的小水潭每次從 LAYOUT 重建，不存
+function serializeForest(){
+  const m=maps.forest;
+  return JSON.stringify({
+    v:1, map:activeMap, seen:forestSeen?1:0, n:m.n,
+    plants:m.plants.map(p=>[p.type,+p.x.toFixed(4),+p.y.toFixed(4),p.stage,p.color,+p.seed.toFixed(6),p.nb|0]),
+    wets:wetRows(m),
+    ponds:m.ponds.filter(p=>!p.fixed).map(p=>[+p.x.toFixed(4),+p.y.toFixed(4),+p.r.toFixed(4)]),
+    flies:flyRows(m),
+    critters:m.critters.filter(c=>!GUEST[c.kind]).map(critterRow).concat(m.keep)
   });
 }
 function writeNow(){
   clearTimeout(saveT);
   if(!ready||frozen) return;
-  try{ localStorage.setItem(KEY,serialize()); }
-  catch(e){ emit('saveerror',e); return; }      // 不再靜靜吞掉：頁面會持續顯示警告，直到下一次寫入成功
+  let err=null;
+  try{ localStorage.setItem(KEY,serialize()); }catch(e){ err=e; }
+  if(forestOpen&&maps.forest){ try{ localStorage.setItem(FKEY,serializeForest()); }catch(e){ err=err||e; } }
+  if(err){ emit('saveerror',err); return; }      // 不再靜靜吞掉：頁面會持續顯示警告，直到下一次寫入成功
   emit('saved');
 }
 function save(){ clearTimeout(saveT); saveT=setTimeout(writeNow,250); }
 addEventListener('pagehide',writeNow);          // 答完馬上離開也不漏存最後一筆
 addEventListener('storage',e=>{
-  if(e.key===KEY||e.key===null) emit('external',e);   // 別的分頁（或 Painless 匯入備份）改了存檔；要不要停寫由頁面決定
+  if(e.key===KEY||e.key===FKEY||e.key===null) emit('external',e);   // 別的分頁（或 Painless 匯入備份）改了存檔；要不要停寫由頁面決定
 });
-// 讀檔：土地放進 maps.home，回傳整包存檔物件（沒有存檔回傳 null）讓頁面還原題庫進度
+// 讀進目前綁定的這塊地
+function readLand(d,forest){
+  (d.plants||[]).forEach(a=>{if(!Array.isArray(a)) return; const p={type:a[0],x:a[1],y:a[2],stage:a[3],v:a[3],color:a[4],seed:a[5],born:-1e9}; if(forest) p.nb=a[6]|0; plants.push(p)});
+  (d.wets||[]).forEach(a=>wets.push({x:a[0],y:a[1],r:a[2],t0:-1e9}));
+  (d.ponds||[]).forEach(a=>ponds.push({x:a[0],y:a[1],r:a[2],born:-1e9}));
+  (d.flies||[]).forEach(a=>flies.push({x:a[0],y:a[1],seed:a[2],c:a[3],born:-1e9}));
+  (d.critters||[]).forEach(a=>{if(!Array.isArray(a)) return; if(GUEST[a[0]]) return; if(CR[a[0]]) makeCritter(a[0],a[1],a[2],[a[5],a[6]],{seed:a[3],v:a[4],born:-1e9,quiet:true}); else keepCritters.push(a)});
+}
+// 讀檔：第一塊地放進 maps.home，回傳整包存檔物件（沒有存檔回傳 null）讓頁面還原題庫進度
 function load(){
   let d=null;
   try{d=JSON.parse(localStorage.getItem(KEY)||'null')}catch(e){}
   if(d){
     water=Math.max(0,d.water|0);
-    (d.plants||[]).forEach(a=>plants.push({type:a[0],x:a[1],y:a[2],stage:a[3],v:a[3],color:a[4],seed:a[5],born:-1e9}));
-    (d.wets||[]).forEach(a=>wets.push({x:a[0],y:a[1],r:a[2],t0:-1e9}));
-    (d.ponds||[]).forEach(a=>ponds.push({x:a[0],y:a[1],r:a[2],born:-1e9}));
-    (d.flies||[]).forEach(a=>flies.push({x:a[0],y:a[1],seed:a[2],c:a[3],born:-1e9}));
-    (d.critters||[]).forEach(a=>{if(!Array.isArray(a)) return; if(GUEST[a[0]]) return; if(CR[a[0]]) makeCritter(a[0],a[1],a[2],[a[5],a[6]],{seed:a[3],v:a[4],born:-1e9,quiet:true}); else keepCritters.push(a)});
+    readLand(d,false);
     if(d.seenKinds&&typeof d.seenKinds==='object') seenKinds=d.seenKinds;
     if(d.found&&typeof d.found==='object') found=d.found;
     if(d.newFound&&typeof d.newFound==='object') newFound=d.newFound;
   }
   scanFound();          // 舊存檔沒有 found：從現有土地補登（例如已經有水塘就記為已發現）
-  updateGuideBtn();
+  // v2.0 水邊樹林：森林 key 存在＝已經開門
+  let fd=null;
+  try{fd=JSON.parse(localStorage.getItem(FKEY)||'null')}catch(e){}
+  if(fd&&typeof fd==='object'&&Array.isArray(fd.plants)){
+    const m=maps.forest=newMapData(); fixedPond(m); m.n=Math.max(0,fd.n|0);
+    forestOpen=true; forestSeen=!!fd.seen;
+    withMap('forest',()=>{ readLand(fd,true); scanFound(); });
+    if(fd.map==='forest'){ activeMap='forest'; bindMap(); }
+  }
+  updateGuideBtn(); updateMapBtn(); buildGround();
   ready=true;
+  // 已經超過 300 株的舊存檔：打開頁面就開門（等頁面畫好再說，提示才看得到）
+  if(!forestOpen&&maps.home.plants.length>=OPEN_AT) setTimeout(()=>openForest(false),1500);
   return d;
 }
 
 /* ================= 清空土地 ================= */
+// v2.0 只清現在這塊地；清水邊樹林＝回到開局，地不會關掉。水照舊歸零。
 function reset(){
   gen++;
-  for(const a of [plants,wets,ponds,flies,falls,rings,critters,sparks,keepCritters,puffSeeds,gifts,flakes]) a.length=0;
+  for(const a of [plants,wets,ponds,flies,falls,rings,critters,sparks,keepCritters,puffSeeds,gifts,flakes,petals]) a.length=0;
   sleigh=null;
+  if(inForest()){ maps.forest.n=0; seedForest(maps.forest); }
   seenKinds={};         // 圖鑑紀錄 found 不清
   water=0;
   syncWater(false); save();
@@ -1958,13 +2641,15 @@ const fmtDay=ms=>{const d=new Date(ms);return d.getFullYear()+'/'+(d.getMonth()+
 function showBackupInfo(){
   let at=null; try{ at=+localStorage.getItem(BK_AT)||null }catch(e){}
   G.gBkInfo.textContent=at?'上次下載備份：'+fmtDay(at):'還沒有下載過備份';
-  G.gBkNote.textContent='備份檔包含這塊地和這一頁的答題紀錄。手機容量不夠時，瀏覽器可能會把資料清掉，偶爾下載一份比較安心。'+(cfg.backupNote?' '+cfg.backupNote:'');
+  G.gBkNote.textContent='備份檔包含'+(forestOpen?'兩塊地':'這塊地')+'和這一頁的答題紀錄。手機容量不夠時，瀏覽器可能會把資料清掉，偶爾下載一份比較安心。'+(cfg.backupNote?' '+cfg.backupNote:'');
 }
+// v2.0 備份檔多一個 forest 欄位：水邊樹林 key 的原始字串（還沒開就沒有）
 function downloadBackup(){
   writeNow();                                   // 先把還沒寫出去的變動寫進存檔
-  let raw=null; try{ raw=localStorage.getItem(KEY) }catch(e){}
+  let raw=null, fraw=null; try{ raw=localStorage.getItem(KEY); fraw=localStorage.getItem(FKEY) }catch(e){}
   if(!raw){ alert('這塊地還沒有存檔，先滴幾滴水再備份。'); return; }
-  const file={app:BK_APP, key:KEY, world:VERSION, savedAt:new Date().toISOString(), plants:plants.length, data:raw};
+  const file={app:BK_APP, key:KEY, world:VERSION, savedAt:new Date().toISOString(), plants:maps.home.plants.length, data:raw};
+  if(fraw){ file.forest=fraw; file.forestPlants=maps.forest?maps.forest.plants.length:0; }
   const a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([JSON.stringify(file)],{type:'application/json'}));
   a.download='一滴水備份-'+bkName(KEY)+'-'+stamp()+'.json';
@@ -1987,11 +2672,23 @@ function restoreBackup(text){
   if(b.key!==KEY){ alert('這是「'+bkName(b.key)+'」那一頁的備份，不能還原到「'+bkName(KEY)+'」這一頁。'); return false; }
   try{ d=JSON.parse(b.data) }catch(e){}
   if(!d||!Array.isArray(d.plants)){ alert('備份檔壞掉了，讀不出土地。'); return false; }
+  // v2.0 有水邊樹林就一起還原；舊備份沒有 forest：現在的水邊樹林留著不動
+  let fd=null;
+  if(b.forest!==undefined){
+    try{ fd=JSON.parse(b.forest) }catch(e){}
+    if(typeof b.forest!=='string'||!fd||!Array.isArray(fd.plants)){ alert('備份檔壞掉了，讀不出水邊樹林。'); return false; }
+  }
   const when=b.savedAt?fmtDay(Date.parse(b.savedAt)):'不明日期';
-  if(!confirm('要用 '+when+' 的備份（'+d.plants.length+' 株）換掉現在的土地（'+plants.length+' 株）嗎？\n這一頁的答題紀錄也會一起換成備份裡的。')) return false;
+  const nowF=forestOpen&&maps.forest?'、水邊樹林 '+maps.forest.plants.length+' 株':'';
+  if(!confirm('要用 '+when+' 的備份（'+d.plants.length+' 株'+(fd?'、水邊樹林 '+fd.plants.length+' 株':'')+'）換掉現在的土地（'+maps.home.plants.length+' 株'+nowF+'）嗎？\n這一頁的答題紀錄也會一起換成備份裡的。'+
+    (!fd&&nowF?'\n這份備份裡沒有水邊樹林，現在的水邊樹林會留著。':''))) return false;
   frozen=true; clearTimeout(saveT);
-  try{ localStorage.setItem(KEY,b.data) }
-  catch(e){ frozen=false; alert('寫不進去（手機空間可能不夠），土地沒有改變。'); return false; }
+  let oldF=null; try{ oldF=localStorage.getItem(FKEY) }catch(e){}
+  try{ if(fd) localStorage.setItem(FKEY,b.forest); localStorage.setItem(KEY,b.data); }
+  catch(e){
+    try{ if(fd){ if(oldF===null) localStorage.removeItem(FKEY); else localStorage.setItem(FKEY,oldF); } }catch(_){}   // 只寫進一半：把水邊樹林放回原樣
+    frozen=false; alert('寫不進去（手機空間可能不夠），土地沒有改變。'); return false;
+  }
   location.reload();
   return true;
 }
@@ -2020,6 +2717,8 @@ const api={
   freeze(){ frozen=true; clearTimeout(saveT); },
   get water(){ return water; },
   get activeMap(){ return activeMap; },
+  get forestOpen(){ return forestOpen; },   // v2.0
+  switchMap,                                // v2.0 'home' | 'forest'（沒開門時不動）
   // 測試用唯讀窺視（x,y 是可以點到那隻居民的畫面座標，px，相對於畫布左上）
   _peek(){
     const t=now();
@@ -2030,8 +2729,12 @@ const api={
       fade:(()=>{const vs=critterViews(t);return plants.map(p=>vs.length&&p.type!=='lily'?foliageAlpha(p,p.x*W,p.y*H,vs):1)})(),
       plants:plants.map(p=>({type:p.type,x:p.x,y:p.y})), ponds:ponds.map(p=>({x:p.x,y:p.y,r:p.r})), W, H, S,
       found:{...found}, newFound:{...newFound}, seenKinds:{...seenKinds}, guideOpen:!G.guide.hidden, now:t,
+      map:activeMap, forestOpen, n:maps.forest?maps.forest.n:0, homePlants:maps.home.plants.length, petals:petals.length,
+      plantsFull:plants.map(p=>({type:p.type,x:p.x,y:p.y,stage:p.stage,color:p.color,nb:p.nb})),
     };
   },
+  // v2.0 測試用（會改資料）：直接開水邊樹林
+  _openForest(){ openForest(true); },
   // v1.2 測試用：假如畫面座標 (X,Y)（px，植物的腳）有一株 type（樹用 v），它現在的透明度（唯讀）
   _fadeAt(type,X,Y,v=3){ return foliageAlpha({type,v},X,Y,critterViews(now())); },
   // v1.2 測試用（會改資料）：直接呼叫 addPlant，看新植物落在哪（x,y 是 0～1）；頁面不要用
