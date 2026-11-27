@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>教師使用手冊｜自然科學實驗筆記</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Iansui&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: calm, practical, colleague-to-colleague; a printed teacher's handout
+   IDEA: the same graph-paper lab notebook, now as the teacher's guide pages
+   PICTURE: a three-stage lesson strip (實驗前／實驗中／實驗後) at the top
+   COLOUR and TYPE: paper white + graphite; ballpoint blue only for things students write or say; Noto Sans TC + Iansui
+   LAYOUT: one reading column ≤ 760px, section links row, short sections with headings that state the point */
+:root{color-scheme:light dark;
+--bg:light-dark(#f4f5f1,#15181c);--grid:light-dark(#e4e7e0,#1e2228);--card:light-dark(#fff,#1d2127);
+--ink:light-dark(#1d232b,#e6e9ec);--muted:light-dark(#5b6672,#9aa5b0);--line:light-dark(#d6dbd3,#323a44);
+--pen:light-dark(#1f3f99,#9db6ff);--penbg:light-dark(#eef2fd,#1f2840);--warn:light-dark(#8a4b00,#f0b66b);--warnbg:light-dark(#fff5e6,#3a2a14);
+--btn:light-dark(#1d232b,#e6e9ec);--btnink:light-dark(#fff,#15181c)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html{scroll-padding-top:72px}
+body{margin:0;color:var(--ink);font:16.5px/1.8 "Noto Sans TC",system-ui,sans-serif;overflow-x:clip;background:var(--bg);
+background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px}
+.wrap{max-width:820px;margin:0 auto;padding:0 max(4vw,16px)}
+header{padding:36px 0 12px}
+.kicker{font-size:14px;color:var(--muted);margin:0 0 8px}
+h1{font-size:clamp(30px,5vw,44px);line-height:1.12;margin:0 0 12px;text-wrap:balance}
+.lead{font-size:18px;margin:0 0 18px;max-width:40em}
+.row{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-flex;align-items:center;min-height:44px;padding:10px 18px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);text-decoration:none;font-weight:500}
+.btn.pri{background:var(--btn);color:var(--btnink);border-color:var(--btn)}
+nav.toc{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(4px);border-bottom:1px solid var(--line);margin:22px 0 10px}
+nav.toc .scroll{display:flex;gap:4px;overflow-x:auto;padding:8px 0;scrollbar-width:none}
+nav.toc a{flex:none;text-decoration:none;color:var(--muted);padding:8px 12px;border-radius:8px;font-size:15px}
+nav.toc a:hover{color:var(--ink);background:var(--card)}
+.strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin:26px 0 8px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.stage{padding:18px 18px 20px;border-right:1px dashed var(--line);position:relative}
+.stage:last-child{border-right:0}
+.stage h3{margin:0 0 2px;font-size:20px}
+.stage .when{font-size:13px;color:var(--muted);margin-bottom:10px;display:block}
+.stage ul{margin:0;padding-left:18px;font-size:15px;line-height:1.7}
+.stage .tab{display:inline-block;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:0 6px;margin:1px 2px;background:var(--bg);white-space:nowrap}
+section{padding:26px 0 8px}
+h2{font-size:26px;line-height:1.25;margin:0 0 12px;text-wrap:balance}
+h3{font-size:18px;margin:22px 0 6px}
+p{margin:0 0 12px}
+ol,ul{padding-left:22px;margin:0 0 12px}
+li{margin:4px 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin:12px 0}
+.say{font-family:"Iansui","Noto Sans TC",sans-serif;color:var(--pen);background:var(--penbg);border-radius:12px;padding:16px 20px;font-size:18px;line-height:1.8;margin:12px 0}
+.say small{display:block;font:13px "Noto Sans TC",sans-serif;color:var(--muted);margin-bottom:4px}
+.note{background:var(--warnbg);color:var(--warn);border-radius:12px;padding:14px 18px;margin:12px 0}
+.note b{display:block;margin-bottom:2px}
+table{border-collapse:collapse;width:100%;font-size:15px;background:var(--card);border-radius:12px;overflow:hidden}
+th,td{border-bottom:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}
+th{background:var(--grid);font-weight:700;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.q{font-family:"Iansui","Noto Sans TC",sans-serif;color:var(--pen)}
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;margin:8px 0}
+summary{cursor:pointer;padding:12px 16px;font-weight:500;min-height:44px}
+details>div{padding:0 16px 12px}
+code{background:var(--grid);border-radius:4px;padding:1px 5px;font-size:.92em;overflow-wrap:anywhere}
+footer{margin:36px 0 48px;padding-top:14px;border-top:1px solid var(--line);font-size:14px;color:var(--muted)}
+a{color:var(--pen)}
+a:focus-visible,summary:focus-visible{outline:3px solid color-mix(in srgb,var(--pen) 45%,transparent);outline-offset:2px}
+@media(max-width:600px){
+ .strip{grid-template-columns:minmax(0,1fr)}
+ .stage{border-right:0;border-bottom:1px dashed var(--line)}
+ .stage:last-child{border-bottom:0}
+ table{font-size:14px}
+ .stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:3px 12px 3px 8em;text-align:start}.stack td::before{content:attr(data-l);float:inline-start;width:7.5em;margin-inline-start:-7.5em;font-weight:700;white-space:normal}.stack td:empty{display:none}
+}
+@media print{nav.toc,.row{display:none}body{background:#fff}.card,details{break-inside:avoid}details>div{display:block}}
+</style>
+<script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
+</head>
+<body>
+<div class="wrap">
+<header>
+ <p class="kicker">自然科學實驗筆記・教師使用手冊</p>
+ <h1>學生負責思考與記錄，工具只負責整理與呈現</h1>
+ <p class="lead">這個工具讓學生用自己的照片、文字和數據，一步步留下實驗過程，最後整理成一份可以閱讀、保存、列印的筆記。它不會幫學生寫任何內容。這份手冊說明怎麼帶學生用，以及怎麼用「老師檢視」和學生討論。</p>
+ <div class="row"><a class="btn pri" href="lab-notebook.html">打開工具</a><a class="btn" href="#start">五分鐘上手</a></div>
+
+ <div class="strip" aria-label="一個實驗單元的使用流程">
+  <div class="stage"><h3>實驗前</h3><span class="when">約 10 分鐘</span>
+   <ul><li>開一份新筆記</li><li>寫下<span class="tab">基本資料</span>：題目、組別、目的</li><li>用自己的話寫<span class="tab">想探究的問題</span></li></ul></div>
+  <div class="stage"><h3>實驗中</h3><span class="when">每次觀察後 5 分鐘</span>
+   <ul><li>在<span class="tab">過程紀錄</span>新增一筆</li><li>拍照，並寫一句照片說明</li><li>當下記下意外和問題</li></ul></div>
+  <div class="stage"><h3>實驗後</h3><span class="when">約 20–30 分鐘</span>
+   <ul><li>填<span class="tab">數據與觀察</span></li><li>挑有想法的題目寫<span class="tab">反思</span></li><li>按<span class="tab">整理我的實驗筆記</span>，交 PDF 和備份檔</li></ul></div>
+ </div>
+</header>
+
+<nav class="toc" aria-label="手冊章節"><div class="scroll">
+ <a href="#start">五分鐘上手</a><a href="#lesson">課堂流程</a><a href="#intro">怎麼跟學生介紹</a><a href="#collect">收作業</a><a href="#teacher">老師檢視</a><a href="#not">工具不做的事</a><a href="#care">注意事項</a><a href="#faq">常見問題</a>
+</div></nav>
+
+<section id="start">
+ <h2>五分鐘上手：先看示範，再自己試一筆</h2>
+ <ol>
+  <li><b>打開工具。</b>第一次打開時會自動載入示範資料「植物生長觀察」：一組學生比較綠豆在窗邊和櫃子裡的生長情形，共有三筆不同日期的觀察。</li>
+  <li><b>依序點上方分頁</b>：基本資料 → 過程紀錄 → 數據與觀察 → 反思，看看學生要填哪些東西。</li>
+  <li><b>按右上角「整理我的實驗筆記」。</b>藍色手寫字是學生的原文，黑色印刷字是工具加的標題。學生沒寫的地方會標示「（未填寫）」，工具不會補。</li>
+  <li><b>切換到「我的原始紀錄」</b>，可以看到學生依寫下順序留下的內容，以及每筆是什麼時候寫的、改過幾次。</li>
+  <li><b>打開「備份與更多 → 老師檢視」</b>，看學習歷程時間軸長什麼樣子。</li>
+  <li>試完後按「清空示範，開始我的筆記」，就能從空白開始。</li>
+ </ol>
+</section>
+
+<section id="lesson">
+ <h2>課堂流程：記錄要在當下，整理可以留到最後</h2>
+ <p>最重要的習慣是<b>做完觀察就馬上記</b>。事後補記也可以，但老師檢視會顯示「觀察後幾天才寫下」，這正好可以拿來和學生聊記錄的習慣。</p>
+ <table class="stack">
+  <thead><tr><th>階段</th><th>學生做什麼</th><th>老師可以做什麼</th></tr></thead>
+  <tbody>
+   <tr><td>實驗前</td><td>建立筆記，寫實驗目的和想探究的問題。寫不出來可以先空著。</td><td>巡視時問：「你的問題可以用這個實驗回答嗎？」不必要求一次寫完整。</td></tr>
+   <tr><td>實驗中</td><td>每次觀察新增一筆：做了什麼、看到什麼、遇到什麼問題，再拍照。</td><td>提醒學生照片要寫說明。只有照片、沒有文字的紀錄，工具會在整理前提醒。</td></tr>
+   <tr><td>數據整理</td><td>自己決定數據表的欄位名稱，輸入測量結果。</td><td>欄位名稱也是學生的思考，不需要統一格式。</td></tr>
+   <tr><td>反思</td><td>五個開放題挑有想法的寫，一句話也可以。</td><td>不要求每題都答，寫得真比寫得滿重要。</td></tr>
+   <tr><td>整理與繳交</td><td>按「整理我的實驗筆記」，匯出 PDF，並下載備份檔。</td><td>收 PDF 看成果，收備份檔看過程（見下一節）。</td></tr>
+  </tbody>
+ </table>
+</section>
+
+<section id="intro">
+ <h2>怎麼跟學生介紹：說清楚「這是你的紀錄」</h2>
+ <p>第一次使用時，建議花兩分鐘講清楚三件事：內容是誰寫的、資料存在哪裡、老師會看到什麼。可以參考這段說法：</p>
+ <div class="say"><small>給學生的說明（可以照自己的語氣改）</small>這個工具不會幫你寫報告。你寫什麼，它就整理什麼；你沒寫的，它會標示「未填寫」。<br>資料存在你現在用的這個瀏覽器裡，換電腦就看不到，所以每次做完都要下載備份檔。<br>老師收到備份檔後，會看到你什麼時候寫了什麼、改了什麼。這不是要抓錯，是想了解你的想法是怎麼變化的。</div>
+ <p>最後一點特別重要：事先告訴學生有修改紀錄，老師檢視才會被當成討論的工具，而不是監控。</p>
+</section>
+
+<section id="collect">
+ <h2>收作業：PDF 看成果，備份檔看過程</h2>
+ <table class="stack">
+  <thead><tr><th>檔案</th><th>怎麼產生</th><th>適合用來</th></tr></thead>
+  <tbody>
+   <tr><td>PDF</td><td>「整理我的實驗筆記」頁面，按「匯出 PDF」</td><td>閱讀、批改、放進學習歷程檔案。如果 PDF 匯出失敗，改按「下載列印版」，再用瀏覽器列印成 PDF。</td></tr>
+   <tr><td>備份檔（.json）</td><td>「備份與更多 → 下載 JSON 備份檔」</td><td>用「老師檢視」看學習歷程；學生換電腦時也能用它還原。</td></tr>
+  </tbody>
+ </table>
+ <h3>建議的檔名規則</h3>
+ <p>工具會自動以實驗名稱和日期命名。全班一起交時，可以請學生改成<code>班級-組別-實驗名稱.json</code>，例如 <code>205-第3組-綠豆生長.json</code>，老師開啟時比較好認。</p>
+ <h3>收檔方式</h3>
+ <p>用學校習慣的平台即可，例如 Google Classroom、雲端硬碟資料夾或學習平台的作業區。工具本身沒有伺服器，不會自動收件。</p>
+</section>
+
+<section id="teacher">
+ <h2>老師檢視：用歷程找到對話的切入點</h2>
+ <p>從工具的「備份與更多 → 老師檢視：學習歷程時間軸」進入。按「開啟學生備份檔」，可以一次選好幾份，再用下拉選單切換。這些檔案只拿來看，不會存進電腦，也不會影響這台電腦上原本的筆記。</p>
+ <h3>三種檢視</h3>
+ <ul>
+  <li><b>歷程時間軸</b>：學生每天做了哪些事。修改過的內容可以展開，左右對照修改前和修改後的文字。</li>
+  <li><b>整理後筆記</b>：學生最後交出的版本。</li>
+  <li><b>原始紀錄</b>：學生依寫下順序輸入的內容，沒有經過排版。</li>
+ </ul>
+ <h3>「可以聊聊的地方」怎麼用</h3>
+ <p>工具會列出幾種值得注意的情況。它們不是缺點清單，而是提問的起點：</p>
+ <table class="stack">
+  <thead><tr><th>工具看到的</th><th>可以這樣問</th></tr></thead>
+  <tbody>
+   <tr><td>觀察後隔了幾天才寫下</td><td class="q">那天你有先記在別的地方嗎？隔幾天再寫，有沒有哪裡記不清楚？</td></tr>
+   <tr><td>只有照片，沒有文字</td><td class="q">這張照片裡，你最想讓別人注意到什麼？</td></tr>
+   <tr><td>修改過「觀察結果」</td><td class="q">你後來為什麼改？是重新量了，還是想法變了？</td></tr>
+   <tr><td>改寫過「想探究的問題」</td><td class="q">一開始的問題和現在的差在哪裡？是什麼讓你改的？</td></tr>
+   <tr><td>記下了問題或意外</td><td class="q">如果重做，你會怎麼處理這個問題？這會影響你的結論嗎？</td></tr>
+  </tbody>
+ </table>
+ <div class="note"><b>歷程紀錄是參考，不是證據</b>備份檔是普通的文字檔，懂一點技術的人可以修改。請把時間軸當作了解學生學習過程的線索，搭配課堂觀察和對話一起判斷，不建議用來評分或認定作弊。</div>
+</section>
+
+<section id="not">
+ <h2>工具刻意不做的事</h2>
+ <p>這些限制是設計時刻意保留的，目的是讓學生把力氣花在思考和記錄上：</p>
+ <ul>
+  <li><b>不會代寫或改寫。</b>整理後的筆記一字不改保留學生原文，只調整順序、加上標題。</li>
+  <li><b>不會補資料。</b>沒填的地方標示「未填寫」，不會用推測補上。</li>
+  <li><b>不會強迫填完。</b>除了紀錄日期，其他欄位都可以空著，整理前只會溫和提醒。</li>
+  <li><b>不會評分。</b>排版好看不代表學習品質好，工具也不判斷內容對錯。</li>
+  <li><b>不連網路上的 AI。</b>不需要帳號、不需要 API Key，學生資料不會上傳。</li>
+ </ul>
+</section>
+
+<section id="care">
+ <h2>使用前的注意事項</h2>
+ <div class="card">
+  <h3 style="margin-top:0">資料只存在學生的瀏覽器</h3>
+  <p>換電腦、換瀏覽器、使用無痕視窗或清除瀏覽紀錄，資料都會不見。請養成每次做完就下載備份的習慣。</p>
+  <h3>共用電腦要清空</h3>
+  <p>電腦教室如果多人共用同一個瀏覽器，下一位使用者會看到上一位的筆記。請學生做完後先下載備份，再按「備份與更多 → 開始一份新的筆記」清空。</p>
+  <h3>照片隱私</h3>
+  <p>照片會放在備份檔和 PDF 裡。提醒學生拍實驗器材就好，避免拍到同學的臉或個人資料。</p>
+  <h3 style="margin-bottom:6px">學校網路可能擋外部資源</h3>
+  <p style="margin:0">工具會從網路載入手寫字型和產生 PDF 的元件。如果學校網路擋住，字型會變成一般字體，PDF 也可能匯出失敗，改用「下載列印版」再列印即可。其他功能都不受影響。</p>
+ </div>
+</section>
+
+<section id="faq">
+ <h2>常見問題</h2>
+ <details><summary>學生可以用手機或平板嗎？</summary><div><p>可以。介面會自動調整，手機可以直接拍照上傳。照片會自動壓縮，避免占用太多空間。</p></div></details>
+ <details><summary>學生換電腦怎麼辦？</summary><div><p>在原本的電腦下載備份檔，到新電腦打開工具，按「備份與更多 → 從備份還原」並選擇該檔案即可。</p></div></details>
+ <details><summary>出現「儲存失敗：空間可能不足」？</summary><div><p>瀏覽器能存的空間有限，通常是照片太多。請先下載備份，再刪掉幾張不必要的照片。</p></div></details>
+ <details><summary>可以改成我們自己的實驗嗎？要不要設定學科？</summary><div><p>不用設定。工具沒有綁定學科，數據表的欄位名稱也由學生自己決定，物理、化學、生物、地科的實驗都能用。</p></div></details>
+ <details><summary>按「列印」沒反應？</summary><div><p>某些嵌入環境會擋下列印視窗。請改用「匯出 PDF」，或「下載列印版」後在瀏覽器打開再列印。</p></div></details>
+ <details><summary>全組共用一份筆記，還是每人一份？</summary><div><p>都可以。共用一份時，建議在「實驗者／組別」寫清楚組員，並固定由一台裝置記錄，避免資料分散在不同裝置上。</p></div></details>
+</section>
+
+<footer>
+ <p>自然科學實驗筆記是教學輔助原型，歡迎複製、修改，用在自己的課堂。原始碼與部署說明請見專案的 README。</p>
+ <p><a href="lab-notebook.html">回到工具</a></p>
+</footer>
+</div>
+</body>
+</html>

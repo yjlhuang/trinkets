@@ -45,7 +45,7 @@ nav.tabs .wrap{display:flex;gap:6px;overflow-x:auto;padding-top:8px;padding-bott
 nav.tabs a{flex:none;text-decoration:none;color:var(--muted);padding:10px 14px;border-radius:10px;font-size:15px;min-height:44px;display:flex;align-items:center;gap:6px;border:1px solid transparent}
 nav.tabs a.on{color:var(--ink);background:var(--card);border-color:var(--line);font-weight:700}
 nav.tabs a .n{font-size:12px;background:var(--grid);border-radius:99px;padding:0 7px;color:var(--muted)}
-nav.tabs a.go{margin-left:auto;background:var(--btn);color:var(--btnink);font-weight:700}
+nav.tabs a.go{gap:0;margin-left:auto;background:var(--btn);color:var(--btnink);font-weight:700}
 nav.tabs a.go.on{border-color:var(--btn)}
 section.view{display:none;padding-bottom:64px}
 section.view.on{display:block}
@@ -129,6 +129,29 @@ ol.tl>li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px}
 .rawitem b{font-weight:500;color:var(--muted);font-size:14px;margin-right:6px}
 .rawitem .v{font-family:"Iansui","Noto Sans TC",sans-serif;color:var(--pen)}
 .paperwrap{overflow-x:auto}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.stat b{display:block;font-size:26px;line-height:1.1;font-variant-numeric:tabular-nums}
+.stat span{font-size:13px;color:var(--muted)}
+.talk{margin-bottom:16px}.talk h3{margin:0 0 6px;font-size:16px}.talk ul{margin:0;padding-left:20px}.talk li{margin:4px 0}
+.tday{margin:0 0 18px}
+.tday h3{font-size:15px;margin:0 0 6px;padding:6px 0;border-bottom:2px solid var(--ink);display:flex;justify-content:space-between}
+.tday h3 span{font-weight:400;color:var(--muted);font-size:13px}
+.tev{display:grid;grid-template-columns:58px minmax(0,1fr);gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.tev time{font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px;padding-top:1px}
+.tev .what{font-size:15px}
+.tev .sub{font-size:13px;color:var(--muted)}
+.tev details{margin-top:4px;font-size:14px}
+.tev summary{cursor:pointer;color:var(--pen);min-height:32px;display:inline-flex;align-items:center}
+.diff{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:4px}
+.diff div{border:1px solid var(--line);border-radius:8px;padding:8px 10px;white-space:pre-wrap;font-family:"Iansui","Noto Sans TC",sans-serif;color:var(--pen)}
+.diff div::before{display:block;font:12px "Noto Sans TC",sans-serif;color:var(--muted);margin-bottom:2px}
+.diff .b::before{content:"修改前"}.diff .a::before{content:"修改後"}
+.diff .b{background:var(--grid)}
+.quote{white-space:pre-wrap;font-family:"Iansui","Noto Sans TC",sans-serif;color:var(--pen);font-size:14px;margin-top:2px}
+.tag{display:inline-block;font-size:12px;border-radius:99px;padding:1px 8px;margin-left:6px;background:var(--warnbg);color:var(--warn);white-space:nowrap}
+.k-create{font-weight:700}
+@media(max-width:600px){.diff{grid-template-columns:minmax(0,1fr)}.tev{grid-template-columns:48px minmax(0,1fr)}}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%) translateY(20px);background:var(--btn);color:var(--btnink);padding:12px 18px;border-radius:12px;font-size:15px;opacity:0;pointer-events:none;transition:.25s;z-index:60;max-width:calc(100vw - 24px)}
 #toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
@@ -156,43 +179,43 @@ ol.tl>li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px}
 }
 </style>
 <style id="nbcss">
-#paper{background:#fff;color:#22272e;max-width:820px;margin:0 auto;padding:44px 52px 40px;box-shadow:0 1px 2px rgba(0,0,0,.08),0 12px 32px rgba(0,0,0,.08);border-radius:4px;font:15px/1.75 "Noto Sans TC",sans-serif;color-scheme:light}
-#paper .kicker{font-size:12px;color:#6b7480;margin:0 0 6px}
-#paper h1{font-size:28px;line-height:1.25;margin:0 0 6px;font-weight:700}
-#paper h2{font-size:18px;margin:30px 0 12px;padding-bottom:4px;border-bottom:1.5px solid #22272e;font-weight:700}
-#paper h4{margin:0 0 4px;font-size:17px;font-weight:400}
-#paper .mine{font-family:"Iansui","Noto Sans TC",sans-serif;color:#1f3f99;white-space:pre-wrap;font-size:16.5px}
-#paper.src .mine{background:#f1f4fd;border-left:3px solid #9fb4ec;padding:1px 6px 1px 7px}
-#paper .empty{display:inline-block;color:#8a929b;border:1px dashed #b9c0c7;border-radius:4px;padding:0 8px;font-size:13px;line-height:1.7}
-#paper .legend{border:1px solid #d7dce1;border-radius:6px;padding:10px 14px;font-size:13px;color:#4b545e;margin:16px 0 4px;display:none}
-#paper.src .legend{display:block}
-#paper .legend p{margin:2px 0}
-#paper .legend .mine{font-size:14px}
-#paper dl.meta{display:grid;grid-template-columns:7.5em minmax(0,1fr);gap:6px 12px;margin:0}
-#paper dl.meta dt{color:#5b6672;font-size:14px;padding-top:2px}
-#paper dl.meta dd{margin:0}
-#paper .lb{display:block;font-size:13px;color:#5b6672;margin-top:8px}
-#paper ol.ntl{list-style:none;margin:0;padding:0}
-#paper ol.ntl>li{display:grid;grid-template-columns:118px minmax(0,1fr);gap:14px;padding:12px 0;border-bottom:1px solid #e3e6ea;break-inside:avoid;page-break-inside:avoid}
-#paper ol.ntl .d{font-weight:700;font-size:15px;white-space:nowrap}
-#paper ol.ntl .d small{display:block;font-weight:400;color:#6b7480;font-size:13px}
-#paper .ref{font-size:13px;color:#5b6672;margin:8px 0 0}
-#paper .figs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
-#paper figure{margin:0;break-inside:avoid;page-break-inside:avoid}
-#paper figure img{width:100%;aspect-ratio:4/3;object-fit:cover;border:1px solid #d7dce1;border-radius:3px;display:block;background:#fafafa}
-#paper figcaption{font-size:13px;color:#5b6672;margin-top:6px}
-#paper figcaption .mine{font-size:15px}
-#paper table.nd{border-collapse:collapse;width:100%;font-size:14px}
-#paper table.nd th,#paper table.nd td{border:1px solid #c9cfd5;padding:6px 8px;text-align:left;vertical-align:top}
-#paper table.nd th{background:#f3f5f7;font-weight:400}
-#paper table.nd tr{break-inside:avoid;page-break-inside:avoid}
-#paper .q{margin:0 0 14px;break-inside:avoid;page-break-inside:avoid}
-#paper .q .qt{font-size:14px;color:#3c444d;font-weight:700;margin-bottom:2px}
-#paper .foot{margin-top:34px;padding-top:10px;border-top:1px solid #d7dce1;font-size:12px;color:#6b7480}
-@media(max-width:600px){#paper{padding:26px 18px}#paper ol.ntl>li{grid-template-columns:minmax(0,1fr);gap:2px}#paper .figs{grid-template-columns:minmax(0,1fr)}#paper dl.meta{grid-template-columns:minmax(0,1fr);gap:0}#paper dl.meta dd{margin-bottom:8px}}
-#paper.fixw{width:718px;max-width:none;box-shadow:none;padding:8px 6px;margin:0;border-radius:0}#paper.fixw .figs{display:block}#paper.fixw h2.pbb{page-break-before:always;break-before:page;margin-top:0}#paper.fixw figure{width:72%;margin:0 auto 18px}
-#paper.fixw ol.ntl>li{grid-template-columns:118px minmax(0,1fr)}#paper.fixw .figs{grid-template-columns:repeat(2,minmax(0,1fr))}#paper.fixw dl.meta{grid-template-columns:7.5em minmax(0,1fr);gap:6px 12px}
-@media print{#paper{box-shadow:none;padding:0;max-width:none;border-radius:0}}
+.paper{background:#fff;color:#22272e;max-width:820px;margin:0 auto;padding:44px 52px 40px;box-shadow:0 1px 2px rgba(0,0,0,.08),0 12px 32px rgba(0,0,0,.08);border-radius:4px;font:15px/1.75 "Noto Sans TC",sans-serif;color-scheme:light}
+.paper .kicker{font-size:12px;color:#6b7480;margin:0 0 6px}
+.paper h1{font-size:28px;line-height:1.25;margin:0 0 6px;font-weight:700}
+.paper h2{font-size:18px;margin:30px 0 12px;padding-bottom:4px;border-bottom:1.5px solid #22272e;font-weight:700}
+.paper h4{margin:0 0 4px;font-size:17px;font-weight:400}
+.paper .mine{font-family:"Iansui","Noto Sans TC",sans-serif;color:#1f3f99;white-space:pre-wrap;font-size:16.5px}
+.paper.src .mine{background:#f1f4fd;border-left:3px solid #9fb4ec;padding:1px 6px 1px 7px}
+.paper .empty{display:inline-block;color:#8a929b;border:1px dashed #b9c0c7;border-radius:4px;padding:0 8px;font-size:13px;line-height:1.7}
+.paper .legend{border:1px solid #d7dce1;border-radius:6px;padding:10px 14px;font-size:13px;color:#4b545e;margin:16px 0 4px;display:none}
+.paper.src .legend{display:block}
+.paper .legend p{margin:2px 0}
+.paper .legend .mine{font-size:14px}
+.paper dl.meta{display:grid;grid-template-columns:7.5em minmax(0,1fr);gap:6px 12px;margin:0}
+.paper dl.meta dt{color:#5b6672;font-size:14px;padding-top:2px}
+.paper dl.meta dd{margin:0}
+.paper .lb{display:block;font-size:13px;color:#5b6672;margin-top:8px}
+.paper ol.ntl{list-style:none;margin:0;padding:0}
+.paper ol.ntl>li{display:grid;grid-template-columns:118px minmax(0,1fr);gap:14px;padding:12px 0;border-bottom:1px solid #e3e6ea;break-inside:avoid;page-break-inside:avoid}
+.paper ol.ntl .d{font-weight:700;font-size:15px;white-space:nowrap}
+.paper ol.ntl .d small{display:block;font-weight:400;color:#6b7480;font-size:13px}
+.paper .ref{font-size:13px;color:#5b6672;margin:8px 0 0}
+.paper .figs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.paper figure{margin:0;break-inside:avoid;page-break-inside:avoid}
+.paper figure img{width:100%;aspect-ratio:4/3;object-fit:cover;border:1px solid #d7dce1;border-radius:3px;display:block;background:#fafafa}
+.paper figcaption{font-size:13px;color:#5b6672;margin-top:6px}
+.paper figcaption .mine{font-size:15px}
+.paper table.nd{border-collapse:collapse;width:100%;font-size:14px}
+.paper table.nd th,.paper table.nd td{border:1px solid #c9cfd5;padding:6px 8px;text-align:left;vertical-align:top}
+.paper table.nd th{background:#f3f5f7;font-weight:400}
+.paper table.nd tr{break-inside:avoid;page-break-inside:avoid}
+.paper .q{margin:0 0 14px;break-inside:avoid;page-break-inside:avoid}
+.paper .q .qt{font-size:14px;color:#3c444d;font-weight:700;margin-bottom:2px}
+.paper .foot{margin-top:34px;padding-top:10px;border-top:1px solid #d7dce1;font-size:12px;color:#6b7480}
+@media(max-width:600px){.paper{padding:26px 18px}.paper ol.ntl>li{grid-template-columns:minmax(0,1fr);gap:2px}.paper .figs{grid-template-columns:minmax(0,1fr)}.paper dl.meta{grid-template-columns:minmax(0,1fr);gap:0}.paper dl.meta dd{margin-bottom:8px}}
+.paper.fixw{width:718px;max-width:none;box-shadow:none;padding:8px 6px;margin:0;border-radius:0}.paper.fixw .figs{display:block}.paper.fixw h2.pbb{page-break-before:always;break-before:page;margin-top:0}.paper.fixw figure{width:72%;margin:0 auto 18px}
+.paper.fixw ol.ntl>li{grid-template-columns:118px minmax(0,1fr)}.paper.fixw .figs{grid-template-columns:repeat(2,minmax(0,1fr))}.paper.fixw dl.meta{grid-template-columns:7.5em minmax(0,1fr);gap:6px 12px}
+@media print{.paper{box-shadow:none;padding:0;max-width:none;border-radius:0}}
 </style>
 </head>
 <body>
@@ -208,7 +231,9 @@ ol.tl>li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px}
      <button data-act="restore">從備份還原</button>
      <button data-act="demo">載入示範：植物生長觀察</button>
      <button data-act="new">開始一份新的筆記</button>
-     <p>資料只存在這台裝置的瀏覽器裡，不會上傳。換電腦或清除瀏覽器前，記得先下載備份。</p>
+     <button data-act="teacher">老師檢視：學習歷程時間軸</button>
+     <a class="btn" href="lab-notebook-guide.html" style="border:0;background:transparent;width:100%">給老師的使用手冊</a>
+     <p>資料只存在這台裝置的瀏覽器裡，不會上傳。換電腦或清除瀏覽器前，記得先下載備份。備份檔裡會有你寫下與修改的時間紀錄，交給老師時老師看得到。</p>
     </div>
    </details>
   </div>
@@ -286,11 +311,22 @@ ol.tl>li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px}
   </div>
   <div id="stale" class="stale noprint" hidden><span>整理之後你又修改了紀錄，筆記還是舊的版本。</span><button data-act="gen">重新整理</button></div>
   <div class="card checks noprint" id="checks"></div>
-  <div id="nbArea"><div class="paperwrap"><div id="paper" class="src"></div></div></div>
+  <div id="nbArea"><div class="paperwrap"><div id="paper" class="paper src"></div></div></div>
   <div id="raw" hidden></div>
  </section>
+
+ <section class="view" id="v-teacher">
+  <div class="row" style="justify-content:space-between;margin-bottom:6px"><h2>老師檢視：學習歷程</h2><a class="btn ghost" href="#info">回到學生筆記</a></div>
+  <p class="lead">看學生什麼時候寫了什麼、改了什麼。這是學習過程的紀錄，用來找對話的切入點，不是評分或防弊工具：備份檔可以被改動，請搭配課堂觀察一起看。</p>
+  <div class="card row" style="margin-bottom:16px;justify-content:space-between">
+   <label class="row" style="flex:1 1 280px;gap:8px"><span style="flex:none">檢視</span><select id="tSel" style="flex:1;font-family:'Noto Sans TC',sans-serif;color:var(--ink)"></select></label>
+   <label class="btn">開啟學生備份檔（可多選）<input type="file" id="tFiles" accept=".json,application/json" multiple hidden></label>
+  </div>
+  <div class="seg" style="margin-bottom:16px"><button data-act="tv" data-v="tl" id="tv-tl" class="on">歷程時間軸</button><button data-act="tv" data-v="nb" id="tv-nb">整理後筆記</button><button data-act="tv" data-v="raw" id="tv-raw">原始紀錄</button></div>
+  <div id="tOut"></div>
+ </section>
 </main>
-<footer class="wrap noprint" style="padding:0 0 28px;font-size:12px;color:var(--muted)">版本 v1.1 · 2026-11-27</footer>
+<footer class="wrap noprint" style="padding:0 0 28px;font-size:12px;color:var(--muted)">版本 v1.2 · 2026-11-28</footer>
 
 <div class="ov" id="ed" hidden>
  <form class="sheet" id="edForm" autocomplete="off">
@@ -333,7 +369,7 @@ const wd=s=>{const d=new Date(s+'T00:00');return isNaN(d)?'':WD[d.getDay()]};
 const fmtD=s=>s?s.replace(/-/g,'/')+(wd(s)?'（'+wd(s)+'）':''):'';
 const RQ=[['expect','實驗結果是否符合原本預期？'],['found','過程中發現了什麼？'],['uncertain','有哪些意外或不確定的地方？'],['change','如果重新進行，會想調整什麼？'],['next','還有哪些問題想繼續探索？']];
 const META=[['title','實驗名稱'],['date','實驗日期'],['authors','實驗者／組別'],['purpose','實驗目的'],['question','想探究的問題']];
-const blank=()=>({v:1,meta:{title:'',date:today(),authors:'',purpose:'',question:''},entries:[],table:{cols:['日期','測量項目','備註'],rows:[['','','']],notes:''},reflect:{expect:'',found:'',uncertain:'',change:'',next:''},generatedAt:null,updatedAt:Date.now(),isDemo:false});
+const blank=()=>({v:1,meta:{title:'',date:today(),authors:'',purpose:'',question:''},entries:[],table:{cols:['日期','測量項目','備註'],rows:[['','','']],notes:''},reflect:{expect:'',found:'',uncertain:'',change:'',next:''},generatedAt:null,updatedAt:Date.now(),isDemo:false,log:[{type:'start',t:Date.now()}]});
 let S=null, draft=null, view='nb';
 
 /* ---------- storage ---------- */
@@ -342,11 +378,18 @@ let saveT=null;
 function save(){clearTimeout(saveT);saveT=setTimeout(saveNow,300)}
 function saveNow(){const st=$('#status');try{localStorage.setItem(KEY,JSON.stringify(S));st.textContent='已自動儲存在這台裝置';st.className='status'}catch(e){st.textContent='儲存失敗：空間可能不足，請先下載備份或刪掉幾張照片';st.className='status bad'}}
 function touch(){S.updatedAt=Date.now();if(S.generatedAt)S.dirty=true;save();refreshBits()}
+const FL={'meta.title':'實驗名稱','meta.date':'實驗日期','meta.authors':'實驗者／組別','meta.purpose':'實驗目的','meta.question':'想探究的問題','table.notes':'補充觀察備註','reflect.expect':'反思：結果是否符合預期','reflect.found':'反思：過程中發現了什麼','reflect.uncertain':'反思：意外或不確定的地方','reflect.change':'反思：重新進行會調整什麼','reflect.next':'反思：還想探索的問題','table':'數據表'};
+const EL={date:'日期',time:'時間',title:'標題',desc:'做了什麼',obs:'觀察結果',issue:'問題或意外'};
+function logEv(ev){ev.t=ev.t||Date.now();S.log.push(ev);if(S.log.length>1500)S.log.splice(0,S.log.length-1500)}
+function logField(k,before,after){const L=S.log[S.log.length-1],now=Date.now();
+ if(L&&L.type==='field'&&L.k===k&&now-L.t<15*60e3){L.t=now;if(after!==undefined)L.after=after;return}
+ const ev={type:'field',k};if(after!==undefined){ev.before=before;ev.after=after}logEv(ev)}
 function normalize(d){
  if(!d||typeof d!=='object'||!d.meta||!Array.isArray(d.entries))throw new Error('格式不符');
  const b=blank();
  const o={...b,...d,meta:{...b.meta,...d.meta},table:{...b.table,...(d.table||{})},reflect:{...b.reflect,...(d.reflect||{})}};
  o.entries=d.entries.map(e=>({id:e.id||uid(),date:String(e.date||''),time:String(e.time||''),title:String(e.title||''),desc:String(e.desc||''),obs:String(e.obs||''),issue:String(e.issue||''),photos:(e.photos||[]).filter(p=>p&&typeof p.src==='string'&&p.src.startsWith('data:image/')).map(p=>({id:p.id||uid(),src:p.src,caption:String(p.caption||'')})),createdAt:e.createdAt||Date.now(),updatedAt:e.updatedAt||e.createdAt||Date.now(),edits:e.edits||0}));
+ o.log=Array.isArray(d.log)?d.log.filter(x=>x&&x.t&&x.type):[];
  if(!Array.isArray(o.table.cols)||!o.table.cols.length)o.table.cols=b.table.cols;
  o.table.cols=o.table.cols.map(String);
  o.table.rows=(Array.isArray(o.table.rows)?o.table.rows:[]).map(r=>o.table.cols.map((_,i)=>String((r||[])[i]??'')));
@@ -474,7 +517,7 @@ function renderNotebook(){
  setView(view);
 }
 function setView(v){view=v;$('#b-nb').classList.toggle('on',v==='nb');$('#b-raw').classList.toggle('on',v==='raw');$('#nbArea').hidden=v!=='nb';$('#raw').hidden=v!=='raw';$('#nbtools').style.visibility=v==='nb'?'visible':'hidden'}
-function generate(){S.generatedAt=Date.now();S.dirty=false;saveNow();view='nb';renderNotebook();toast('已整理完成：內容全是你寫的，工具只負責排版')}
+function generate(){S.generatedAt=Date.now();S.dirty=false;logEv({type:'gen'});saveNow();view='nb';renderNotebook();toast('已整理完成：內容全是你寫的，工具只負責排版')}
 
 function refreshBits(){
  $('#n-log').textContent=S.entries.length;
@@ -484,9 +527,9 @@ function refreshBits(){
 function renderAll(){fillBinds();renderTL();renderTable();refreshBits();if(curTab()==='notebook')renderNotebook()}
 
 /* ---------- tabs ---------- */
-const TABS=['info','log','data','reflect','notebook'];
+const TABS=['info','log','data','reflect','notebook','teacher'];
 const curTab=()=>{const h=location.hash.slice(1);return TABS.includes(h)?h:'info'};
-function showTab(){const t=curTab();TABS.forEach(x=>{$('#v-'+x).classList.toggle('on',x===t);document.querySelector(`[data-tab="${x}"]`).classList.toggle('on',x===t)});if(t==='notebook')renderNotebook();window.scrollTo(0,0)}
+function showTab(){const t=curTab();TABS.forEach(x=>{$('#v-'+x).classList.toggle('on',x===t);const a=document.querySelector(`[data-tab="${x}"]`);if(a)a.classList.toggle('on',x===t)});if(t==='notebook')renderNotebook();if(t==='teacher')renderTeacher();window.scrollTo(0,0)}
 window.addEventListener('hashchange',showTab);
 $('#go').addEventListener('click',e=>{if(curTab()==='notebook'){e.preventDefault();generate()}else{pendingGen=true}});
 let pendingGen=false;
@@ -511,6 +554,10 @@ $('#edForm').addEventListener('submit',ev=>{
  const isNew=draft._new;delete draft._new;
  const old=isNew?null:S.entries.find(x=>x.id===draft.id);
  const changed=!old||JSON.stringify({...old,edits:0,updatedAt:0})!==JSON.stringify({...draft,...f,edits:0,updatedAt:0});
+ if(isNew)logEv({type:'create',eid:draft.id,title:f.title,date:f.date,photos:draft.photos.length});
+ else if(changed){const ch=Object.keys(EL).filter(k=>old[k]!==f[k]).map(k=>({l:EL[k],b:old[k],a:f[k]}));const oi=old.photos.map(p=>p.id),ni=draft.photos.map(p=>p.id);
+  const pcap=draft.photos.filter(p=>{const o=old.photos.find(x=>x.id===p.id);return o&&o.caption!==p.caption}).map(p=>({l:'照片說明',b:old.photos.find(x=>x.id===p.id).caption,a:p.caption}));
+  logEv({type:'edit',eid:draft.id,title:f.title||old.title,ch:ch.concat(pcap),padd:ni.filter(i=>!oi.includes(i)).length,prem:oi.filter(i=>!ni.includes(i)).length})}
  Object.assign(draft,f);
  if(!isNew&&changed){draft.edits=(draft.edits||0)+1;draft.updatedAt=Date.now()}
  if(isNew)S.entries.push(draft);else S.entries=S.entries.map(x=>x.id===draft.id?draft:x);
@@ -529,9 +576,9 @@ $('#e-file').addEventListener('change',async ev=>{
 /* ---------- global input/click ---------- */
 document.addEventListener('input',ev=>{
  const t=ev.target,d=t.dataset;
- if(d.bind){const [a,b]=d.bind.split('.');S[a][b]=t.value;touch()}
- else if(d.col!=null){S.table.cols[+d.col]=t.value;touch()}
- else if(d.r!=null){S.table.rows[+d.r][+d.c]=t.value;touch()}
+ if(d.bind){const [a,b]=d.bind.split('.');const old=S[a][b];S[a][b]=t.value;logField(d.bind,old,t.value);touch()}
+ else if(d.col!=null){S.table.cols[+d.col]=t.value;logField('table');touch()}
+ else if(d.r!=null){S.table.rows[+d.r][+d.c]=t.value;logField('table');touch()}
  else if(d.cap!=null&&draft){const p=draft.photos.find(p=>p.id===d.cap);if(p)p.caption=t.value}
 });
 $('#srcmark').addEventListener('change',e=>$('#paper').classList.toggle('src',e.target.checked));
@@ -547,11 +594,13 @@ document.addEventListener('click',async ev=>{
  case 'delph':draft.photos=draft.photos.filter(p=>p.id!==b.dataset.id);renderEdPhotos();break;
  case 'delent':{const e=S.entries.find(x=>x.id===b.dataset.id);if(!e)break;
   const ok=await ask('刪除這筆紀錄？',`<p>「${esc(e.title||'未命名')}」（${esc(fmtD(e.date))}）和它的 ${e.photos.length} 張照片會被刪除，無法復原。</p>`,[{t:'取消',v:false,cls:'ghost'},{t:'刪除',v:true,cls:'pri'}]);
-  if(ok){S.entries=S.entries.filter(x=>x.id!==e.id);touch();renderTL();toast('已刪除')}break}
- case 'addrow':S.table.rows.push(S.table.cols.map(()=>''));touch();renderTable();break;
- case 'addcol':S.table.cols.push('新欄位');S.table.rows.forEach(r=>r.push(''));touch();renderTable();break;
- case 'delrow':{const i=+b.dataset.i,r=S.table.rows[i];if(r.some(v=>v.trim())&&!await ask('刪除這一列？','<p>這一列有你填的數據，刪除後無法復原。</p>',[{t:'取消',v:false,cls:'ghost'},{t:'刪除',v:true,cls:'pri'}]))break;S.table.rows.splice(i,1);touch();renderTable();break}
- case 'delcol':{const i=+b.dataset.i;if(S.table.rows.some(r=>r[i].trim())&&!await ask(`刪除「${esc(S.table.cols[i])}」這一欄？`,'<p>這一欄有你填的數據，刪除後無法復原。</p>',[{t:'取消',v:false,cls:'ghost'},{t:'刪除',v:true,cls:'pri'}]))break;S.table.cols.splice(i,1);S.table.rows.forEach(r=>r.splice(i,1));touch();renderTable();break}
+  if(ok){S.entries=S.entries.filter(x=>x.id!==e.id);logEv({type:'delete',eid:e.id,title:e.title,date:e.date});touch();renderTL();toast('已刪除')}break}
+ case 'addrow':S.table.rows.push(S.table.cols.map(()=>''));logField('table');touch();renderTable();break;
+ case 'addcol':S.table.cols.push('新欄位');S.table.rows.forEach(r=>r.push(''));logField('table');touch();renderTable();break;
+ case 'delrow':{const i=+b.dataset.i,r=S.table.rows[i];if(r.some(v=>v.trim())&&!await ask('刪除這一列？','<p>這一列有你填的數據，刪除後無法復原。</p>',[{t:'取消',v:false,cls:'ghost'},{t:'刪除',v:true,cls:'pri'}]))break;S.table.rows.splice(i,1);logField('table');touch();renderTable();break}
+ case 'delcol':{const i=+b.dataset.i;if(S.table.rows.some(r=>r[i].trim())&&!await ask(`刪除「${esc(S.table.cols[i])}」這一欄？`,'<p>這一欄有你填的數據，刪除後無法復原。</p>',[{t:'取消',v:false,cls:'ghost'},{t:'刪除',v:true,cls:'pri'}]))break;S.table.cols.splice(i,1);S.table.rows.forEach(r=>r.splice(i,1));logField('table');touch();renderTable();break}
+ case 'teacher':location.hash='#teacher';break;
+ case 'tv':tView=b.dataset.v;renderTeacher();break;
  case 'gen':if(curTab()!=='notebook'){pendingGen=true;if(b.tagName!=='A')location.hash='#notebook'}else generate();break;
  case 'vnb':setView('nb');break;
  case 'vraw':setView('raw');break;
@@ -569,19 +618,13 @@ window.addEventListener('hashchange',()=>{if(pendingGen&&curTab()==='notebook'){
 function ensureNB(){if(!S.generatedAt)generate();setView('nb')}
 
 /* ---------- downloads ---------- */
-const dlP=(async()=>{for(let i=0;i<10&&!(window.claude&&window.claude.use);i++)await new Promise(r=>setTimeout(r,100));try{return window.claude&&window.claude.use?await window.claude.use('downloads'):null}catch(e){return null}})();
+const inFrame=(()=>{try{return window.self!==window.top}catch(e){return true}})();
+const dlP=(async()=>{if(!inFrame)return null;for(let i=0;i<60&&!(window.claude&&window.claude.use);i++)await new Promise(r=>setTimeout(r,100));try{return window.claude&&window.claude.use?await window.claude.use('downloads'):null}catch(e){return null}})();
 const fname=ext=>`實驗筆記-${(S.meta.title.trim()||'未命名').replace(/[\\/:*?"<>|\s]+/g,'_').slice(0,30)}-${today()}.${ext}`;
 async function saveFile(name,data,label){
  const dl=await dlP;
- if(!dl){ /* 一般瀏覽器：用 Blob 觸發下載 */
-  try{
-   const type=name.endsWith('.json')?'application/json':name.endsWith('.pdf')?'application/pdf':name.endsWith('.jpg')?'image/jpeg':'text/html';
-   const blob=data instanceof Blob?data:new Blob([data],{type:type+';charset=utf-8'});
-   const u=URL.createObjectURL(blob),a=document.createElement('a');
-   a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();
-   setTimeout(()=>URL.revokeObjectURL(u),4000);toast(`已存下${label}`);return true;
-  }catch(e){return false}
- }
+ if(!dl){if(inFrame)return false;
+  try{const blob=data instanceof Blob?data:new Blob([data],{type:name.endsWith('.json')?'application/json':name.endsWith('.html')?'text/html':name.endsWith('.pdf')?'application/pdf':name.endsWith('.jpg')?'image/jpeg':'application/octet-stream'});const u=URL.createObjectURL(blob);const a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);toast(`已下載${label}`);return true}catch(e){return false}}
  try{await dl.save({filename:name,data});toast(`已存下${label}`);return true}
  catch(e){const c=e&&e.code;if(c==='declined'){toast('已取消下載');return true}if(c==='rate_limited'){toast('請稍等一下再試');return true}if(c==='host_unavailable'){toast('這個 App 不能存檔，請用電腦或瀏覽器打開');return true}return false}
 }
@@ -632,7 +675,7 @@ async function dlHTML(){
  ensureNB();
  const css=$('#nbcss').textContent;
  const src=$('#paper').classList.contains('src')?' src':'';
- const doc=`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(S.meta.title||'實驗筆記')}</title><link href="https://fonts.googleapis.com/css2?family=Iansui&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#eef0ec;padding:24px 10px}${css}.pb{display:block;margin:0 auto 16px;font:16px sans-serif;padding:10px 18px;border-radius:8px;border:1px solid #999;background:#fff;cursor:pointer}@media print{body{background:#fff;padding:0}.pb{display:none}}</style></head><body><button class="pb" onclick="window.print()">列印／另存為 PDF</button><div id="paper" class="${src.trim()}">${$('#paper').innerHTML}</div></body></html>`;
+ const doc=`<!DOCTYPE html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(S.meta.title||'實驗筆記')}</title><link href="https://fonts.googleapis.com/css2?family=Iansui&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet"><style>body{margin:0;background:#eef0ec;padding:24px 10px}${css}.pb{display:block;margin:0 auto 16px;font:16px sans-serif;padding:10px 18px;border-radius:8px;border:1px solid #999;background:#fff;cursor:pointer}@media print{body{background:#fff;padding:0}.pb{display:none}}</style></head><body><button class="pb" onclick="window.print()">列印／另存為 PDF</button><div class="paper${src}">${$('#paper').innerHTML}</div></body></html>`;
  if(!await saveFile(fname('html'),doc,'列印版'))toast('這裡無法直接下載檔案');
 }
 
@@ -656,12 +699,93 @@ async function loadDemo(){
  entries:[
   {id:uid(),date:'2026-11-10',time:'15:40',title:'種下綠豆',desc:'兩個一樣大的塑膠杯，各放10顆泡過水的綠豆在濕棉花上。\nA杯放教室窗邊，B杯放在講台下面的櫃子裡（門關起來）。\n每天早上第一節下課澆水，大概10ml。',obs:'綠豆泡過水之後有變大一點點，表皮皺皺的。',issue:'櫃子其實不是全黑，門縫有一點光，不知道會不會影響。',photos:[{id:uid(),src:ph[0],caption:'左邊是A杯（窗邊），右邊是B杯（櫃子）。'}],createdAt:T('2026-11-10T15:52'),updatedAt:T('2026-11-10T15:52'),edits:0},
   {id:uid(),date:'2026-11-13',time:'10:05',title:'發芽了',desc:'兩杯都有發芽。量每杯最高的3株，再算平均。',obs:'A杯平均1.2公分，芽是綠色的。\nB杯平均1.8公分，反而比較長！顏色比較黃白。',issue:'B杯有一顆發霉了，我們先把它夾出來。',photos:[{id:uid(),src:ph[1],caption:'第三天，B杯的芽比較長。'}],createdAt:T('2026-11-13T10:20'),updatedAt:T('2026-11-13T12:31'),edits:1},
-  {id:uid(),date:'2026-11-17',time:'10:10',title:'第七天，差好多',desc:'跟上次一樣量最高的3株。',obs:'A杯平均4.5公分，葉子打開了，莖比較粗。\nB杯平均9.3公分，但是很細很軟，有兩株倒下來，葉子是黃色的、沒有打開。',issue:'週末兩天沒有人澆水，A杯的棉花有點乾。',photos:[{id:uid(),src:ph[2],caption:'第七天。B杯有兩株倒下來了。'}],createdAt:T('2026-11-17T10:30'),updatedAt:T('2026-11-17T10:30'),edits:0}],
+  {id:uid(),date:'2026-11-17',time:'10:10',title:'第七天，差好多',desc:'跟上次一樣量最高的3株。',obs:'A杯平均4.5公分，葉子打開了，莖比較粗。\nB杯平均9.3公分，但是很細很軟，有兩株倒下來，葉子是黃色的、沒有打開。',issue:'週末兩天沒有人澆水，A杯的棉花有點乾。',photos:[{id:uid(),src:ph[2],caption:'第七天。B杯有兩株倒下來了。'}],createdAt:T('2026-11-19T21:05'),updatedAt:T('2026-11-19T21:05'),edits:0}],
  table:{cols:['日期','A杯 窗邊 平均高度(cm)','B杯 櫃子 平均高度(cm)','備註'],rows:[['11/10','0','0','剛種下'],['11/13','1.2','1.8','B杯一顆發霉，移除'],['11/17','4.5','9.3','B杯兩株倒下']],notes:'B杯的莖很細，量的時候要輕輕拉直，可能量得不太準。'},
  reflect:{expect:'不符合。我們原本以為沒有光會長比較慢，結果B杯長得比較高。',found:'有光的比較矮但比較壯，葉子是綠色的。沒光的長很高可是很軟，好像在找光。',uncertain:'',change:'要排好週末誰來澆水；櫃子裡的杯子要用黑色袋子包起來，比較確定沒有光。',next:''},
  generatedAt:null,updatedAt:Date.now()};
+ const q0='我們想知道沒有光的綠豆會不會長比較慢？';
+ const obs0='A杯平均1.2公分，芽是綠色的。\nB杯平均1.8公分，比較長。';
+ S.log=[{type:'start',t:T('2026-11-10T15:30')},{type:'field',k:'meta.title',before:'',after:S.meta.title,t:T('2026-11-10T15:31')},{type:'field',k:'meta.authors',before:'',after:S.meta.authors,t:T('2026-11-10T15:33')},{type:'field',k:'meta.purpose',before:'',after:S.meta.purpose,t:T('2026-11-10T15:36')},{type:'field',k:'meta.question',before:'',after:q0,t:T('2026-11-10T15:38')},
+ {type:'create',eid:S.entries[0].id,title:'種下綠豆',date:'2026-11-10',photos:1,t:T('2026-11-10T15:52')},{type:'field',k:'table',t:T('2026-11-10T15:58')},
+ {type:'create',eid:S.entries[1].id,title:'發芽了',date:'2026-11-13',photos:1,t:T('2026-11-13T10:20')},{type:'field',k:'table',t:T('2026-11-13T10:24')},
+ {type:'edit',eid:S.entries[1].id,title:'發芽了',ch:[{l:'觀察結果',b:obs0,a:S.entries[1].obs}],padd:0,prem:0,t:T('2026-11-13T12:31')},
+ {type:'field',k:'meta.question',before:q0,after:S.meta.question,t:T('2026-11-13T12:40')},
+ {type:'create',eid:S.entries[2].id,title:'第七天，差好多',date:'2026-11-17',photos:1,t:T('2026-11-19T21:05')},{type:'field',k:'table',t:T('2026-11-19T21:12')},{type:'field',k:'table.notes',before:'',after:S.table.notes,t:T('2026-11-19T21:14')},
+ {type:'field',k:'reflect.expect',before:'',after:S.reflect.expect,t:T('2026-11-20T20:02')},{type:'field',k:'reflect.found',before:'',after:S.reflect.found,t:T('2026-11-20T20:07')},{type:'field',k:'reflect.change',before:'',after:S.reflect.change,t:T('2026-11-20T20:13')}];
  saveNow();renderAll();showTab();toast('已載入示範資料：植物生長觀察');
 }
+
+
+/* ---------- teacher view ---------- */
+let TD=[],tIdx=-1,tView='tl';
+const getT=()=>tIdx<0?S:TD[tIdx].data;
+function withData(N,fn){const old=S;S=N;try{return fn()}finally{S=old}}
+const dayKey=t=>{const d=new Date(t);return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+const hm=t=>{const d=new Date(t);return pad(d.getHours())+':'+pad(d.getMinutes())};
+const md=s=>s?s.slice(5).replace('-','/'):'';
+const lateDays=(t,date)=>{if(!date)return 0;const a=new Date(dayKey(t)+'T00:00'),b=new Date(date+'T00:00');return isNaN(b)?0:Math.round((a-b)/864e5)};
+const cut=(v,n=80)=>{v=String(v||'');return v.length>n?v.slice(0,n)+'…':v};
+function synthLog(N){const L=[];N.entries.forEach(e=>{L.push({type:'create',t:e.createdAt,eid:e.id,title:e.title,date:e.date,photos:e.photos.length});if(e.edits&&e.updatedAt>e.createdAt)L.push({type:'edit',t:e.updatedAt,eid:e.id,title:e.title,ch:[],padd:0,prem:0,nodetail:1})});if(N.generatedAt)L.push({type:'gen',t:N.generatedAt});return L}
+function evHTML(ev){
+ const diff=(b,a)=>`<div class="diff"><div class="b">${b?esc(b):'（空白）'}</div><div class="a">${a?esc(a):'（空白）'}</div></div>`;
+ switch(ev.type){
+ case 'start':return '<div class="what">開始這份筆記</div>';
+ case 'gen':return '<div class="what">按下「整理我的實驗筆記」</div>';
+ case 'field':{const lab=FL[ev.k]||ev.k;
+  if(ev.k==='table')return '<div class="what">編輯數據表</div>';
+  if(ev.after===undefined)return `<div class="what">編輯「${esc(lab)}」</div>`;
+  const first=!String(ev.before||'').trim();
+  if(first)return `<div class="what">填寫「${esc(lab)}」</div>${ev.after?`<div class="quote">${esc(cut(ev.after,120))}</div>`:''}`;
+  if(ev.before===ev.after)return `<div class="what">編輯「${esc(lab)}」（最後內容沒有改變）</div>`;
+  return `<div class="what">修改「${esc(lab)}」</div><details><summary>看修改前後</summary>${diff(ev.before,ev.after)}</details>`}
+ case 'create':{const late=lateDays(ev.t,ev.date);
+  return `<div class="what k-create">新增過程紀錄「${esc(ev.title||'未命名')}」${late>=2?`<span class="tag">觀察後 ${late} 天才寫下</span>`:''}</div><div class="sub">觀察日 ${esc(md(ev.date)||'未填')}${ev.photos?`・附 ${ev.photos} 張照片`:''}</div>`}
+ case 'edit':{const parts=[...new Set((ev.ch||[]).map(c=>c.l))];if(ev.padd)parts.push(`新增 ${ev.padd} 張照片`);if(ev.prem)parts.push(`移除 ${ev.prem} 張照片`);
+  return `<div class="what">修改紀錄「${esc(ev.title||'未命名')}」${parts.length?'：'+esc(parts.join('、')):''}</div>${ev.nodetail?'<div class="sub">（較早的資料，只知道有修改，沒有細節）</div>':''}${(ev.ch||[]).length?`<details><summary>看修改前後</summary>${ev.ch.map(c=>`<div class="sub" style="margin-top:6px">${esc(c.l)}</div>${diff(c.b,c.a)}`).join('')}</details>`:''}`}
+ case 'delete':return `<div class="what">刪除過程紀錄「${esc(ev.title||'未命名')}」</div><div class="sub">原本的觀察日 ${esc(md(ev.date)||'未填')}</div>`;
+ }return ''}
+function tlHTML(N){
+ const log=(N.log&&N.log.some(e=>e.type!=='start')?N.log:synthLog(N)).slice().sort((a,b)=>a.t-b.t);
+ const photos=N.entries.reduce((n,e)=>n+e.photos.length,0);
+ const rows=N.table.rows.filter(r=>r.some(v=>v.trim())).length;
+ const rq=RQ.filter(([k])=>N.reflect[k].trim()).length;
+ const days=[...new Set(log.map(e=>dayKey(e.t)))];
+ const edits=log.filter(e=>e.type==='edit'||(e.type==='field'&&String(e.before||'').trim()&&e.before!==e.after)).length;
+ const gens=log.filter(e=>e.type==='gen').length;
+ const talk=[];
+ const ents=[...N.entries].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));
+ ents.forEach((e,i)=>{const nm=`第 ${i+1} 筆「${e.title||'未命名'}」`;const late=lateDays(e.createdAt,e.date);
+  if(late>=2)talk.push(`${nm}觀察日是 ${md(e.date)}，${late} 天後才寫下。可以問問：當天有先記在別的地方嗎？`);
+  if(!e.desc.trim()&&!e.obs.trim()&&!e.issue.trim()&&e.photos.length)talk.push(`${nm}只有照片、沒有文字。可以請學生說說照片裡看到了什麼。`);
+  else if(!e.obs.trim())talk.push(`${nm}沒有寫觀察結果。`);
+});
+ const iss=ents.filter(e=>e.issue.trim()).length;if(iss)talk.push(`有 ${iss} 筆紀錄寫下了問題或意外，是討論實驗設計的好起點。`);
+ const changedObs=log.filter(e=>e.type==='edit'&&(e.ch||[]).some(c=>c.l==='觀察結果')).length;
+ if(changedObs)talk.push(`有 ${changedObs} 次修改了「觀察結果」。可以看看前後差在哪裡，問問為什麼改。`);
+ const fq=log.filter(e=>e.type==='field'&&e.k==='meta.question'&&String(e.before||'').trim()&&e.before!==e.after).length;
+ if(fq)talk.push('學生在過程中改寫過「想探究的問題」，這通常代表他對問題的理解有變化。');
+ if(rq<RQ.length)talk.push(`反思寫了 ${rq} / ${RQ.length} 題（反思本來就可以選擇回答）。`);
+ const groups={};log.forEach(e=>{(groups[dayKey(e.t)]=groups[dayKey(e.t)]||[]).push(e)});
+ const st=(v,l)=>`<div class="stat"><b>${v}</b><span>${l}</span></div>`;
+ return `<div class="stats">${st(N.entries.length,'過程紀錄')}${st(photos,'照片')}${st(rows,'數據列')}${st(rq+' / '+RQ.length,'反思已回答')}${st(days.length,'有動作的天數')}${st(edits,'修改次數')}${st(gens,'整理筆記次數')}</div>
+ <div class="card talk"><h3>可以聊聊的地方</h3>${talk.length?`<ul>${talk.map(t=>`<li>${esc(t)}</li>`).join('')}</ul>`:'<p class="muted" style="margin:0">沒有特別需要留意的地方。</p>'}</div>
+ <div class="card">${Object.keys(groups).sort().map(k=>{const g=groups[k];return `<div class="tday"><h3>${esc(fmtD(k))}<span>${g.length} 個動作</span></h3>${g.map(e=>`<div class="tev"><time>${hm(e.t)}</time><div>${evHTML(e)}</div></div>`).join('')}</div>`}).join('')||'<p class="muted">還沒有任何紀錄。</p>'}
+ <p class="muted" style="font-size:13px;margin:8px 0 0">連續編輯同一個欄位 15 分鐘內只記一次，時間為最後一次動作。</p></div>`;
+}
+function renderTeacher(){
+ const sel=$('#tSel');
+ sel.innerHTML=`<option value="-1">這台裝置上的筆記：${esc(S.meta.title||'未命名')}</option>`+TD.map((t,i)=>`<option value="${i}">${esc(t.name)}</option>`).join('');
+ sel.value=String(tIdx);
+ ['tl','nb','raw'].forEach(v=>$('#tv-'+v).classList.toggle('on',v===tView));
+ const N=getT();const out=$('#tOut');
+ if(tView==='tl')out.innerHTML=tlHTML(N);
+ else if(tView==='raw')out.innerHTML=withData(N,rawHTML);
+ else out.innerHTML=(N.generatedAt?'':'<p class="stale" style="display:block">學生還沒有按下「整理」，以下是依目前內容整理的預覽。</p>')+`<div class="paperwrap"><div class="paper src">${withData(N,nbHTML)}</div></div>`;
+}
+$('#tSel').addEventListener('change',e=>{tIdx=+e.target.value;renderTeacher()});
+$('#tFiles').addEventListener('change',async ev=>{const fs=[...ev.target.files];ev.target.value='';let bad=0,last=-1;
+ for(const f of fs){try{const d=normalize(JSON.parse(await f.text()));TD.push({name:`${d.meta.authors||'未填組別'}｜${d.meta.title||f.name}`,data:d});last=TD.length-1}catch(e){bad++}}
+ if(last>=0)tIdx=last;renderTeacher();toast(`已開啟 ${fs.length-bad} 份備份${bad?`，${bad} 個檔案無法讀取`:''}（只供檢視，不會存到這台裝置）`)});
 
 /* ---------- start ---------- */
 renderRQ();
