@@ -279,6 +279,7 @@ ol.tl>li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px}
    <div class="row" id="nbtools">
     <label class="chk"><input type="checkbox" id="srcmark" checked> 標示我寫的文字</label>
     <button data-act="pdf" id="b-pdf">匯出 PDF</button>
+    <button data-act="img" id="b-img">存成長圖</button>
     <button data-act="print">列印</button>
     <button data-act="dlhtml">下載列印版</button>
    </div>
@@ -289,7 +290,7 @@ ol.tl>li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px}
   <div id="raw" hidden></div>
  </section>
 </main>
-<footer class="wrap noprint" style="padding:0 0 28px;font-size:12px;color:var(--muted)">版本 v1.0 · 2026-11-27</footer>
+<footer class="wrap noprint" style="padding:0 0 28px;font-size:12px;color:var(--muted)">版本 v1.1 · 2026-11-27</footer>
 
 <div class="ov" id="ed" hidden>
  <form class="sheet" id="edForm" autocomplete="off">
@@ -555,6 +556,7 @@ document.addEventListener('click',async ev=>{
  case 'vnb':setView('nb');break;
  case 'vraw':setView('raw');break;
  case 'pdf':exportPDF(b);break;
+ case 'img':exportImage(b);break;
  case 'print':ensureNB();try{window.print()}catch(e){}setTimeout(()=>toast('如果沒有跳出列印視窗，請改用「匯出 PDF」或「下載列印版」'),600);break;
  case 'dlhtml':dlHTML();break;
  case 'backup':backup();break;
@@ -573,7 +575,7 @@ async function saveFile(name,data,label){
  const dl=await dlP;
  if(!dl){ /* 一般瀏覽器：用 Blob 觸發下載 */
   try{
-   const type=name.endsWith('.json')?'application/json':name.endsWith('.pdf')?'application/pdf':'text/html';
+   const type=name.endsWith('.json')?'application/json':name.endsWith('.pdf')?'application/pdf':name.endsWith('.jpg')?'image/jpeg':'text/html';
    const blob=data instanceof Blob?data:new Blob([data],{type:type+';charset=utf-8'});
    const u=URL.createObjectURL(blob),a=document.createElement('a');
    a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();
@@ -609,6 +611,21 @@ async function exportPDF(btn){
   el.classList.remove('fixw');
   if(!await saveFile(fname('pdf'),blob,' PDF'))toast('這裡無法直接下載，請改用「下載列印版」或在瀏覽器中列印');
  }catch(e){el.classList.remove('fixw');toast('PDF 產生失敗，請改用「下載列印版」再列印成 PDF')}
+ btn.disabled=false;btn.textContent=old;
+}
+async function exportImage(btn){
+ ensureNB();btn.disabled=true;const old=btn.textContent;btn.textContent='產生中…';
+ const el=$('#paper');
+ try{
+  await loadScript('https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js');
+  if(document.fonts&&document.fonts.ready)await document.fonts.ready;
+  el.classList.add('fixw');
+  const h=el.scrollHeight,scale=Math.max(0.5,Math.min(2,15000/h));
+  const canvas=await window.html2pdf().set({pagebreak:{mode:[]},html2canvas:{scale,backgroundColor:'#ffffff'}}).from(el).toCanvas().get('canvas');
+  el.classList.remove('fixw');
+  const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',.9));
+  if(!await saveFile(fname('jpg'),blob,'長圖'))toast('這裡無法直接下載，請改用「下載列印版」');
+ }catch(e){el.classList.remove('fixw');toast('長圖產生失敗，請重試或改用 PDF')}
  btn.disabled=false;btn.textContent=old;
 }
 async function dlHTML(){
